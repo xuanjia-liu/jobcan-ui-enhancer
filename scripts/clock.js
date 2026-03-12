@@ -220,8 +220,11 @@ function createSelfAnimatingClock(clockElement) {
   progressContainer.className = 'work-progress-container';
   const progressTrack = document.createElement('div');
   progressTrack.className = 'work-progress-track';
+  const workScheduleLayer = document.createElement('div');
+  workScheduleLayer.className = 'work-schedule-layer';
   const progressFill = document.createElement('div');
   progressFill.className = 'work-progress-fill';
+  progressTrack.appendChild(workScheduleLayer);
   progressTrack.appendChild(progressFill);
   
   // Moving progress indicator
@@ -688,6 +691,121 @@ function renderPunchMarkers(track, entries) {
   });
 }
 
+function isWorkStartType(type) {
+  return (type || '').includes('入室') || (type || '').includes('出勤');
+}
+
+function isWorkEndType(type) {
+  return (type || '').includes('退室') || (type || '').includes('退勤');
+}
+
+function buildWorkScheduleSegments(entries) {
+  const startMinutes = WORK_HOURS.start * 60;
+  const endMinutes = WORK_HOURS.end * 60;
+  const now = new Date();
+  const nowMinutes = (now.getHours() * 60) + now.getMinutes();
+  const effectiveNow = Math.max(startMinutes, Math.min(endMinutes, nowMinutes));
+  const events = [];
+
+  (entries || []).forEach((entry) => {
+    const type = entry?.type || '';
+    if (!isWorkStartType(type) && !isWorkEndType(type)) return;
+    const minutes = parsePunchMinutes(entry?.time);
+    if (minutes === null) return;
+    // Do not project work/off state from future punch records.
+    if (minutes > effectiveNow) return;
+    events.push({ minutes, type });
+  });
+
+  events.sort((a, b) => {
+    if (a.minutes !== b.minutes) return a.minutes - b.minutes;
+    if (isWorkEndType(a.type) && isWorkStartType(b.type)) return -1;
+    if (isWorkStartType(a.type) && isWorkEndType(b.type)) return 1;
+    return 0;
+  });
+
+  const segments = [];
+  let cursor = startMinutes;
+  let isWorking = false;
+
+  events.forEach((event) => {
+    const point = Math.max(startMinutes, Math.min(endMinutes, event.minutes));
+    if (point > cursor) {
+      segments.push({
+        start: cursor,
+        end: point,
+        state: isWorking ? 'working' : 'off'
+      });
+      cursor = point;
+    }
+
+    if (isWorkStartType(event.type)) isWorking = true;
+    if (isWorkEndType(event.type)) isWorking = false;
+  });
+
+  // Draw factual state only up to current time.
+  if (cursor < effectiveNow) {
+    segments.push({
+      start: cursor,
+      end: effectiveNow,
+      state: isWorking ? 'working' : 'off'
+    });
+  }
+
+  // Future area is always off (unknown/not-yet-worked), never working.
+  if (effectiveNow < endMinutes) {
+    segments.push({
+      start: effectiveNow,
+      end: endMinutes,
+      state: 'off'
+    });
+  }
+
+  if (segments.length === 0) {
+    segments.push({
+      start: startMinutes,
+      end: endMinutes,
+      state: 'off'
+    });
+  }
+
+  return segments;
+}
+
+function getOrCreateWorkScheduleLayer(track) {
+  let layer = track.querySelector('.work-schedule-layer');
+  if (layer) return layer;
+
+  layer = document.createElement('div');
+  layer.className = 'work-schedule-layer';
+  track.prepend(layer);
+  return layer;
+}
+
+function renderWorkScheduleSegments(track, entries) {
+  if (!track) return;
+  const layer = getOrCreateWorkScheduleLayer(track);
+  layer.innerHTML = '';
+
+  const startMinutes = WORK_HOURS.start * 60;
+  const totalMinutes = WORK_HOURS.totalMinutes;
+  const segments = buildWorkScheduleSegments(entries);
+
+  segments.forEach((segment) => {
+    if (segment.end <= segment.start) return;
+
+    const segmentNode = document.createElement('div');
+    segmentNode.className = `work-schedule-segment segment-${segment.state}`;
+
+    const left = ((segment.start - startMinutes) / totalMinutes) * 100;
+    const width = ((segment.end - segment.start) / totalMinutes) * 100;
+    segmentNode.style.left = `${Math.max(0, Math.min(100, left))}%`;
+    segmentNode.style.width = `${Math.max(0, Math.min(100, width))}%`;
+
+    layer.appendChild(segmentNode);
+  });
+}
+
 function getPunchMarkerTooltipElement() {
   let tooltip = document.getElementById('jbe-punch-tooltip');
   if (tooltip) return tooltip;
@@ -737,6 +855,7 @@ function refreshPunchMarkers(container, force) {
     const payload = result.jobcanPunchListData;
     const entries = payload && Array.isArray(payload.entries) ? payload.entries : [];
     const targetEntries = filterTodayPunchEntries(entries);
+    renderWorkScheduleSegments(track, targetEntries);
     renderPunchMarkers(track, targetEntries);
   });
 }

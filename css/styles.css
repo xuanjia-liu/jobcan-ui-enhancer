@@ -2200,49 +2200,72 @@
   .jobcan-enhanced .work-progress-track {
     height: 14px;
     width: 100%;
-    background-color: #d8dce1;
+    background-color: #cfd5dc;
     border-radius: 999px;
     overflow: hidden;
     position: relative;
     box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.14);
     margin-top: 0;
   }
+
+  .jobcan-enhanced .work-schedule-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+  }
+
+  .jobcan-enhanced .work-schedule-segment {
+    position: absolute;
+    top: 0;
+    height: 100%;
+    border-radius: 999px;
+  }
+
+  .jobcan-enhanced .work-schedule-segment.segment-working {
+    background: linear-gradient(90deg, var(--color-work-segment-working-start) 0%, var(--color-work-segment-working-end) 100%);
+  }
+
+  .jobcan-enhanced .work-schedule-segment.segment-off {
+    background: linear-gradient(90deg, var(--color-work-segment-off-start) 0%, var(--color-work-segment-off-end) 100%);
+  }
   
   .jobcan-enhanced .work-progress-fill {
     height: 100%;
     width: 0%;
-    background: linear-gradient(90deg, #0f8bff 0%, #0066dd 70%, #0050b3 100%);
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0.08) 100%);
     position: absolute;
     left: 0;
     top: 0;
+    z-index: 2;
     transition: width 0.5s ease, background-color 0.5s ease, box-shadow 0.5s ease;
-    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.15), 0 0 10px rgba(0, 102, 221, 0.25);
+    box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.65), 0 0 8px rgba(0, 102, 221, 0.2);
     border-radius: 999px;
   }
   
   /* Progress state classes */
   .jobcan-enhanced .progress-state-inactive {
-    background-color: var(--color-gray-400);
+    background-color: rgba(255, 255, 255, 0.12);
     box-shadow: 0 0 4px var(--color-gray-400);
   }
 
   .jobcan-enhanced .progress-state-starting {
-    background-color: var(--color-primary);
+    background-color: rgba(30, 124, 242, 0.22);
     box-shadow: 0 0 4px var(--shadow-primary);
   }
 
   .jobcan-enhanced .progress-state-halfway {
-    background-color: var(--color-info);
+    background-color: rgba(23, 162, 184, 0.25);
     box-shadow: 0 0 4px var(--color-info);
   }
 
   .jobcan-enhanced .progress-state-good {
-    background-color: var(--color-success);
+    background-color: rgba(40, 167, 69, 0.24);
     box-shadow: 0 0 4px var(--color-success);
   }
 
   .jobcan-enhanced .progress-state-complete {
-    background-color: var(--color-success-dark);
+    background-color: rgba(26, 95, 160, 0.24);
     box-shadow: 0 0 6px var(--color-success-dark);
   }
   
@@ -2303,6 +2326,7 @@
     border: 2px solid rgba(255, 255, 255, 0.9);
     box-shadow: 0 2px 8px rgba(15, 23, 42, 0.25);
     cursor: pointer;
+    z-index: 4;
   }
 
   .jobcan-enhanced .work-punch-marker:hover {
@@ -2338,13 +2362,13 @@
   }
 
   .jobcan-enhanced body.dark-mode .work-progress-track {
-    background-color: #48525f;
+    background-color: #3f4855;
     box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5);
   }
 
   .jobcan-enhanced body.dark-mode .work-progress-fill {
-    background: linear-gradient(90deg, #40a9ff 0%, #1677ff 70%, #0050b3 100%);
-    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.14), 0 0 12px rgba(22, 119, 255, 0.35);
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0.26) 0%, rgba(255, 255, 255, 0.06) 100%);
+    box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.45), 0 0 10px rgba(22, 119, 255, 0.28);
   }
 
   .jobcan-enhanced body.dark-mode .work-progress-inline-label {

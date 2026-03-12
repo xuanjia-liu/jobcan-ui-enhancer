@@ -183,6 +183,10 @@
     --color-clock-colon-working: #2d8bd8;
     --color-clock-colon-not-working: #7d8a99;
     --color-clock-text: var(--color-white);
+    --color-work-segment-working-start: #1e7cf2;
+    --color-work-segment-working-end: #13a26b;
+    --color-work-segment-off-start: #9ca7b4;
+    --color-work-segment-off-end: #7f8b99;
  
     
     /* Notification Colors */
@@ -228,6 +232,10 @@
     --shadow-card-hover: 0 4px 12px rgba(0, 0, 0, 0.4);
     --shadow-modal: -5px 0 25px rgba(0, 0, 0, 0.4);
     --shadow-modal-content: -2px 0 10px rgba(0, 0, 0, 0.4);
+    --color-work-segment-working-start: #4ea8ff;
+    --color-work-segment-working-end: #2ac18e;
+    --color-work-segment-off-start: #596472;
+    --color-work-segment-off-end: #45505f;
     
     /* Gray scale shades */
     --color-gray-100: #33333f;
