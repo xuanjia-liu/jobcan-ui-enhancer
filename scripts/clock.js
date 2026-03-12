@@ -119,25 +119,8 @@ function addFlipClockStyles() {
       position: absolute;
       top: 50%;
       transform: translate(-50%, -50%);
-      width: 12px;
-      height: 12px;
-      border-radius: 50%;
-      background-color: var(--color-danger);
-      box-shadow: 0 0 5px rgba(220, 53, 69, 0.5);
-      z-index: 3;
+      z-index: 9;
       transition: left ${ANIMATION.progressBar}ms cubic-bezier(0.34, 1.56, 0.64, 1);
-    }
-    
-    .work-progress-indicator::after {
-      content: '';
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background-color: white;
     }
 
     .work-punch-marker {
@@ -260,6 +243,14 @@ function createSelfAnimatingClock(clockElement) {
   percentageIndicator.className = 'work-progress-percentage';
   progressContainer.appendChild(progressTrack);
   progressContainer.appendChild(percentageIndicator);
+  const rerenderScheduleSegmentsForHover = () => {
+    const cachedEntries = Array.isArray(flipClockContainer._cachedPunchEntries)
+      ? flipClockContainer._cachedPunchEntries
+      : [];
+    renderWorkScheduleSegments(progressTrack, cachedEntries);
+  };
+  progressContainer.addEventListener('mouseenter', rerenderScheduleSegmentsForHover);
+  progressContainer.addEventListener('mouseleave', rerenderScheduleSegmentsForHover);
   chrome.storage.sync.get(['showProgressBar'], function(result) {
     const showProgressBar = result.showProgressBar !== false;
     progressContainer.classList.toggle('hidden', !showProgressBar);
@@ -776,18 +767,37 @@ function renderWorkScheduleSegments(track, entries) {
 
   const startMinutes = WORK_HOURS.start * 60;
   const totalMinutes = WORK_HOURS.totalMinutes;
+  const trackWidth = Math.max(track.clientWidth || 0, 1);
+  const computedTrackStyle = window.getComputedStyle(track);
+  const boundaryGapPxFromVar = parseFloat(computedTrackStyle.getPropertyValue('--work-segment-boundary-gap')) || 0;
+  const dotWidthPxFromVar =
+    parseFloat(computedTrackStyle.getPropertyValue('--work-dot-active-width')) ||
+    parseFloat(computedTrackStyle.getPropertyValue('--work-dot-normal-width')) ||
+    0;
+  const boundaryGapPx = Math.max(boundaryGapPxFromVar, dotWidthPxFromVar);
+  const boundaryGapPercent = (boundaryGapPx / trackWidth) * 100;
   const segments = buildWorkScheduleSegments(entries);
 
-  segments.forEach((segment) => {
+  segments.forEach((segment, index) => {
     if (segment.end <= segment.start) return;
 
     const segmentNode = document.createElement('div');
     segmentNode.className = `work-schedule-segment segment-${segment.state}`;
 
-    const left = ((segment.start - startMinutes) / totalMinutes) * 100;
-    const width = ((segment.end - segment.start) / totalMinutes) * 100;
-    segmentNode.style.left = `${Math.max(0, Math.min(100, left))}%`;
-    segmentNode.style.width = `${Math.max(0, Math.min(100, width))}%`;
+    const leftRaw = ((segment.start - startMinutes) / totalMinutes) * 100;
+    const rightRaw = ((segment.end - startMinutes) / totalMinutes) * 100;
+    let left = leftRaw;
+    let right = rightRaw;
+
+    // Keep a visible gap around state boundaries so slim punch/current dots have breathing room.
+    if (index > 0) left += boundaryGapPercent / 2;
+    if (index < segments.length - 1) right -= boundaryGapPercent / 2;
+
+    left = Math.max(0, Math.min(100, left));
+    right = Math.max(0, Math.min(100, right));
+    const width = Math.max(0, right - left);
+    segmentNode.style.left = `${left}%`;
+    segmentNode.style.width = `${width}%`;
 
     layer.appendChild(segmentNode);
   });
@@ -842,6 +852,7 @@ function refreshPunchMarkers(container, force) {
     const payload = result.jobcanPunchListData;
     const entries = payload && Array.isArray(payload.entries) ? payload.entries : [];
     const targetEntries = filterTodayPunchEntries(entries);
+    container._cachedPunchEntries = targetEntries;
     renderWorkScheduleSegments(track, targetEntries);
     renderPunchMarkers(track, targetEntries);
   });
