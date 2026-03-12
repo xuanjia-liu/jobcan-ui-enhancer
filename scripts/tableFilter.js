@@ -950,14 +950,39 @@ function setupTableFilterButtons() {
       if (!modal) return null;
       await waitForModalContentReady(modal, 2000);
 
-      const modalRows = Array.from(
-        modal.querySelectorAll('.man-hour-table-edit tr, .jbc-table tr')
-      ).filter((tr) => !tr.querySelector('th'));
+      const getEditableRows = () => {
+        const modalRows = Array.from(
+          modal.querySelectorAll('.man-hour-table-edit tr, .jbc-table tr')
+        ).filter((tr) => !tr.querySelector('th'));
+        return modalRows.filter((row) =>
+          row.querySelector('input.man-hour-input[name="minutes[]"], input[name="minutes[]"], select[name="projects[]"], select[name="tasks[]"]')
+        );
+      };
 
-      const editableRows = modalRows.filter((row) =>
-        row.querySelector('input.man-hour-input[name="minutes[]"], input[name="minutes[]"], select[name="projects[]"], select[name="tasks[]"]')
-      );
+      let editableRows = getEditableRows();
+      if (rowsToApply.length > editableRows.length) {
+        const addRecordBtn = modal.querySelector(
+          'span.btn.jbc-btn-primary[onclick*="addRecord"], .btn.jbc-btn-primary[onclick*="addRecord"]'
+        );
 
+        if (addRecordBtn) {
+          let guard = 0;
+          while (editableRows.length < rowsToApply.length && guard < 40) {
+            const prevCount = editableRows.length;
+            addRecordBtn.click();
+            for (let waitTry = 0; waitTry < 10; waitTry++) {
+              await sleep(80);
+              editableRows = getEditableRows();
+              if (editableRows.length > prevCount) break;
+            }
+            editableRows = getEditableRows();
+            if (editableRows.length <= prevCount) break;
+            guard += 1;
+          }
+        }
+      }
+
+      editableRows = getEditableRows();
       const applyCount = Math.min(rowsToApply.length, editableRows.length);
       for (let i = 0; i < applyCount; i++) {
         const src = rowsToApply[i];
@@ -1225,12 +1250,14 @@ function setupTableFilterButtons() {
         const col = document.createElement('div');
         col.className = 'table-report-trend-col';
         if (day.mismatchFlag) col.classList.add('is-mismatch');
+        if (day.totalMinutes <= 0) col.classList.add('is-zero');
 
         const barBox = document.createElement('div');
         barBox.className = 'table-report-trend-bar-box';
         const bar = document.createElement('div');
         bar.className = 'table-report-trend-bar';
-        bar.style.height = `${Math.max(6, Math.round((day.totalMinutes / maxMinutes) * 100))}%`;
+        const fillHeight = day.totalMinutes <= 0 ? 0 : Math.max(4, Math.round((day.totalMinutes / maxMinutes) * 100));
+        bar.style.height = `${fillHeight}%`;
         bar.title = `${day.dateText || day.label}: ${formatMinutesToHHMM(day.totalMinutes)}`;
         barBox.appendChild(bar);
         col.appendChild(barBox);
@@ -1791,8 +1818,78 @@ function setupTableFilterButtons() {
       }
 
       data.days.forEach((day) => {
+        const buildEditableDayRow = (entryLike = {}) => {
+          const entry = {
+            project: entryLike.project || '',
+            task: entryLike.task || '',
+            minutesValue: Number.isFinite(entryLike.minutesValue) ? entryLike.minutesValue : parseMinutesValue(entryLike.minutesRaw || ''),
+            isProjectUnselected: entryLike.isProjectUnselected === true
+          };
+
+          const line = document.createElement('div');
+          line.className = `table-report-day-row${entry.isProjectUnselected ? ' is-project-unselected' : ''}`;
+          const projectCell = document.createElement('div');
+          projectCell.className = 'table-report-day-cell table-report-day-project-cell';
+          const taskCell = document.createElement('div');
+          taskCell.className = 'table-report-day-cell table-report-day-task-cell';
+          const minutesCell = document.createElement('div');
+          minutesCell.className = 'table-report-day-cell table-report-day-minutes-cell';
+          const actionCell = document.createElement('div');
+          actionCell.className = 'table-report-day-cell table-report-day-row-action-cell';
+
+          const projectDisplay = document.createElement('div');
+          projectDisplay.className = 'table-report-day-project table-report-day-display';
+          projectDisplay.textContent = entry.project || '(プロジェクト未選択)';
+          const project = createReportSelect(
+            'table-report-day-project table-report-day-project-select table-report-day-editor',
+            optionCatalog?.projects || [],
+            entry.project || '',
+            '(プロジェクト未選択)'
+          );
+          const taskDisplay = document.createElement('div');
+          taskDisplay.className = 'table-report-day-task table-report-day-display';
+          taskDisplay.textContent = entry.task || '(タスク未選択)';
+          const task = createReportSelect(
+            'table-report-day-task table-report-day-task-select table-report-day-editor',
+            optionCatalog?.tasks || [],
+            entry.task || '',
+            '(タスク未選択)'
+          );
+          const minutesDisplay = document.createElement('div');
+          minutesDisplay.className = 'table-report-day-minutes table-report-day-display';
+          minutesDisplay.textContent = formatMinutesToHHMM(entry.minutesValue);
+          const minutes = document.createElement('input');
+          minutes.type = 'text';
+          minutes.className = 'table-report-day-minutes table-report-day-minutes-input table-report-day-editor';
+          minutes.value = formatMinutesToHHMM(entry.minutesValue);
+          minutes.placeholder = '00:00';
+
+          projectCell.appendChild(projectDisplay);
+          projectCell.appendChild(project);
+          taskCell.appendChild(taskDisplay);
+          taskCell.appendChild(task);
+          minutesCell.appendChild(minutesDisplay);
+          minutesCell.appendChild(minutes);
+          const deleteBtn = document.createElement('button');
+          deleteBtn.type = 'button';
+          deleteBtn.className = 'table-report-day-row-delete table-report-day-editor table-report-day-icon-btn';
+          deleteBtn.setAttribute('aria-label', '行を削除');
+          deleteBtn.title = '削除';
+          deleteBtn.innerHTML = '<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path fill="currentColor" d="M6 1h4l.5 1H14v1H2V2h3.5L6 1Zm-2 4h8l-.7 9H4.7L4 5Zm2 2v5h1V7H6Zm3 0v5h1V7H9Z"/></svg>';
+          deleteBtn.addEventListener('click', () => {
+            line.remove();
+          });
+          actionCell.appendChild(deleteBtn);
+          line.appendChild(projectCell);
+          line.appendChild(taskCell);
+          line.appendChild(minutesCell);
+          line.appendChild(actionCell);
+          return line;
+        };
+
         const card = document.createElement('div');
         card.className = `table-report-day-card${day.mismatchFlag ? ' is-mismatch' : ''}`;
+        const originalEntries = Array.isArray(day.entries) ? day.entries.map((entry) => ({ ...entry })) : [];
 
         const head = document.createElement('div');
         head.className = 'table-report-day-head';
@@ -1820,14 +1917,64 @@ function setupTableFilterButtons() {
         dayEditBtn.type = 'button';
         dayEditBtn.className = 'table-report-day-edit-btn';
         dayEditBtn.textContent = '編集';
-        dayEditBtn.addEventListener('click', async () => {
-          const isEditing = card.classList.contains('is-editing');
-          if (!isEditing) {
-            card.classList.add('is-editing');
-            dayEditBtn.textContent = '保存';
-            return;
-          }
+        const dayFooter = document.createElement('div');
+        dayFooter.className = 'table-report-day-footer';
+        const daySaveBtn = document.createElement('button');
+        daySaveBtn.type = 'button';
+        daySaveBtn.className = 'table-report-day-save-btn';
+        daySaveBtn.textContent = '保存';
+        const dayCancelBtn = document.createElement('button');
+        dayCancelBtn.type = 'button';
+        dayCancelBtn.className = 'table-report-day-cancel-btn';
+        dayCancelBtn.textContent = 'キャンセル';
+        const dayAddBtn = document.createElement('button');
+        dayAddBtn.type = 'button';
+        dayAddBtn.className = 'table-report-day-add-btn table-report-day-icon-btn';
+        dayAddBtn.title = '追加';
+        dayAddBtn.setAttribute('aria-label', '行を追加');
+        dayAddBtn.innerHTML = '<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path fill="currentColor" d="M8 3a.75.75 0 0 1 .75.75v3.5h3.5a.75.75 0 0 1 0 1.5h-3.5v3.5a.75.75 0 0 1-1.5 0v-3.5h-3.5a.75.75 0 0 1 0-1.5h3.5v-3.5A.75.75 0 0 1 8 3Z"/></svg>';
+        const dayActions = document.createElement('div');
+        dayActions.className = 'table-report-day-actions';
+        dayActions.appendChild(dayRefetchBtn);
+        dayActions.appendChild(dayEditBtn);
+        dayFooter.appendChild(daySaveBtn);
+        dayFooter.appendChild(dayCancelBtn);
+        dayFooter.appendChild(dayAddBtn);
 
+        const rows = document.createElement('div');
+        rows.className = 'table-report-day-rows';
+        const renderRows = (entries = []) => {
+          rows.replaceChildren();
+          entries.forEach((entry) => {
+            rows.appendChild(buildEditableDayRow(entry));
+          });
+        };
+        renderRows(originalEntries);
+
+        dayCancelBtn.addEventListener('click', () => {
+          renderRows(originalEntries);
+          card.classList.remove('is-editing');
+          dayEditBtn.disabled = false;
+        });
+
+        dayAddBtn.addEventListener('click', () => {
+          if (!card.classList.contains('is-editing')) return;
+          const newRow = buildEditableDayRow({
+            project: '',
+            task: '',
+            minutesRaw: '',
+            minutesValue: 0,
+            isProjectUnselected: false
+          });
+          rows.appendChild(newRow);
+        });
+
+        dayEditBtn.addEventListener('click', () => {
+          card.classList.add('is-editing');
+          dayEditBtn.disabled = true;
+        });
+
+        daySaveBtn.addEventListener('click', async () => {
           if (typeof onApplyDay !== 'function') return;
           const lines = card.querySelectorAll('.table-report-day-row');
           const editedEntries = Array.from(lines).map((line) => ({
@@ -1836,18 +1983,21 @@ function setupTableFilterButtons() {
             minutesRaw: (line.querySelector('.table-report-day-minutes-input')?.value || '').trim()
           }));
 
-          dayEditBtn.disabled = true;
-          dayEditBtn.textContent = '保存中...';
+          daySaveBtn.disabled = true;
+          daySaveBtn.textContent = '保存中...';
+          dayCancelBtn.disabled = true;
+          dayAddBtn.disabled = true;
           try {
             const ok = await onApplyDay(day.id, editedEntries);
             if (ok) {
               card.classList.remove('is-editing');
-              dayEditBtn.textContent = '編集';
-            } else {
-              dayEditBtn.textContent = '保存';
+              dayEditBtn.disabled = false;
             }
           } finally {
-            dayEditBtn.disabled = false;
+            daySaveBtn.disabled = false;
+            daySaveBtn.textContent = '保存';
+            dayCancelBtn.disabled = false;
+            dayAddBtn.disabled = false;
           }
         });
         const dayTotal = document.createElement('div');
@@ -1863,70 +2013,13 @@ function setupTableFilterButtons() {
           dayTotal.appendChild(noData);
         }
         dayDateWrap.appendChild(dayDate);
-        dayDateWrap.appendChild(dayRefetchBtn);
-        dayDateWrap.appendChild(dayEditBtn);
+        dayDateWrap.appendChild(dayActions);
         head.appendChild(dayDateWrap);
         head.appendChild(dayTotal);
 
         card.appendChild(head);
-
-        const rows = document.createElement('div');
-        rows.className = 'table-report-day-rows';
-
-        if (hasEntries) {
-          day.entries.forEach((entry) => {
-            const line = document.createElement('div');
-            line.className = `table-report-day-row${entry.isProjectUnselected ? ' is-project-unselected' : ''}`;
-            const projectCell = document.createElement('div');
-            projectCell.className = 'table-report-day-cell table-report-day-project-cell';
-            const taskCell = document.createElement('div');
-            taskCell.className = 'table-report-day-cell table-report-day-task-cell';
-            const minutesCell = document.createElement('div');
-            minutesCell.className = 'table-report-day-cell table-report-day-minutes-cell';
-
-            const projectDisplay = document.createElement('div');
-            projectDisplay.className = 'table-report-day-project table-report-day-display';
-            projectDisplay.textContent = entry.project || '(プロジェクト未選択)';
-            const project = createReportSelect(
-              'table-report-day-project table-report-day-project-select table-report-day-editor',
-              optionCatalog?.projects || [],
-              entry.project || '',
-              '(プロジェクト未選択)'
-            );
-            const taskDisplay = document.createElement('div');
-            taskDisplay.className = 'table-report-day-task table-report-day-display';
-            taskDisplay.textContent = entry.task || '(タスク未選択)';
-            const task = createReportSelect(
-              'table-report-day-task table-report-day-task-select table-report-day-editor',
-              optionCatalog?.tasks || [],
-              entry.task || '',
-              '(タスク未選択)'
-            );
-            const minutesDisplay = document.createElement('div');
-            minutesDisplay.className = 'table-report-day-minutes table-report-day-display';
-            minutesDisplay.textContent = formatMinutesToHHMM(entry.minutesValue);
-            const minutes = document.createElement('input');
-            minutes.type = 'text';
-            minutes.className = 'table-report-day-minutes table-report-day-minutes-input table-report-day-editor';
-            minutes.value = formatMinutesToHHMM(entry.minutesValue);
-            minutes.placeholder = '00:00';
-
-            projectCell.appendChild(projectDisplay);
-            projectCell.appendChild(project);
-            taskCell.appendChild(taskDisplay);
-            taskCell.appendChild(task);
-            minutesCell.appendChild(minutesDisplay);
-            minutesCell.appendChild(minutes);
-            line.appendChild(projectCell);
-            line.appendChild(taskCell);
-            line.appendChild(minutesCell);
-            rows.appendChild(line);
-          });
-        }
-
-        if (hasEntries) {
-          card.appendChild(rows);
-        }
+        card.appendChild(rows);
+        card.appendChild(dayFooter);
         wrap.appendChild(card);
       });
 

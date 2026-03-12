@@ -4156,17 +4156,17 @@
   }
 
   .table-report-trend-scroll-wrap {
-    display: grid;
-    grid-template-rows: minmax(0, 1fr) 12px;
+    display: flex;
+    flex-direction: column;
     gap: 8px;
   }
 
   .table-report-trend-bars {
-    min-height: 172px;
+    min-height: 148px;
     display: grid;
     grid-auto-flow: column;
     grid-auto-columns: minmax(26px, 1fr);
-    align-items: stretch;
+    align-items: end;
     gap: 6px;
     overflow-x: auto;
     padding-bottom: 0;
@@ -4178,28 +4178,29 @@
   }
 
   .table-report-trend-scrollbar {
-    height: 12px;
+    height: 8px;
     border-radius: 999px;
-    background: color-mix(in srgb, var(--color-card) 68%, #ffffff 32%);
-    border: 1px solid color-mix(in srgb, var(--color-border) 78%, var(--color-primary) 22%);
+    background: color-mix(in srgb, var(--color-card) 90%, var(--color-white) 10%);
+    border: 1px solid color-mix(in srgb, var(--color-border) 92%, var(--color-primary) 8%);
     position: relative;
     cursor: pointer;
+    opacity: 0.72;
   }
 
   .table-report-trend-scrollbar-thumb {
     position: absolute;
     top: 1px;
     left: 1px;
-    height: 8px;
+    height: 4px;
     min-width: 34px;
     border-radius: 999px;
-    background: linear-gradient(90deg, color-mix(in srgb, var(--color-primary) 88%, #6ec7ff 12%), color-mix(in srgb, var(--color-info) 88%, #4be4ff 12%));
-    box-shadow: 0 1px 4px var(--color-black-20);
+    background: color-mix(in srgb, var(--color-primary) 42%, var(--color-info) 58%);
+    box-shadow: none;
     transition: background-color 0.18s ease;
   }
 
   .table-report-trend-scrollbar:hover .table-report-trend-scrollbar-thumb {
-    background: linear-gradient(90deg, color-mix(in srgb, var(--color-primary) 82%, #98dcff 18%), color-mix(in srgb, var(--color-info) 82%, #76efff 18%));
+    background: color-mix(in srgb, var(--color-primary) 48%, var(--color-info) 52%);
   }
 
   .table-report-trend-scrollbar.is-disabled {
@@ -4208,11 +4209,11 @@
   }
 
   .table-report-trend-col {
-    display: grid;
-    grid-template-rows: 132px auto;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: center;
     gap: 6px;
-    align-items: stretch;
-    justify-items: center;
     min-width: 26px;
   }
 
@@ -4229,9 +4230,13 @@
 
   .table-report-trend-bar {
     width: 100%;
-    min-height: 6px;
+    min-height: 0;
     border-radius: 6px 6px 0 0;
     background: linear-gradient(180deg, var(--color-primary), var(--color-info));
+  }
+
+  .table-report-trend-col.is-zero .table-report-trend-bar {
+    display: none;
   }
 
   .table-report-trend-col.is-mismatch .table-report-trend-bar {
@@ -4239,9 +4244,13 @@
   }
 
   .table-report-trend-label {
+    display: block;
     font-size: 10px;
     color: var(--color-text-secondary);
-    line-height: 1;
+    line-height: 10px;
+    height: 10px;
+    margin: 0;
+    padding: 0;
     white-space: nowrap;
   }
 
@@ -4341,29 +4350,46 @@
     border-radius: 10px;
     background: color-mix(in srgb, var(--color-background) 95%, #08142a 5%);
     box-shadow: 0 14px 30px var(--color-black-35);
-    overflow: hidden;
+    overflow: visible;
   }
 
   .table-report-day-popover-close {
+    appearance: none;
+    -webkit-appearance: none;
     position: absolute;
-    top: 6px;
-    right: 6px;
-    width: 24px;
-    height: 24px;
-    border: 1px solid color-mix(in srgb, var(--color-border) 70%, var(--color-primary) 30%);
+    top: -8px;
+    right: -8px;
+    width: 22px;
+    height: 22px;
+    border: 1px solid color-mix(in srgb, var(--color-border) 66%, var(--color-primary) 34%);
     border-radius: 999px;
-    background: color-mix(in srgb, var(--color-card) 86%, var(--color-black-10) 14%);
-    color: var(--color-text-secondary);
-    font-size: 16px;
+    background: color-mix(in srgb, var(--color-card) 92%, var(--color-black-10) 8%);
+    color: color-mix(in srgb, var(--color-text-secondary) 86%, var(--color-white) 14%);
+    font-size: 18px;
+    font-weight: 400;
     line-height: 1;
+    padding: 0;
+    margin: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     cursor: pointer;
     z-index: 2;
+    box-shadow: none;
+    transition: background-color 0.16s ease, color 0.16s ease, transform 0.16s ease;
+  }
+
+  .table-report-day-popover-close:hover {
+    background: color-mix(in srgb, var(--color-card) 78%, var(--color-black-10) 22%);
+    color: var(--color-text-primary);
+    transform: scale(1.04);
   }
 
   .table-report-day-popover-content {
     max-height: 58vh;
     overflow: auto;
     padding: 6px;
+    border-radius: inherit;
   }
 
   .table-report-day-list.is-popover-list {
@@ -4390,14 +4416,17 @@
   }
 
   .table-report-day-list.is-popover-list .table-report-day-refetch-btn,
-  .table-report-day-list.is-popover-list .table-report-day-edit-btn {
+  .table-report-day-list.is-popover-list .table-report-day-save-btn,
+  .table-report-day-list.is-popover-list .table-report-day-edit-btn,
+  .table-report-day-list.is-popover-list .table-report-day-cancel-btn,
+  .table-report-day-list.is-popover-list .table-report-day-add-btn {
     height: 20px;
     padding: 0 6px;
     font-size: 10px;
   }
 
   .table-report-day-list.is-popover-list .table-report-day-row {
-    grid-template-columns: minmax(0, 2fr) minmax(0, 1.1fr) minmax(0, 0.7fr);
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1.1fr) minmax(0, 0.7fr) 20px;
     gap: 8px;
     padding: 6px 9px;
     font-size: 11px;
@@ -4668,6 +4697,22 @@
     flex-wrap: wrap;
   }
 
+  .table-report-day-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .table-report-day-footer {
+    display: none;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 8px 10px;
+    border-top: 1px solid color-mix(in srgb, var(--color-border) 80%, var(--color-primary) 20%);
+    background: color-mix(in srgb, var(--color-black-3) 56%, var(--color-card) 44%);
+  }
+
   .table-report-day-date {
     font-weight: 700;
     color: var(--color-text-primary);
@@ -4734,13 +4779,96 @@
     cursor: wait;
   }
 
+  .table-report-day-save-btn {
+    border: 1px solid color-mix(in srgb, var(--color-primary) 58%, var(--color-border) 42%);
+    background: color-mix(in srgb, var(--color-primary) 26%, var(--color-card) 74%);
+    color: var(--color-text-primary);
+    border-radius: var(--border-radius-sm);
+    height: 24px;
+    padding: 0 10px;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  .table-report-day-save-btn:disabled {
+    opacity: 0.7;
+    cursor: wait;
+  }
+
+  .table-report-day-cancel-btn,
+  .table-report-day-add-btn {
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-sm);
+    height: 24px;
+    padding: 0 8px;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1;
+    cursor: pointer;
+    display: none;
+  }
+
+  .table-report-day-cancel-btn {
+    background: color-mix(in srgb, var(--color-card) 92%, var(--color-black-3) 8%);
+    color: var(--color-text-secondary);
+  }
+
+  .table-report-day-add-btn {
+    background: color-mix(in srgb, var(--color-info) 18%, var(--color-card) 82%);
+    color: var(--color-text-primary);
+  }
+
+  .table-report-day-card.is-editing .table-report-day-cancel-btn,
+  .table-report-day-card.is-editing .table-report-day-add-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .table-report-day-card.is-editing .table-report-day-footer {
+    display: flex;
+  }
+
+  .table-report-day-card.is-editing .table-report-day-edit-btn {
+    display: none;
+  }
+
+  .table-report-day-card.is-editing .table-report-day-refetch-btn {
+    opacity: 0.55;
+    pointer-events: none;
+  }
+
+  .table-report-day-icon-btn {
+    width: 24px;
+    padding: 0;
+  }
+
+  .table-report-day-row-delete {
+    border: 1px solid color-mix(in srgb, var(--color-border) 74%, var(--color-danger) 26%);
+    background: color-mix(in srgb, var(--color-danger) 10%, var(--color-card) 90%);
+    color: color-mix(in srgb, var(--color-danger) 68%, var(--color-text-primary) 32%);
+    border-radius: var(--border-radius-sm);
+    height: 20px;
+    width: 20px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+
+  .table-report-day-card.is-editing .table-report-day-row-delete {
+    display: inline-flex;
+  }
+
   .table-report-day-rows {
     display: grid;
   }
 
   .table-report-day-row {
     display: grid;
-    grid-template-columns: 5fr 1fr 0.5fr;
+    grid-template-columns: 5fr 1.3fr 0.8fr 24px;
     gap: 10px;
     padding: 8px 12px;
     border-bottom: 1px dashed var(--color-border);
@@ -4759,6 +4887,12 @@
 
   .table-report-day-cell {
     min-width: 0;
+  }
+
+  .table-report-day-row-action-cell {
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .table-report-day-project,
@@ -4871,7 +5005,7 @@
     }
 
     .table-report-trend-col {
-      grid-template-rows: 112px auto;
+      min-width: 24px;
     }
 
     .table-report-trend-bar-box {
