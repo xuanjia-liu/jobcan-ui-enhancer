@@ -2311,13 +2311,13 @@
   
   .jobcan-enhanced .time-scale-marker {
     position: absolute;
-    top: 0;
-    width: 2px;
-    height: 14px;
-    background-color: rgba(26, 40, 58, 0.6);
-    z-index: 3;
+    top: 3px;
+    width: 1px;
+    height: 8px;
+    background-color: rgba(255, 255, 255, 0.4);
+    z-index: 10;
     border-radius: 999px;
-    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08);
+    box-shadow: 0 0 0 1px rgba(16, 24, 40, 0.1);
   }
 
   .jobcan-enhanced .work-punch-marker {
@@ -2380,8 +2380,8 @@
   }
 
   .jobcan-enhanced body.dark-mode .time-scale-marker {
-    background-color: rgba(255, 255, 255, 0.45);
-    box-shadow: none;
+    background-color: rgba(255, 255, 255, 0.4);
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.2);
   }
   
   .jobcan-enhanced .current-time-indicator {

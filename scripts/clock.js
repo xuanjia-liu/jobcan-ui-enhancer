@@ -234,16 +234,9 @@ function createSelfAnimatingClock(clockElement) {
   
   const createTimeMarker = (percent, time) => {
     const marker = document.createElement('div');
-    marker.className = `time-scale-marker marker-position-${percent}`;
+    marker.className = `time-scale-marker marker-position-${percent} visible`;
     marker.title = time;
-    marker.style.position = 'absolute';
     marker.style.left = `${percent}%`;
-    marker.style.top = '-1px';
-    marker.style.width = '1px';
-    marker.style.height = '10px';
-    marker.style.backgroundColor = 'var(--color-black-40)';
-    marker.style.opacity = '0.45';
-    marker.style.borderRadius = '999px';
     return marker;
   };
   
@@ -255,15 +248,9 @@ function createSelfAnimatingClock(clockElement) {
   progressTrack.appendChild(createTimeMarker(83.33, '21:00'));
   progressTrack.appendChild(createTimeMarker(100, '24:00'));
   
-  // Fade in markers sequentially with delay
-  setTimeout(() => {
-    const markers = progressTrack.querySelectorAll('.time-scale-marker');
-    markers.forEach((marker, index) => {
-      setTimeout(() => {
-        marker.classList.add('visible');
-      }, index * 150);
-    });
-  }, 500);
+  // Ensure markers remain visible even when schedule colors are layered.
+  const markers = progressTrack.querySelectorAll('.time-scale-marker');
+  markers.forEach((marker) => marker.classList.add('visible'));
   
   const startMarker = document.createElement('div');
   startMarker.className = 'work-progress-marker start-marker';
