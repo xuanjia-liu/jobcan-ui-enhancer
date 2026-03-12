@@ -1173,6 +1173,40 @@ function setupTableFilterButtons() {
       return text.slice(0, 8);
     };
 
+    const buildDailySummaryKpiItems = (rawDays = []) => {
+      const days = (rawDays || []).map((day) => ({
+        ...day,
+        totalMinutes: getDayTotalMinutes(day),
+        label: extractDayLabel(day?.dateText || `ID ${day?.id || ''}`)
+      }));
+
+      if (!days.length) return [];
+
+      const totalMinutes = days.reduce((sum, day) => sum + day.totalMinutes, 0);
+      const activeDays = days.filter((day) => day.totalMinutes > 0).length;
+      const avgMinutes = activeDays > 0 ? Math.round(totalMinutes / activeDays) : 0;
+      const peakDay = days.reduce((best, day) => (day.totalMinutes > (best?.totalMinutes || 0) ? day : best), null);
+      const noInputDays = days.filter((day) => day.skippedNoInput || day.totalMinutes <= 0).length;
+
+      return [
+        {
+          label: 'ピーク日',
+          value: peakDay ? formatMinutesToHHMM(peakDay.totalMinutes) : '00:00',
+          detail: peakDay ? `${peakDay.dateText || peakDay.label}` : 'データなし'
+        },
+        {
+          label: '平均/稼働日',
+          value: formatMinutesToHHMM(avgMinutes),
+          detail: `${activeDays}日が稼働`
+        },
+        {
+          label: '未入力日',
+          value: `${noInputDays}日`,
+          detail: `対象 ${days.length}日`
+        }
+      ];
+    };
+
     const buildReportVisualSummary = (data, detailHandlers = {}) => {
       const wrap = document.createElement('div');
       wrap.className = 'table-report-visual-summary';
@@ -1192,51 +1226,6 @@ function setupTableFilterButtons() {
         return wrap;
       }
 
-      const totalMinutes = days.reduce((sum, day) => sum + day.totalMinutes, 0);
-      const activeDays = days.filter((day) => day.totalMinutes > 0).length;
-      const avgMinutes = activeDays > 0 ? Math.round(totalMinutes / activeDays) : 0;
-      const peakDay = days.reduce((best, day) => (day.totalMinutes > (best?.totalMinutes || 0) ? day : best), null);
-      const noInputDays = days.filter((day) => day.skippedNoInput || day.totalMinutes <= 0).length;
-
-      const cards = document.createElement('div');
-      cards.className = 'table-report-visual-summary-cards';
-
-      const summaryItems = [
-        {
-          label: 'ピーク日',
-          value: peakDay ? formatMinutesToHHMM(peakDay.totalMinutes) : '00:00',
-          detail: peakDay ? `${peakDay.dateText || peakDay.label}` : 'データなし'
-        },
-        {
-          label: '平均/稼働日',
-          value: formatMinutesToHHMM(avgMinutes),
-          detail: `${activeDays}日が稼働`
-        },
-        {
-          label: '未入力日',
-          value: `${noInputDays}日`,
-          detail: `対象 ${days.length}日`
-        }
-      ];
-
-      summaryItems.forEach((item) => {
-        const card = document.createElement('div');
-        card.className = 'table-report-visual-metric';
-        card.innerHTML = `
-          <div class="table-report-visual-metric-label">${item.label}</div>
-          <div class="table-report-visual-metric-value">${item.value}</div>
-          <div class="table-report-visual-metric-detail">${item.detail}</div>
-        `;
-        cards.appendChild(card);
-      });
-
-      const layout = document.createElement('div');
-      layout.className = 'table-report-visual-layout';
-      const leftPane = document.createElement('div');
-      leftPane.className = 'table-report-visual-left';
-      const rightPane = document.createElement('div');
-      rightPane.className = 'table-report-visual-right';
-
       const trend = document.createElement('div');
       trend.className = 'table-report-visual-card';
       const trendTitle = document.createElement('h4');
@@ -1245,6 +1234,33 @@ function setupTableFilterButtons() {
       const trendBars = document.createElement('div');
       trendBars.className = 'table-report-trend-bars';
       const maxMinutes = Math.max(...days.map((day) => day.totalMinutes), 1);
+      const overtimeThresholdMinutes = 8 * 60;
+      const workingDays = days.filter((day) => day.totalMinutes > 0);
+      const avgWorkingMinutes = workingDays.length
+        ? Math.round(workingDays.reduce((sum, day) => sum + day.totalMinutes, 0) / workingDays.length)
+        : 0;
+      const avgHeightPct = avgWorkingMinutes > 0
+        ? Math.max(0, Math.min(100, (avgWorkingMinutes / maxMinutes) * 100))
+        : 0;
+
+      if (avgWorkingMinutes > 0) {
+        const avgMeta = document.createElement('span');
+        avgMeta.className = 'table-report-trend-average-meta';
+        avgMeta.textContent = `平均 ${formatMinutesToHHMM(avgWorkingMinutes)}`;
+        trendTitle.appendChild(avgMeta);
+      }
+
+      const colorLegend = document.createElement('span');
+      colorLegend.className = 'table-report-trend-color-legend';
+      const regularLegend = document.createElement('span');
+      regularLegend.className = 'table-report-trend-color-legend-item';
+      regularLegend.innerHTML = '<i class="is-regular"></i><span>通常（~8h）</span>';
+      const overtimeLegend = document.createElement('span');
+      overtimeLegend.className = 'table-report-trend-color-legend-item';
+      overtimeLegend.innerHTML = '<i class="is-overtime"></i><span>超過（8h+）</span>';
+      colorLegend.appendChild(regularLegend);
+      colorLegend.appendChild(overtimeLegend);
+      trendTitle.appendChild(colorLegend);
 
       days.forEach((day) => {
         const col = document.createElement('div');
@@ -1254,10 +1270,19 @@ function setupTableFilterButtons() {
 
         const barBox = document.createElement('div');
         barBox.className = 'table-report-trend-bar-box';
+        if (avgWorkingMinutes > 0) {
+          barBox.classList.add('has-average');
+          barBox.style.setProperty('--avg-height', `${avgHeightPct}%`);
+        }
         const bar = document.createElement('div');
         bar.className = 'table-report-trend-bar';
         const fillHeight = day.totalMinutes <= 0 ? 0 : Math.max(4, Math.round((day.totalMinutes / maxMinutes) * 100));
+        const regularMinutes = Math.max(0, Math.min(day.totalMinutes, overtimeThresholdMinutes));
+        const regularCutoffPct = day.totalMinutes > 0
+          ? Math.max(0, Math.min(100, (regularMinutes / day.totalMinutes) * 100))
+          : 100;
         bar.style.height = `${fillHeight}%`;
+        bar.style.setProperty('--regular-cutoff', `${regularCutoffPct}%`);
         bar.title = `${day.dateText || day.label}: ${formatMinutesToHHMM(day.totalMinutes)}`;
         barBox.appendChild(bar);
         col.appendChild(barBox);
@@ -1481,13 +1506,8 @@ function setupTableFilterButtons() {
       setTimeout(syncTrendScrollbar, 0);
       setTimeout(syncTrendScrollbar, 120);
 
-      leftPane.appendChild(cards);
-      leftPane.appendChild(trend);
-      rightPane.appendChild(heatmap);
-      layout.appendChild(leftPane);
-      layout.appendChild(rightPane);
-
-      wrap.appendChild(layout);
+      wrap.appendChild(trend);
+      wrap.appendChild(heatmap);
       return wrap;
     };
 
@@ -2175,6 +2195,25 @@ function setupTableFilterButtons() {
         }
         kpis.appendChild(card);
       });
+      buildDailySummaryKpiItems(data.days || []).forEach((item) => {
+        const card = document.createElement('div');
+        card.className = 'table-report-kpi-card table-report-kpi-card-visual';
+        const label = document.createElement('div');
+        label.className = 'table-report-kpi-label';
+        label.textContent = item.label;
+        const value = document.createElement('div');
+        value.className = 'table-report-kpi-value';
+        value.textContent = item.value;
+        card.appendChild(label);
+        card.appendChild(value);
+        if (item.detail) {
+          const detail = document.createElement('div');
+          detail.className = 'table-report-kpi-detail';
+          detail.textContent = item.detail;
+          card.appendChild(detail);
+        }
+        kpis.appendChild(card);
+      });
 
       const section1 = document.createElement('section');
       section1.className = 'table-report-section';
@@ -2219,8 +2258,8 @@ function setupTableFilterButtons() {
       }));
 
       body.appendChild(kpis);
-      body.appendChild(section1);
       body.appendChild(section2);
+      body.appendChild(section1);
 
       panel.appendChild(header);
       panel.appendChild(body);
