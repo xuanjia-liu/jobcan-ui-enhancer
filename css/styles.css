@@ -3884,30 +3884,31 @@
   .table-report-modal-overlay {
     position: fixed;
     inset: 0;
-    background: var(--color-black-50);
+    background: color-mix(in srgb, var(--color-black-50) 78%, #0f172a 22%);
     z-index: var(--z-index-notification);
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 20px;
+    padding: 24px;
+    backdrop-filter: blur(2px);
   }
 
   .table-report-modal {
-    width: min(800px, 96vw);
+    width: min(1120px, 97vw);
     max-height: 90vh;
     display: flex;
     flex-direction: column;
-    background: var(--color-background);
-    border-radius: var(--border-radius-md);
-    border: 1px solid var(--color-border);
-    box-shadow: 0 16px 38px var(--color-black-30);
+    background: linear-gradient(160deg, color-mix(in srgb, var(--color-background) 94%, var(--color-card) 6%), color-mix(in srgb, var(--color-card) 92%, var(--color-black-3) 8%));
+    border-radius: var(--border-radius-lg);
+    border: 1px solid color-mix(in srgb, var(--color-border) 82%, var(--color-primary) 18%);
+    box-shadow: 0 22px 54px var(--color-black-30);
     overflow: hidden;
   }
 
   .table-report-header {
-    padding: 16px 18px;
-    border-bottom: 1px solid var(--color-border);
-    background: linear-gradient(95deg, var(--color-card), var(--color-black-3));
+    padding: 18px 22px;
+    border-bottom: 1px solid color-mix(in srgb, var(--color-border) 76%, var(--color-primary) 24%);
+    background: linear-gradient(95deg, color-mix(in srgb, var(--color-card) 70%, var(--color-primary) 30%), color-mix(in srgb, var(--color-card) 92%, var(--color-black-3) 8%));
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -3916,15 +3917,17 @@
 
   .table-report-title {
     margin: 0;
-    font-size: 20px;
+    font-size: 22px;
     line-height: 1.2;
     color: var(--color-text-primary);
+    letter-spacing: 0.01em;
   }
 
   .table-report-timestamp {
-    margin-top: 4px;
+    margin-top: 5px;
     color: var(--color-text-secondary);
     font-size: 12px;
+    font-weight: 500;
   }
 
   .table-report-actions {
@@ -3936,12 +3939,13 @@
 
   .table-report-action-btn,
   .table-report-close-btn {
-    border: none;
+    border: 1px solid color-mix(in srgb, var(--color-border) 76%, var(--color-primary) 24%);
     border-radius: var(--border-radius-sm);
     padding: 8px 14px;
     font-size: 13px;
     font-weight: 600;
     cursor: pointer;
+    transition: transform 0.16s ease, background-color 0.16s ease, filter 0.16s ease;
   }
 
   .table-report-action-btn {
@@ -3951,6 +3955,7 @@
 
   .table-report-action-btn:hover {
     filter: brightness(1.05);
+    transform: translateY(-1px);
   }
 
   .table-report-action-btn:disabled {
@@ -3959,20 +3964,21 @@
   }
 
   .table-report-close-btn {
-    background: var(--color-gray-300);
+    background: color-mix(in srgb, var(--color-card) 88%, var(--color-gray-300) 12%);
     color: var(--color-text-primary);
   }
 
   .table-report-close-btn:hover {
-    background: var(--color-gray-400);
+    background: color-mix(in srgb, var(--color-card) 82%, var(--color-gray-400) 18%);
+    transform: translateY(-1px);
   }
 
   .table-report-body {
     overflow-y: auto;
     overflow-x: hidden;
-    padding: 16px 18px 24px;
+    padding: 16px 22px 24px;
     display: grid;
-    gap: 16px;
+    gap: 14px;
   }
 
   .table-report-body > * {
@@ -3986,15 +3992,15 @@
   .table-report-month-tabs {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: 10px;
   }
 
   .table-report-month-tab {
-    border: 1px solid var(--color-border);
+    border: 1px solid color-mix(in srgb, var(--color-border) 75%, var(--color-primary) 25%);
     border-radius: var(--border-radius-xl);
-    background: var(--color-white);
+    background: color-mix(in srgb, var(--color-card) 94%, var(--color-white) 6%);
     color: var(--color-text-secondary);
-    padding: 4px 10px;
+    padding: 5px 11px;
     font-size: 12px;
     cursor: pointer;
     transition: all 0.2s ease;
@@ -4031,15 +4037,15 @@
 
   .table-report-kpis {
     display: grid;
-    grid-template-columns: repeat(3, minmax(140px, 1fr));
-    gap: 10px;
+    grid-template-columns: repeat(3, minmax(190px, 1fr));
+    gap: 12px;
   }
 
   .table-report-kpi-card {
-    border: 1px solid var(--color-border);
+    border: 1px solid color-mix(in srgb, var(--color-border) 72%, var(--color-primary) 28%);
     border-radius: var(--border-radius-sm);
-    background: var(--color-card);
-    padding: 10px 12px;
+    background: linear-gradient(175deg, color-mix(in srgb, var(--color-card) 86%, var(--color-white) 14%), color-mix(in srgb, var(--color-card) 95%, var(--color-black-3) 5%));
+    padding: 12px 13px;
   }
 
   .table-report-kpi-label {
@@ -4048,10 +4054,11 @@
   }
 
   .table-report-kpi-value {
-    margin-top: 4px;
-    font-size: 20px;
+    margin-top: 5px;
+    font-size: 24px;
     font-weight: 700;
     color: var(--color-text-primary);
+    letter-spacing: 0.01em;
   }
 
   .table-report-kpi-detail {
@@ -4063,18 +4070,337 @@
   }
 
   .table-report-section {
-    border: 1px solid var(--color-border);
+    border: 1px solid color-mix(in srgb, var(--color-border) 82%, var(--color-primary) 18%);
     border-radius: var(--border-radius-sm);
-    padding: 12px;
-    background: var(--color-card);
+    padding: 13px;
+    background: color-mix(in srgb, var(--color-card) 94%, var(--color-black-3) 6%);
     min-width: 0;
   }
 
   .table-report-section-title {
-    margin: 0 0 10px;
-    font-size: 14px;
+    margin: 0 0 12px;
+    font-size: 15px;
     font-weight: 700;
     color: var(--color-text-primary);
+    letter-spacing: 0.01em;
+  }
+
+  .table-report-visual-summary {
+    display: grid;
+    gap: 0;
+  }
+
+  .table-report-visual-layout {
+    display: grid;
+    grid-template-columns: minmax(420px, 1.2fr) minmax(520px, 1.8fr);
+    gap: 12px;
+    align-items: start;
+  }
+
+  .table-report-visual-left {
+    display: grid;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  .table-report-visual-right {
+    min-width: 0;
+  }
+
+  .table-report-visual-summary-cards {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(130px, 1fr));
+    gap: 10px;
+  }
+
+  .table-report-visual-metric {
+    padding: 10px 12px;
+    border-radius: var(--border-radius-sm);
+    border: 1px solid color-mix(in srgb, var(--color-border) 72%, var(--color-info) 28%);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--color-card) 90%, var(--color-info) 10%), color-mix(in srgb, var(--color-card) 98%, var(--color-black-3) 2%));
+  }
+
+  .table-report-visual-metric-label {
+    font-size: 11px;
+    color: var(--color-text-secondary);
+  }
+
+  .table-report-visual-metric-value {
+    margin-top: 4px;
+    font-size: 21px;
+    font-weight: 700;
+    color: var(--color-text-primary);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .table-report-visual-metric-detail {
+    margin-top: 4px;
+    font-size: 11px;
+    color: var(--color-text-secondary);
+  }
+
+  .table-report-visual-card {
+    border: 1px solid color-mix(in srgb, var(--color-border) 80%, var(--color-primary) 20%);
+    border-radius: var(--border-radius-sm);
+    background: color-mix(in srgb, var(--color-background) 94%, var(--color-card) 6%);
+    padding: 10px;
+    min-width: 0;
+    position: relative;
+  }
+
+  .table-report-visual-title {
+    margin: 0 0 8px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--color-text-secondary);
+  }
+
+  .table-report-trend-scroll-wrap {
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) 12px;
+    gap: 8px;
+  }
+
+  .table-report-trend-bars {
+    min-height: 172px;
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(26px, 1fr);
+    align-items: stretch;
+    gap: 6px;
+    overflow-x: auto;
+    padding-bottom: 0;
+    scrollbar-width: none;
+  }
+
+  .table-report-trend-bars::-webkit-scrollbar {
+    height: 0;
+  }
+
+  .table-report-trend-scrollbar {
+    height: 12px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--color-card) 68%, #ffffff 32%);
+    border: 1px solid color-mix(in srgb, var(--color-border) 78%, var(--color-primary) 22%);
+    position: relative;
+    cursor: pointer;
+  }
+
+  .table-report-trend-scrollbar-thumb {
+    position: absolute;
+    top: 1px;
+    left: 1px;
+    height: 8px;
+    min-width: 34px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, color-mix(in srgb, var(--color-primary) 88%, #6ec7ff 12%), color-mix(in srgb, var(--color-info) 88%, #4be4ff 12%));
+    box-shadow: 0 1px 4px var(--color-black-20);
+    transition: background-color 0.18s ease;
+  }
+
+  .table-report-trend-scrollbar:hover .table-report-trend-scrollbar-thumb {
+    background: linear-gradient(90deg, color-mix(in srgb, var(--color-primary) 82%, #98dcff 18%), color-mix(in srgb, var(--color-info) 82%, #76efff 18%));
+  }
+
+  .table-report-trend-scrollbar.is-disabled {
+    opacity: 0.32;
+    pointer-events: none;
+  }
+
+  .table-report-trend-col {
+    display: grid;
+    grid-template-rows: 132px auto;
+    gap: 6px;
+    align-items: stretch;
+    justify-items: center;
+    min-width: 26px;
+  }
+
+  .table-report-trend-bar-box {
+    width: 100%;
+    height: 132px;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--color-card) 82%, var(--color-black-10) 18%);
+    border: 1px solid color-mix(in srgb, var(--color-border) 82%, var(--color-primary) 18%);
+    display: flex;
+    align-items: flex-end;
+    overflow: hidden;
+  }
+
+  .table-report-trend-bar {
+    width: 100%;
+    min-height: 6px;
+    border-radius: 6px 6px 0 0;
+    background: linear-gradient(180deg, var(--color-primary), var(--color-info));
+  }
+
+  .table-report-trend-col.is-mismatch .table-report-trend-bar {
+    background: linear-gradient(180deg, color-mix(in srgb, var(--color-danger) 85%, #fff 15%), color-mix(in srgb, var(--color-danger) 70%, #8b1e2d 30%));
+  }
+
+  .table-report-trend-label {
+    font-size: 10px;
+    color: var(--color-text-secondary);
+    line-height: 1;
+    white-space: nowrap;
+  }
+
+  .table-report-heatmap-grid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .table-report-heatmap-weekdays {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 6px;
+    margin-bottom: 6px;
+  }
+
+  .table-report-heatmap-weekday {
+    font-size: 10px;
+    color: var(--color-text-secondary);
+    text-align: center;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+
+  .table-report-heatmap-weekday.is-sun {
+    color: color-mix(in srgb, var(--color-danger) 70%, var(--color-text-secondary) 30%);
+  }
+
+  .table-report-heatmap-weekday.is-sat {
+    color: color-mix(in srgb, var(--color-info) 75%, var(--color-text-secondary) 25%);
+  }
+
+  .table-report-heatmap-cell {
+    border-radius: var(--border-radius-sm);
+    padding: 5px 6px 4px;
+    border: 1px solid color-mix(in srgb, var(--color-border) 74%, var(--color-primary) 26%);
+    display: grid;
+    gap: 2px;
+    min-height: 40px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .table-report-heatmap-empty-cell {
+    min-height: 40px;
+    border-radius: var(--border-radius-sm);
+    background: transparent;
+  }
+
+  .table-report-heatmap-date {
+    font-size: 10px;
+    color: var(--color-text-secondary);
+    line-height: 1;
+  }
+
+  .table-report-heatmap-value {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--color-text-primary);
+    line-height: 1.1;
+  }
+
+  .table-report-heatmap-cell.intensity-0 { background: color-mix(in srgb, var(--color-card) 92%, var(--color-black-3) 8%); }
+  .table-report-heatmap-cell.intensity-1 { background: color-mix(in srgb, var(--color-primary) 10%, var(--color-card) 90%); }
+  .table-report-heatmap-cell.intensity-2 { background: color-mix(in srgb, var(--color-primary) 20%, var(--color-card) 80%); }
+  .table-report-heatmap-cell.intensity-3 { background: color-mix(in srgb, var(--color-primary) 30%, var(--color-card) 70%); }
+  .table-report-heatmap-cell.intensity-4 { background: color-mix(in srgb, var(--color-primary) 40%, var(--color-card) 60%); }
+
+  .table-report-heatmap-cell.is-mismatch {
+    border-color: color-mix(in srgb, var(--color-danger) 64%, var(--color-border) 36%);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-danger) 38%, transparent 62%);
+  }
+
+  .table-report-heatmap-cell.is-active {
+    outline: 2px solid color-mix(in srgb, var(--color-info) 70%, var(--color-primary) 30%);
+    outline-offset: 0;
+  }
+
+  .table-report-day-popover-layer {
+    position: absolute;
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    z-index: 8;
+    pointer-events: none;
+  }
+
+  .table-report-day-popover-layer.is-open {
+    pointer-events: auto;
+  }
+
+  .table-report-day-popover {
+    position: relative;
+    margin-left: auto;
+    width: min(560px, 100%);
+    max-height: 58vh;
+    border: 1px solid color-mix(in srgb, var(--color-border) 68%, var(--color-primary) 32%);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--color-background) 95%, #08142a 5%);
+    box-shadow: 0 14px 30px var(--color-black-35);
+    overflow: hidden;
+  }
+
+  .table-report-day-popover-close {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 24px;
+    height: 24px;
+    border: 1px solid color-mix(in srgb, var(--color-border) 70%, var(--color-primary) 30%);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--color-card) 86%, var(--color-black-10) 14%);
+    color: var(--color-text-secondary);
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+    z-index: 2;
+  }
+
+  .table-report-day-popover-content {
+    max-height: 58vh;
+    overflow: auto;
+    padding: 6px;
+  }
+
+  .table-report-day-list.is-popover-list {
+    gap: 0;
+  }
+
+  .table-report-day-list.is-popover-list .table-report-day-card {
+    border-radius: 8px;
+    border: 1px solid color-mix(in srgb, var(--color-border) 72%, var(--color-primary) 28%);
+    background: color-mix(in srgb, var(--color-card) 96%, var(--color-background) 4%);
+  }
+
+  .table-report-day-list.is-popover-list .table-report-day-head {
+    padding: 7px 9px;
+    gap: 6px;
+  }
+
+  .table-report-day-list.is-popover-list .table-report-day-date {
+    font-size: 12px;
+  }
+
+  .table-report-day-list.is-popover-list .table-report-day-total {
+    font-size: 12px;
+  }
+
+  .table-report-day-list.is-popover-list .table-report-day-refetch-btn,
+  .table-report-day-list.is-popover-list .table-report-day-edit-btn {
+    height: 20px;
+    padding: 0 6px;
+    font-size: 10px;
+  }
+
+  .table-report-day-list.is-popover-list .table-report-day-row {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1.1fr) minmax(0, 0.7fr);
+    gap: 8px;
+    padding: 6px 9px;
+    font-size: 11px;
   }
 
   .table-report-empty {
@@ -4494,6 +4820,14 @@
       grid-template-columns: repeat(3, minmax(120px, 1fr));
     }
 
+    .table-report-visual-layout {
+      grid-template-columns: 1fr;
+    }
+
+    .table-report-visual-summary-cards {
+      grid-template-columns: repeat(3, minmax(110px, 1fr));
+    }
+
     .table-report-task-groups {
       grid-template-columns: 1fr;
     }
@@ -4516,6 +4850,56 @@
 
     .table-report-kpis {
       grid-template-columns: repeat(2, minmax(120px, 1fr));
+    }
+
+    .table-report-visual-summary {
+      gap: 0;
+    }
+
+    .table-report-visual-summary-cards {
+      grid-template-columns: 1fr;
+    }
+
+    .table-report-trend-bars {
+      min-height: 150px;
+      grid-auto-columns: minmax(24px, 1fr);
+    }
+
+    .table-report-trend-scroll-wrap {
+      grid-template-rows: minmax(0, 1fr) 10px;
+      gap: 7px;
+    }
+
+    .table-report-trend-col {
+      grid-template-rows: 112px auto;
+    }
+
+    .table-report-trend-bar-box {
+      height: 112px;
+    }
+
+    .table-report-heatmap-weekdays {
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+    }
+
+    .table-report-day-popover-layer {
+      left: 6px;
+      right: 6px;
+      bottom: 6px;
+    }
+
+    .table-report-day-popover {
+      width: 100%;
+      max-height: 66vh;
+    }
+
+    .table-report-day-popover-content {
+      max-height: 66vh;
+    }
+
+    .table-report-day-list.is-popover-list .table-report-day-row {
+      grid-template-columns: 1fr;
+      gap: 5px;
     }
 
     .table-report-day-row {

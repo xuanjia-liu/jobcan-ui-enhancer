@@ -1126,6 +1126,344 @@ function setupTableFilterButtons() {
       return reportDataCache;
     };
 
+    const getDayTotalMinutes = (day) => {
+      const entryTotal = Array.isArray(day?.entries)
+        ? day.entries.reduce((sum, entry) => sum + (Number.isFinite(entry?.minutesValue) ? entry.minutesValue : 0), 0)
+        : 0;
+      if (entryTotal > 0) return entryTotal;
+
+      const modalTotal = parseMinutesValue(day?.modalTotalText || '');
+      if (modalTotal > 0) return modalTotal;
+
+      return parseMinutesValue(day?.dayTotalText || day?.manHourTotalText || '');
+    };
+
+    const extractDayLabel = (dateText) => {
+      const text = String(dateText || '').trim();
+      if (!text) return '';
+      const slash = text.match(/(\d{1,2})\s*\/\s*(\d{1,2})/);
+      if (slash) return `${slash[1]}/${slash[2]}`;
+      const hyphen = text.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
+      if (hyphen) return `${hyphen[2]}/${hyphen[3]}`;
+      return text.slice(0, 8);
+    };
+
+    const buildReportVisualSummary = (data, detailHandlers = {}) => {
+      const wrap = document.createElement('div');
+      wrap.className = 'table-report-visual-summary';
+      const renderDayPopoverContent = detailHandlers?.renderDayPopoverContent;
+
+      const days = (data?.days || []).map((day) => ({
+        ...day,
+        totalMinutes: getDayTotalMinutes(day),
+        label: extractDayLabel(day?.dateText || `ID ${day?.id || ''}`)
+      }));
+
+      if (!days.length) {
+        const empty = document.createElement('div');
+        empty.className = 'table-report-empty';
+        empty.textContent = '可視化できる日次データがありません';
+        wrap.appendChild(empty);
+        return wrap;
+      }
+
+      const totalMinutes = days.reduce((sum, day) => sum + day.totalMinutes, 0);
+      const activeDays = days.filter((day) => day.totalMinutes > 0).length;
+      const avgMinutes = activeDays > 0 ? Math.round(totalMinutes / activeDays) : 0;
+      const peakDay = days.reduce((best, day) => (day.totalMinutes > (best?.totalMinutes || 0) ? day : best), null);
+      const noInputDays = days.filter((day) => day.skippedNoInput || day.totalMinutes <= 0).length;
+
+      const cards = document.createElement('div');
+      cards.className = 'table-report-visual-summary-cards';
+
+      const summaryItems = [
+        {
+          label: 'ピーク日',
+          value: peakDay ? formatMinutesToHHMM(peakDay.totalMinutes) : '00:00',
+          detail: peakDay ? `${peakDay.dateText || peakDay.label}` : 'データなし'
+        },
+        {
+          label: '平均/稼働日',
+          value: formatMinutesToHHMM(avgMinutes),
+          detail: `${activeDays}日が稼働`
+        },
+        {
+          label: '未入力日',
+          value: `${noInputDays}日`,
+          detail: `対象 ${days.length}日`
+        }
+      ];
+
+      summaryItems.forEach((item) => {
+        const card = document.createElement('div');
+        card.className = 'table-report-visual-metric';
+        card.innerHTML = `
+          <div class="table-report-visual-metric-label">${item.label}</div>
+          <div class="table-report-visual-metric-value">${item.value}</div>
+          <div class="table-report-visual-metric-detail">${item.detail}</div>
+        `;
+        cards.appendChild(card);
+      });
+
+      const layout = document.createElement('div');
+      layout.className = 'table-report-visual-layout';
+      const leftPane = document.createElement('div');
+      leftPane.className = 'table-report-visual-left';
+      const rightPane = document.createElement('div');
+      rightPane.className = 'table-report-visual-right';
+
+      const trend = document.createElement('div');
+      trend.className = 'table-report-visual-card';
+      const trendTitle = document.createElement('h4');
+      trendTitle.className = 'table-report-visual-title';
+      trendTitle.textContent = '日次トレンド';
+      const trendBars = document.createElement('div');
+      trendBars.className = 'table-report-trend-bars';
+      const maxMinutes = Math.max(...days.map((day) => day.totalMinutes), 1);
+
+      days.forEach((day) => {
+        const col = document.createElement('div');
+        col.className = 'table-report-trend-col';
+        if (day.mismatchFlag) col.classList.add('is-mismatch');
+
+        const barBox = document.createElement('div');
+        barBox.className = 'table-report-trend-bar-box';
+        const bar = document.createElement('div');
+        bar.className = 'table-report-trend-bar';
+        bar.style.height = `${Math.max(6, Math.round((day.totalMinutes / maxMinutes) * 100))}%`;
+        bar.title = `${day.dateText || day.label}: ${formatMinutesToHHMM(day.totalMinutes)}`;
+        barBox.appendChild(bar);
+        col.appendChild(barBox);
+
+        const label = document.createElement('div');
+        label.className = 'table-report-trend-label';
+        label.textContent = day.label;
+        col.appendChild(label);
+
+        trendBars.appendChild(col);
+      });
+
+      const trendScrollWrap = document.createElement('div');
+      trendScrollWrap.className = 'table-report-trend-scroll-wrap';
+      const trendScrollbar = document.createElement('div');
+      trendScrollbar.className = 'table-report-trend-scrollbar';
+      const trendScrollThumb = document.createElement('div');
+      trendScrollThumb.className = 'table-report-trend-scrollbar-thumb';
+      trendScrollbar.appendChild(trendScrollThumb);
+      trendScrollWrap.appendChild(trendBars);
+      trendScrollWrap.appendChild(trendScrollbar);
+
+      let dragState = null;
+      const syncTrendScrollbar = () => {
+        const visible = trendBars.clientWidth;
+        const total = trendBars.scrollWidth;
+        if (!visible || total <= visible + 1) {
+          trendScrollbar.classList.add('is-disabled');
+          trendScrollThumb.style.width = '100%';
+          trendScrollThumb.style.transform = 'translateX(0px)';
+          return;
+        }
+
+        trendScrollbar.classList.remove('is-disabled');
+        const trackWidth = Math.max(1, trendScrollbar.clientWidth);
+        const thumbWidth = Math.max(34, Math.round((visible / total) * trackWidth));
+        const maxScrollLeft = total - visible;
+        const maxThumbOffset = trackWidth - thumbWidth;
+        const thumbOffset = maxScrollLeft > 0
+          ? Math.round((trendBars.scrollLeft / maxScrollLeft) * maxThumbOffset)
+          : 0;
+
+        trendScrollThumb.style.width = `${thumbWidth}px`;
+        trendScrollThumb.style.transform = `translateX(${thumbOffset}px)`;
+      };
+
+      trendBars.addEventListener('scroll', syncTrendScrollbar);
+      trendScrollbar.addEventListener('pointerdown', (event) => {
+        if (event.target === trendScrollThumb) return;
+        const rect = trendScrollbar.getBoundingClientRect();
+        const ratio = Math.max(0, Math.min(1, (event.clientX - rect.left) / Math.max(1, rect.width)));
+        trendBars.scrollLeft = (trendBars.scrollWidth - trendBars.clientWidth) * ratio;
+      });
+      trendScrollThumb.addEventListener('pointerdown', (event) => {
+        event.preventDefault();
+        const trackRect = trendScrollbar.getBoundingClientRect();
+        dragState = {
+          startX: event.clientX,
+          startScrollLeft: trendBars.scrollLeft,
+          trackWidth: Math.max(1, trackRect.width),
+          maxScroll: Math.max(1, trendBars.scrollWidth - trendBars.clientWidth),
+          thumbWidth: Math.max(1, trendScrollThumb.offsetWidth)
+        };
+        const onPointerMove = (moveEvent) => {
+          if (!dragState) return;
+          const maxThumbOffset = Math.max(1, dragState.trackWidth - dragState.thumbWidth);
+          const deltaRatio = (moveEvent.clientX - dragState.startX) / maxThumbOffset;
+          const next = dragState.startScrollLeft + (dragState.maxScroll * deltaRatio);
+          trendBars.scrollLeft = Math.max(0, Math.min(dragState.maxScroll, next));
+        };
+        const onPointerUp = () => {
+          dragState = null;
+          document.removeEventListener('pointermove', onPointerMove);
+          document.removeEventListener('pointerup', onPointerUp);
+        };
+        document.addEventListener('pointermove', onPointerMove);
+        document.addEventListener('pointerup', onPointerUp);
+      });
+
+      trend.appendChild(trendTitle);
+      trend.appendChild(trendScrollWrap);
+
+      const heatmap = document.createElement('div');
+      heatmap.className = 'table-report-visual-card';
+      const heatmapTitle = document.createElement('h4');
+      heatmapTitle.className = 'table-report-visual-title';
+      heatmapTitle.textContent = '稼働ヒートマップ';
+      const heatmapWeekdays = document.createElement('div');
+      heatmapWeekdays.className = 'table-report-heatmap-weekdays';
+      ['日', '月', '火', '水', '木', '金', '土'].forEach((w) => {
+        const wd = document.createElement('div');
+        wd.className = `table-report-heatmap-weekday${w === '日' ? ' is-sun' : ''}${w === '土' ? ' is-sat' : ''}`;
+        wd.textContent = w;
+        heatmapWeekdays.appendChild(wd);
+      });
+      const heatmapGrid = document.createElement('div');
+      heatmapGrid.className = 'table-report-heatmap-grid';
+      const heatmapPopoverLayer = document.createElement('div');
+      heatmapPopoverLayer.className = 'table-report-day-popover-layer';
+      let activeHeatmapCell = null;
+
+      const closeDayPopover = () => {
+        if (activeHeatmapCell) activeHeatmapCell.classList.remove('is-active');
+        activeHeatmapCell = null;
+        heatmapPopoverLayer.classList.remove('is-open');
+        heatmapPopoverLayer.replaceChildren();
+      };
+
+      const parseDayDate = (day) => {
+        const rawText = String(day?.dateText || day?.label || '').trim();
+        const md = rawText.match(/(\d{1,2})\s*\/\s*(\d{1,2})/);
+        if (!md) return null;
+
+        const parsed = parseBucketMonth(getCacheBucketFromDataset(data) || data?.meta?.cacheBucket || '');
+        const yearNum = Number.parseInt(parsed?.year || '', 10);
+        const monthNum = Number.parseInt(md[1], 10);
+        const dayNum = Number.parseInt(md[2], 10);
+        if (!Number.isFinite(monthNum) || !Number.isFinite(dayNum)) return null;
+        const safeYear = Number.isFinite(yearNum) ? yearNum : new Date().getFullYear();
+        const dt = new Date(safeYear, monthNum - 1, dayNum);
+        if (Number.isNaN(dt.getTime())) return null;
+        return dt;
+      };
+
+      const sortedDays = [...days].sort((a, b) => {
+        const da = parseDayDate(a);
+        const db = parseDayDate(b);
+        if (!da && !db) return 0;
+        if (!da) return 1;
+        if (!db) return -1;
+        return da.getTime() - db.getTime();
+      });
+
+      const firstDate = sortedDays.length ? parseDayDate(sortedDays[0]) : null;
+      const leadingEmptyCount = firstDate ? firstDate.getDay() : 0;
+      for (let i = 0; i < leadingEmptyCount; i++) {
+        const blank = document.createElement('div');
+        blank.className = 'table-report-heatmap-empty-cell';
+        heatmapGrid.appendChild(blank);
+      }
+
+      sortedDays.forEach((day) => {
+        const level = Math.max(0, Math.min(4, Math.round((day.totalMinutes / maxMinutes) * 4)));
+        const cell = document.createElement('div');
+        cell.className = `table-report-heatmap-cell intensity-${level}${day.mismatchFlag ? ' is-mismatch' : ''}`;
+        cell.title = `${day.dateText || day.label}: ${formatMinutesToHHMM(day.totalMinutes)}${day.mismatchFlag ? ' / 工数不一致' : ''}`;
+        cell.setAttribute('role', 'button');
+        cell.setAttribute('tabindex', '0');
+
+        const dayLabel = document.createElement('span');
+        dayLabel.className = 'table-report-heatmap-date';
+        dayLabel.textContent = day.label;
+        const dayValue = document.createElement('span');
+        dayValue.className = 'table-report-heatmap-value';
+        dayValue.textContent = formatMinutesToHHMM(day.totalMinutes);
+
+        cell.appendChild(dayLabel);
+        cell.appendChild(dayValue);
+        const openPopoverForDay = () => {
+          if (activeHeatmapCell === cell) {
+            closeDayPopover();
+            return;
+          }
+
+          const popover = document.createElement('div');
+          popover.className = 'table-report-day-popover';
+          const popoverClose = document.createElement('button');
+          popoverClose.type = 'button';
+          popoverClose.className = 'table-report-day-popover-close';
+          popoverClose.textContent = '×';
+          popoverClose.addEventListener('click', (event) => {
+            event.stopPropagation();
+            closeDayPopover();
+          });
+
+          const popoverContent = document.createElement('div');
+          popoverContent.className = 'table-report-day-popover-content';
+          if (typeof renderDayPopoverContent === 'function') {
+            const detailNode = renderDayPopoverContent(day);
+            if (detailNode) popoverContent.appendChild(detailNode);
+          }
+          if (!popoverContent.childNodes.length) {
+            const empty = document.createElement('div');
+            empty.className = 'table-report-empty';
+            empty.textContent = '日別データがありません';
+            popoverContent.appendChild(empty);
+          }
+
+          popover.appendChild(popoverClose);
+          popover.appendChild(popoverContent);
+          heatmapPopoverLayer.replaceChildren(popover);
+          heatmapPopoverLayer.classList.add('is-open');
+          if (activeHeatmapCell) activeHeatmapCell.classList.remove('is-active');
+          activeHeatmapCell = cell;
+          activeHeatmapCell.classList.add('is-active');
+        };
+
+        cell.addEventListener('click', (event) => {
+          event.stopPropagation();
+          openPopoverForDay();
+        });
+        cell.addEventListener('keydown', (event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            openPopoverForDay();
+          }
+        });
+        heatmapGrid.appendChild(cell);
+      });
+
+      heatmap.appendChild(heatmapTitle);
+      heatmap.appendChild(heatmapWeekdays);
+      heatmap.appendChild(heatmapGrid);
+      heatmap.appendChild(heatmapPopoverLayer);
+      heatmap.addEventListener('click', (event) => {
+        if (event.target && event.target.closest('.table-report-day-popover')) return;
+        if (event.target && event.target.closest('.table-report-heatmap-cell')) return;
+        closeDayPopover();
+      });
+
+      setTimeout(syncTrendScrollbar, 0);
+      setTimeout(syncTrendScrollbar, 120);
+
+      leftPane.appendChild(cards);
+      leftPane.appendChild(trend);
+      rightPane.appendChild(heatmap);
+      layout.appendChild(leftPane);
+      layout.appendChild(rightPane);
+
+      wrap.appendChild(layout);
+      return wrap;
+    };
+
     const saveModalDaySnapshot = async (dayId, modal) => {
       if (!dayId || !modal) return;
       const target = findEditTargetById(dayId);
@@ -1750,11 +2088,11 @@ function setupTableFilterButtons() {
       section1.innerHTML = `<h3 class="table-report-section-title">プロジェクト別サマリー（${projectCount}件）</h3>`;
       section1.appendChild(buildProjectSummaryRows(data));
 
-      const section3 = document.createElement('section');
-      section3.className = 'table-report-section';
-      section3.innerHTML = '<h3 class="table-report-section-title">日別明細</h3>';
+      const section2 = document.createElement('section');
+      section2.className = 'table-report-section table-report-section-visual';
+      section2.innerHTML = '<h3 class="table-report-section-title">日次サマリー</h3>';
       const optionCatalog = buildReportOptionCatalog(data);
-      section3.appendChild(buildDayDetailRows(data, async (dayId) => {
+      const handleRefetchDay = async (dayId) => {
         const latest = await refetchDayData(dayId);
         if (latest) {
           renderReportModal(latest);
@@ -1764,7 +2102,8 @@ function setupTableFilterButtons() {
         } else if (typeof window.showNotification === 'function') {
           window.showNotification('対象日の再取得に失敗しました');
         }
-      }, async (dayId, editedEntries) => {
+      };
+      const handleApplyDay = async (dayId, editedEntries) => {
         const latest = await applyDayEditsToWebsite(dayId, editedEntries);
         if (latest) {
           renderReportModal(latest);
@@ -1776,11 +2115,19 @@ function setupTableFilterButtons() {
           window.showNotification('対象日の反映に失敗しました');
         }
         return false;
-      }, optionCatalog));
+      };
+
+      section2.appendChild(buildReportVisualSummary(data, {
+        renderDayPopoverContent: (day) => {
+          const node = buildDayDetailRows({ days: [day] }, handleRefetchDay, handleApplyDay, optionCatalog);
+          if (node && node.classList) node.classList.add('is-popover-list');
+          return node;
+        }
+      }));
 
       body.appendChild(kpis);
       body.appendChild(section1);
-      body.appendChild(section3);
+      body.appendChild(section2);
 
       panel.appendChild(header);
       panel.appendChild(body);
