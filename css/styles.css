@@ -2198,11 +2198,11 @@
   }
   
   .jobcan-enhanced .work-progress-track {
-    --work-dot-normal-width: 3px;
+    --work-dot-normal-width: 2px;
     --work-dot-normal-height: 12px;
     --work-dot-hover-size: 12px;
     --work-dot-active-width: var(--work-dot-normal-width);
-    --work-segment-boundary-gap: 9px;
+    --work-segment-boundary-gap: 8px;
     height: 20px;
     width: 100%;
     background: linear-gradient(180deg, #d7dde5 0%, #c8d0da 100%);
@@ -2218,24 +2218,21 @@
     inset: 0;
     z-index: 1;
     pointer-events: none;
-    left: calc(var(--work-dot-normal-width) / 2);
-    width: calc(100% - var(--work-dot-normal-width));
+    left: calc(var(--work-dot-normal-width) / 2 + 1px);
+    width: calc(100% - var(--work-dot-normal-width) - 2px);
   }
 
   .jobcan-enhanced .work-schedule-segment {
     position: absolute;
-    top: 3px;
-    height: calc(100% - 6px);
+    top: 2px;
+    height: calc(100% - 5px);
     border-radius: 999px;
     transition: filter 0.2s ease;
   }
 
   .jobcan-enhanced .work-schedule-segment.segment-working {
     background: linear-gradient(90deg, var(--color-work-segment-working-start) 0%, var(--color-work-segment-working-end) 100%);
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.28),
-      0 0 0 1px rgba(255, 255, 255, 0.24),
-      0 6px 14px rgba(14, 165, 164, 0.22);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.26);
   }
 
   .jobcan-enhanced .work-schedule-segment.segment-off {
@@ -2293,6 +2290,10 @@
     z-index: 6;
     border-radius: 999px;
     box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.32);
+  }
+
+  .jobcan-enhanced .time-scale-marker.first-scale-marker {
+    display: none;
   }
 
   .jobcan-enhanced .work-punch-marker {

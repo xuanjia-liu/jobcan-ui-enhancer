@@ -218,6 +218,7 @@ function createSelfAnimatingClock(clockElement) {
   const createTimeMarker = (percent, time) => {
     const marker = document.createElement('div');
     marker.className = `time-scale-marker marker-position-${percent} visible`;
+    if (percent === 0) marker.classList.add('first-scale-marker');
     marker.title = time;
     marker.style.left = `${percent}%`;
     return marker;
