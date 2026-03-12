@@ -262,6 +262,43 @@ function setupTableFilterButtons() {
       return 0;
     };
 
+    const parseMinutesFromTotalText = (raw) => {
+      const text = String(raw || '').trim();
+      if (!text) return null;
+      if (text.includes('入力がありません')) return 0;
+      return parseMinutesValue(text);
+    };
+
+    const getEntryTotalMinutes = (day) => {
+      if (!Array.isArray(day?.entries)) return null;
+      return day.entries.reduce((sum, entry) => {
+        const minutes = Number.isFinite(entry?.minutesValue) ? entry.minutesValue : 0;
+        return sum + minutes;
+      }, 0);
+    };
+
+    const getDeclaredDayTotalMinutes = (day) => {
+      const modalTotal = parseMinutesFromTotalText(day?.modalTotalText);
+      if (modalTotal !== null) return modalTotal;
+      const dayTotal = parseMinutesFromTotalText(day?.dayTotalText);
+      if (dayTotal !== null) return dayTotal;
+      const manHourTotal = parseMinutesFromTotalText(day?.manHourTotalText);
+      if (manHourTotal !== null) return manHourTotal;
+      return null;
+    };
+
+    const deriveDayMismatchFlag = (dayLike) => {
+      const day = dayLike || {};
+      const rowFlags = Array.isArray(day.rowClassFlags) ? day.rowClassFlags : [];
+      const rowMismatch = rowFlags.includes('jbc-table-danger') || rowFlags.includes('danger');
+      const entryTotal = getEntryTotalMinutes(day);
+      const declaredTotal = getDeclaredDayTotalMinutes(day);
+      if (entryTotal !== null && declaredTotal !== null) {
+        return entryTotal !== declaredTotal;
+      }
+      return rowMismatch || day.mismatchFlag === true;
+    };
+
     const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
     const waitForModalState = (open, timeoutMs = 3500) => new Promise((resolve, reject) => {
@@ -366,7 +403,7 @@ function setupTableFilterButtons() {
       const dateText = String(dayLike?.dateText || '').trim();
       const manHourTotalText = String(dayLike?.manHourTotalText || '').trim();
       const dayTotalText = String(dayLike?.dayTotalText || '').trim();
-      const mismatchFlag = dayLike?.mismatchFlag ? '1' : '0';
+      const mismatchFlag = deriveDayMismatchFlag(dayLike) ? '1' : '0';
       const skippedNoInput = dayLike?.skippedNoInput ? '1' : '0';
       return `${dateText}|${manHourTotalText}|${dayTotalText}|${mismatchFlag}|${skippedNoInput}`;
     };
@@ -691,6 +728,7 @@ function setupTableFilterButtons() {
                 day.entries = [];
                 day.modalTotalText = '入力がありません';
               }
+              day.mismatchFlag = deriveDayMismatchFlag(day);
               day.signature = buildDaySignature(day);
 
               await ensureModalClosed();
@@ -814,6 +852,7 @@ function setupTableFilterButtons() {
         signature: '',
         entries: []
       };
+      day.mismatchFlag = deriveDayMismatchFlag(day);
       day.signature = buildDaySignature(day);
       return day;
     };
@@ -824,6 +863,7 @@ function setupTableFilterButtons() {
       if (day.skippedNoInput) {
         day.entries = [];
         day.modalTotalText = '入力がありません';
+        day.mismatchFlag = deriveDayMismatchFlag(day);
         return { day, success: true };
       }
 
@@ -846,6 +886,7 @@ function setupTableFilterButtons() {
             day.entries = [];
             day.modalTotalText = '入力がありません';
           }
+          day.mismatchFlag = deriveDayMismatchFlag(day);
           day.signature = buildDaySignature(day);
           await ensureModalClosed();
           success = true;
@@ -1152,15 +1193,13 @@ function setupTableFilterButtons() {
     };
 
     const getDayTotalMinutes = (day) => {
-      const entryTotal = Array.isArray(day?.entries)
-        ? day.entries.reduce((sum, entry) => sum + (Number.isFinite(entry?.minutesValue) ? entry.minutesValue : 0), 0)
-        : 0;
-      if (entryTotal > 0) return entryTotal;
+      const entryTotal = getEntryTotalMinutes(day);
+      if (entryTotal !== null) return entryTotal;
 
-      const modalTotal = parseMinutesValue(day?.modalTotalText || '');
-      if (modalTotal > 0) return modalTotal;
+      const declaredTotal = getDeclaredDayTotalMinutes(day);
+      if (declaredTotal !== null) return declaredTotal;
 
-      return parseMinutesValue(day?.dayTotalText || day?.manHourTotalText || '');
+      return 0;
     };
 
     const extractDayLabel = (dateText) => {
@@ -1527,6 +1566,7 @@ function setupTableFilterButtons() {
         day.entries = [];
         day.modalTotalText = '入力がありません';
       }
+      day.mismatchFlag = deriveDayMismatchFlag(day);
       day.signature = buildDaySignature(day);
       await upsertDayIntoCache(day);
     };
