@@ -74,6 +74,25 @@ function setupTableFilterButtons() {
       normal: {},
       fixed: {}
     };
+    const shouldAutoOpenReportFromUrl = (() => {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        return params.get('jbe_open_report') === '1';
+      } catch (_) {
+        return false;
+      }
+    })();
+
+    const clearAutoOpenReportFlagFromUrl = () => {
+      try {
+        const url = new URL(window.location.href);
+        if (!url.searchParams.has('jbe_open_report')) return;
+        url.searchParams.delete('jbe_open_report');
+        window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+      } catch (_) {
+        // no-op
+      }
+    };
 
     const closeExistingReportModal = () => {
       const existingModal = document.getElementById('table-report-modal-overlay');
@@ -154,16 +173,38 @@ function setupTableFilterButtons() {
           .filter(([, data]) => isValidReportDataset(data))
           .map(([bucket, data]) => {
             const parsed = parseBucketMonth(bucket);
+            const collectedAtMs = (() => {
+              const raw = data?.meta?.collectedAt;
+              const ts = raw ? Date.parse(raw) : NaN;
+              return Number.isFinite(ts) ? ts : 0;
+            })();
             return {
               bucket,
               data,
               monthKey: parsed.monthKey,
-              label: parsed.label
+              label: parsed.label,
+              collectedAtMs
             };
-          })
+          });
+
+        // Deduplicate same month buckets (e.g. month=3 and month=03) by keeping the newest record.
+        const bestByMonth = new Map();
+        records.forEach((record) => {
+          if (!record.monthKey) {
+            // Skip unknown month records in month tabs.
+            return;
+          }
+
+          const previous = bestByMonth.get(record.monthKey);
+          if (!previous || record.collectedAtMs > previous.collectedAtMs) {
+            bestByMonth.set(record.monthKey, record);
+          }
+        });
+
+        const deduped = Array.from(bestByMonth.values())
           .sort((a, b) => (a.monthKey < b.monthKey ? 1 : -1));
 
-        resolve(records);
+        resolve(deduped);
       });
     });
 
@@ -1562,12 +1603,14 @@ function setupTableFilterButtons() {
       if (!records.length) return tabs;
 
       const activeBucket = getCacheBucketFromDataset(activeData) || getCurrentReportCacheBucket();
+      const activeParsed = parseBucketMonth(activeBucket);
       records.forEach((record) => {
         const tab = document.createElement('button');
         tab.type = 'button';
         tab.className = 'table-report-month-tab';
         tab.textContent = record.label;
-        const isActive = record.bucket === activeBucket;
+        const isActive = record.bucket === activeBucket ||
+          (!!record.monthKey && record.monthKey === activeParsed.monthKey);
         if (isActive) tab.classList.add('active');
         tab.addEventListener('click', () => {
           if (isActive) return;
@@ -1841,6 +1884,17 @@ function setupTableFilterButtons() {
 
     container.parentNode.insertBefore(buttonContainer, container);
     document.body.appendChild(fixedButtonContainer);
+
+    if (shouldAutoOpenReportFromUrl) {
+      clearAutoOpenReportFlagFromUrl();
+      setTimeout(async () => {
+        try {
+          await openReport(false);
+        } catch (error) {
+          console.error('Auto-open report failed:', error);
+        }
+      }, 150);
+    }
 
     container.addEventListener('click', (event) => {
       const trigger = event.target && event.target.closest

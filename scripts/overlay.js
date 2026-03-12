@@ -6,6 +6,61 @@
 // // Show notification toast message - Moved to utils.js
 // function showNotification(message, duration = 3000) { ... }
 
+function normalizeMonthInfo(year, month) {
+  const normalizedYear = String(year || '').trim();
+  const monthNumber = Number.parseInt(String(month || '').trim(), 10);
+  const normalizedMonth = Number.isFinite(monthNumber) && monthNumber > 0
+    ? String(monthNumber)
+    : String(month || '').trim();
+  return { year: normalizedYear, month: normalizedMonth };
+}
+
+function getWorkTimeMonthStorageKeys(year, month) {
+  const { year: normalizedYear, month: normalizedMonth } = normalizeMonthInfo(year, month);
+  if (!normalizedYear || !normalizedMonth) return [];
+  const monthNumber = Number.parseInt(normalizedMonth, 10);
+  const paddedMonth = Number.isFinite(monthNumber) ? String(monthNumber).padStart(2, '0') : normalizedMonth;
+  return Array.from(new Set([
+    `jobcanWorkTimeData_${normalizedYear}_${normalizedMonth}`,
+    `jobcanWorkTimeData_${normalizedYear}_${paddedMonth}`
+  ]));
+}
+
+function buildManHourReportUrl() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1;
+  const baseUrl = 'https://ssl.jobcan.jp/employee/man-hour-manage';
+  return `${baseUrl}?search_type=month&year=${year}&month=${month}&jbe_open_report=1`;
+}
+
+async function waitForTableReportButton(maxAttempts = 12, delayMs = 250) {
+  for (let i = 0; i < maxAttempts; i += 1) {
+    const reportBtn = document.getElementById('table-report-btn');
+    if (reportBtn) return reportBtn;
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+  }
+  return null;
+}
+
+async function getCachedWorkTimeDataByMonth(year, month) {
+  const keys = getWorkTimeMonthStorageKeys(year, month);
+  if (!keys.length) return null;
+
+  const result = await chrome.storage.local.get(keys);
+  for (const key of keys) {
+    const data = result[key];
+    if (!data || typeof data !== 'object' || !Object.keys(data).length) continue;
+
+    const normalized = { ...data };
+    const monthInfo = normalized._monthInfo || normalizeMonthInfo(year, month);
+    normalized._monthInfo = normalizeMonthInfo(monthInfo.year, monthInfo.month);
+    return normalized;
+  }
+
+  return null;
+}
+
 // Show saved work time data in a floating overlay
 async function showWorkTimeOverlay() {
   try {
@@ -122,10 +177,20 @@ async function showWorkTimeOverlay() {
     closeBtn.textContent = '×';
     closeBtn.className = 'work-time-overlay-close';
     closeBtn.setAttribute('title', '閉じる');
+
+    const monthRefetchBtn = document.createElement('button');
+    monthRefetchBtn.type = 'button';
+    monthRefetchBtn.className = 'month-selector-refetch-btn';
+    monthRefetchBtn.textContent = '再取得';
+
+    const headerActions = document.createElement('div');
+    headerActions.className = 'work-time-overlay-header-actions';
+    headerActions.appendChild(monthRefetchBtn);
+    headerActions.appendChild(closeBtn);
     
     // Add header elements
     headerDiv.appendChild(titleContainer);
-    headerDiv.appendChild(closeBtn);
+    headerDiv.appendChild(headerActions);
     
     // Create month selector container
     const selectorContainer = document.createElement('div');
@@ -134,6 +199,52 @@ async function showWorkTimeOverlay() {
     // Create month selector
     const monthSelector = document.createElement('div');
     monthSelector.className = 'month-selector';
+
+    const switchToMonth = async (year, month, options = {}) => {
+      const { forceRefetch = false, triggerButton = null } = options;
+      const monthInfo = normalizeMonthInfo(year, month);
+      const displayMonth = Number.parseInt(monthInfo.month, 10);
+      const displayLabel = `${monthInfo.year}年${Number.isFinite(displayMonth) ? displayMonth : monthInfo.month}月`;
+
+      const monthBtn = triggerButton && triggerButton.classList.contains('month-selector-btn')
+        ? triggerButton
+        : monthSelector.querySelector(`[data-year="${monthInfo.year}"][data-month="${monthInfo.month}"]`);
+
+      const refetchBtn = headerDiv.querySelector('.month-selector-refetch-btn');
+      if (monthBtn) monthBtn.classList.add('loading');
+      if (refetchBtn) {
+        refetchBtn.disabled = true;
+        refetchBtn.textContent = '取得中...';
+      }
+
+      try {
+        if (!forceRefetch) {
+          const cachedMonthData = await getCachedWorkTimeDataByMonth(monthInfo.year, monthInfo.month);
+          if (cachedMonthData) {
+            await chrome.storage.local.set({ jobcanWorkTimeData: cachedMonthData });
+            overlayDiv.remove();
+            setTimeout(() => showWorkTimeOverlay(), 80);
+            return;
+          }
+        }
+
+        const monthUrl = `https://ssl.jobcan.jp/employee/attendance?list_type=normal&search_type=month&year=${encodeURIComponent(monthInfo.year)}&month=${encodeURIComponent(monthInfo.month)}`;
+        await window.loadAttendancePageInIframe(monthUrl);
+        overlayDiv.remove();
+        setTimeout(() => showWorkTimeOverlay(), 80);
+      } catch (error) {
+        console.error('Failed to switch month data:', error);
+        if (typeof window.showNotification === 'function') {
+          window.showNotification(`${displayLabel}のデータを取得できませんでした`, 3000);
+        }
+      } finally {
+        if (monthBtn) monthBtn.classList.remove('loading');
+        if (refetchBtn) {
+          refetchBtn.disabled = false;
+          refetchBtn.textContent = '再取得';
+        }
+      }
+    };
     
     // Add last 3 months, current month, and next month options
     const today = new Date();
@@ -180,23 +291,7 @@ async function showWorkTimeOverlay() {
         if (monthBtn.classList.contains('active')) return;
         
         try {
-          // Remove active class from all buttons
-          document.querySelectorAll('.month-selector-btn').forEach(btn => {
-            btn.classList.remove('active');
-          });
-          
-          // Add loading class
-          monthBtn.classList.add('loading');
-          
-          // Try to load data for this month
-          const monthUrl = `https://ssl.jobcan.jp/employee/attendance?list_type=normal&search_type=month&year=${year}&month=${month}`;
-          const iframeData = await window.loadAttendancePageInIframe(monthUrl);
-          
-          // Remove the current overlay
-          overlayDiv.remove();
-          
-          // Create a new overlay with the new data
-          setTimeout(() => showWorkTimeOverlay(), 100);
+          await switchToMonth(year, month, { triggerButton: monthBtn });
         } catch (error) {
           console.error('Failed to load month data:', error);
           monthBtn.classList.remove('loading');
@@ -218,6 +313,20 @@ async function showWorkTimeOverlay() {
         currentMonthBtn.classList.add('active');
       }
     }
+
+    monthRefetchBtn.addEventListener('click', async () => {
+      const activeBtn = monthSelector.querySelector('.month-selector-btn.active');
+      if (activeBtn) {
+        await switchToMonth(activeBtn.dataset.year, activeBtn.dataset.month, {
+          forceRefetch: true,
+          triggerButton: activeBtn
+        });
+        return;
+      }
+
+      if (!currentMonthInfo || !currentMonthInfo.year || !currentMonthInfo.month) return;
+      await switchToMonth(currentMonthInfo.year, currentMonthInfo.month, { forceRefetch: true });
+    });
     
     selectorContainer.appendChild(monthSelector);
     
@@ -1005,6 +1114,31 @@ function setupFloatingWorkTimeButton() {
       order: 20,
       icon: '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>',
       onClick: showWorkTimeOverlay
+    });
+
+    window.registerFloatingAction({
+      id: 'man-hour-report',
+      title: '工数レポート',
+      order: 30,
+      icon: '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>',
+      onClick: async () => {
+        const isManHourPage = window.location.pathname.startsWith('/employee/man-hour-manage');
+        if (isManHourPage) {
+          if (typeof window.setupTableFilterButtons === 'function') {
+            window.setupTableFilterButtons();
+          }
+          const reportBtn = await waitForTableReportButton();
+          if (reportBtn) {
+            reportBtn.click();
+            return;
+          }
+          if (typeof window.showNotification === 'function') {
+            window.showNotification('工数レポートを開けませんでした。ページの読み込み完了後に再度お試しください。', 3000);
+          }
+          return;
+        }
+        window.location.href = buildManHourReportUrl();
+      }
     });
     return;
   }

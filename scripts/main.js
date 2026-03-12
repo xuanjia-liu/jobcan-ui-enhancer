@@ -151,7 +151,7 @@ function applyEnhancements() {
   if (typeof applyClockSettings === 'function') applyClockSettings();
 
   // Floating work-time button
-  if (isAttendancePage && typeof setupFloatingWorkTimeButton === 'function') setupFloatingWorkTimeButton();
+  if (isEmployeePage && typeof setupFloatingWorkTimeButton === 'function') setupFloatingWorkTimeButton();
 
   // Immediate data extract on specific page
   if (isManHourPage && typeof extractAndStoreCollapseInfoData === 'function') {

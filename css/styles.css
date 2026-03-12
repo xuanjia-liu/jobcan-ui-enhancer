@@ -3051,10 +3051,16 @@
     font-weight: 500;
   }
 
+  .work-time-overlay-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
   .work-time-overlay-close {
     position: relative;
     background-color: var(--color-white);
-    color: var(--color-primary);
+    color: var(--color-primary)!important;
     border: none;
     font-size: 16px;
     cursor: pointer;
@@ -3217,6 +3223,28 @@
     gap: 4px;
     flex-wrap: wrap;
     justify-content: left;
+  }
+
+  .jobcan-enhanced .month-selector-refetch-btn {
+    background-color: var(--color-primary);
+    border: 1px solid var(--color-primary-border-light);
+    color: var(--color-white);
+    padding: 2px 8px;
+    border-radius: var(--border-radius-sm);
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .jobcan-enhanced .month-selector-refetch-btn:hover:not(:disabled) {
+    background-color: var(--color-primary-dark);
+    color: var(--color-white);
+    border-color: var(--color-primary-border-light);
+  }
+
+  .jobcan-enhanced .month-selector-refetch-btn:disabled {
+    opacity: 0.65;
+    cursor: default;
   }
 
   .jobcan-enhanced .month-selector-btn {
