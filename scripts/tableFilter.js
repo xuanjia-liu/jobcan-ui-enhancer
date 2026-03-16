@@ -24,7 +24,7 @@ function setupTableFilterButtons() {
   function setupButtons(container) {
     const FILTERS = [
       { key: 'all', id: 'table-filter-all-btn', label: 'すべて', title: '全ての行を表示' },
-      { key: 'danger', id: 'table-filter-danger-btn', label: '工数不一致', title: '工数不一致の行のみ表示' },
+      { key: 'danger', id: 'table-filter-danger-btn', label: '工数不一致', title: '工数不一致または入力がありませんの行を表示' },
       { key: 'report', id: 'table-report-btn', label: 'レポート', title: '工数レポートを表示' }
     ];
 
@@ -2626,7 +2626,12 @@ function setupTableFilterButtons() {
       }
 
       if (currentFilter === 'danger') {
-        applyFilterRows(rows, (row) => row.classList.contains('jbc-table-danger'));
+        applyFilterRows(rows, (row) => {
+          const manHourTotalText = getRowManHourTotalText(row);
+          const dayTotalMinutes = parseMinutesValue(getRowTotalText(row));
+          const isNoInputWithWorkedTime = hasNoInputLabel(manHourTotalText) && dayTotalMinutes > 0;
+          return row.classList.contains('jbc-table-danger') || isNoInputWithWorkedTime;
+        });
       }
     };
 
