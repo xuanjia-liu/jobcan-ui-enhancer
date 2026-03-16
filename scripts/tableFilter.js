@@ -1296,6 +1296,21 @@ function setupTableFilterButtons() {
       const wrap = document.createElement('div');
       wrap.className = 'table-report-visual-summary';
       const renderDayPopoverContent = detailHandlers?.renderDayPopoverContent;
+      const buildDayPopoverContent = (day) => {
+        const popoverContent = document.createElement('div');
+        popoverContent.className = 'table-report-day-popover-content';
+        if (typeof renderDayPopoverContent === 'function') {
+          const detailNode = renderDayPopoverContent(day);
+          if (detailNode) popoverContent.appendChild(detailNode);
+        }
+        if (!popoverContent.childNodes.length) {
+          const empty = document.createElement('div');
+          empty.className = 'table-report-empty';
+          empty.textContent = '日別データがありません';
+          popoverContent.appendChild(empty);
+        }
+        return popoverContent;
+      };
 
       const days = (data?.days || []).map((day) => ({
         ...day,
@@ -1327,6 +1342,60 @@ function setupTableFilterButtons() {
       const avgHeightPct = avgWorkingMinutes > 0
         ? Math.max(0, Math.min(100, (avgWorkingMinutes / maxMinutes) * 100))
         : 0;
+      let activeTrendCol = null;
+      let activeHeatmapCell = null;
+      let trendPopoverHideTimer = null;
+      let heatmapPopoverLayer = null;
+
+      const clearTrendPopoverHideTimer = () => {
+        if (!trendPopoverHideTimer) return;
+        window.clearTimeout(trendPopoverHideTimer);
+        trendPopoverHideTimer = null;
+      };
+
+      const clearActivePopoverTargets = () => {
+        clearTrendPopoverHideTimer();
+        if (activeTrendCol) activeTrendCol.classList.remove('is-active');
+        if (activeHeatmapCell) activeHeatmapCell.classList.remove('is-active');
+        activeTrendCol = null;
+        activeHeatmapCell = null;
+      };
+
+      const closeSharedDayPopover = () => {
+        clearActivePopoverTargets();
+        if (!heatmapPopoverLayer) return;
+        heatmapPopoverLayer.classList.remove('is-open');
+        heatmapPopoverLayer.replaceChildren();
+      };
+
+      const scheduleTrendPopoverClose = () => {
+        clearTrendPopoverHideTimer();
+        trendPopoverHideTimer = window.setTimeout(() => {
+          closeSharedDayPopover();
+        }, 120);
+      };
+
+      const openTrendPopoverForDay = (day, col) => {
+        clearTrendPopoverHideTimer();
+        if (!col || !heatmapPopoverLayer) return;
+
+        const popover = document.createElement('div');
+        popover.className = 'table-report-day-popover is-trend-popover';
+        popover.appendChild(buildDayPopoverContent(day));
+        popover.addEventListener('mouseenter', clearTrendPopoverHideTimer);
+        popover.addEventListener('mouseleave', scheduleTrendPopoverClose);
+        popover.addEventListener('focusin', clearTrendPopoverHideTimer);
+        popover.addEventListener('focusout', (event) => {
+          if (popover.contains(event.relatedTarget)) return;
+          scheduleTrendPopoverClose();
+        });
+
+        clearActivePopoverTargets();
+        heatmapPopoverLayer.replaceChildren(popover);
+        heatmapPopoverLayer.classList.add('is-open');
+        activeTrendCol = col;
+        activeTrendCol.classList.add('is-active');
+      };
 
       if (avgWorkingMinutes > 0) {
         const avgMeta = document.createElement('span');
@@ -1350,8 +1419,10 @@ function setupTableFilterButtons() {
       days.forEach((day) => {
         const col = document.createElement('div');
         col.className = 'table-report-trend-col';
+        col.tabIndex = 0;
         if (day.mismatchFlag) col.classList.add('is-mismatch');
         if (day.totalMinutes <= 0) col.classList.add('is-zero');
+        col.setAttribute('aria-label', `${day.dateText || day.label}: ${formatMinutesToHHMM(day.totalMinutes)}`);
 
         const barBox = document.createElement('div');
         barBox.className = 'table-report-trend-bar-box';
@@ -1376,6 +1447,27 @@ function setupTableFilterButtons() {
         label.className = 'table-report-trend-label';
         label.textContent = day.label;
         col.appendChild(label);
+
+        col.addEventListener('mouseenter', () => {
+          openTrendPopoverForDay(day, col);
+        });
+        col.addEventListener('mouseleave', (event) => {
+          if (heatmapPopoverLayer && event.relatedTarget && heatmapPopoverLayer.contains(event.relatedTarget)) {
+            clearTrendPopoverHideTimer();
+            return;
+          }
+          scheduleTrendPopoverClose();
+        });
+        col.addEventListener('focus', () => {
+          openTrendPopoverForDay(day, col);
+        });
+        col.addEventListener('blur', (event) => {
+          if (heatmapPopoverLayer && event.relatedTarget && heatmapPopoverLayer.contains(event.relatedTarget)) {
+            clearTrendPopoverHideTimer();
+            return;
+          }
+          scheduleTrendPopoverClose();
+        });
 
         trendBars.appendChild(col);
       });
@@ -1465,15 +1557,11 @@ function setupTableFilterButtons() {
       });
       const heatmapGrid = document.createElement('div');
       heatmapGrid.className = 'table-report-heatmap-grid';
-      const heatmapPopoverLayer = document.createElement('div');
+      heatmapPopoverLayer = document.createElement('div');
       heatmapPopoverLayer.className = 'table-report-day-popover-layer';
-      let activeHeatmapCell = null;
 
       const closeDayPopover = () => {
-        if (activeHeatmapCell) activeHeatmapCell.classList.remove('is-active');
-        activeHeatmapCell = null;
-        heatmapPopoverLayer.classList.remove('is-open');
-        heatmapPopoverLayer.replaceChildren();
+        closeSharedDayPopover();
       };
 
       const parseDayDate = (day) => {
@@ -1543,24 +1631,13 @@ function setupTableFilterButtons() {
             closeDayPopover();
           });
 
-          const popoverContent = document.createElement('div');
-          popoverContent.className = 'table-report-day-popover-content';
-          if (typeof renderDayPopoverContent === 'function') {
-            const detailNode = renderDayPopoverContent(day);
-            if (detailNode) popoverContent.appendChild(detailNode);
-          }
-          if (!popoverContent.childNodes.length) {
-            const empty = document.createElement('div');
-            empty.className = 'table-report-empty';
-            empty.textContent = '日別データがありません';
-            popoverContent.appendChild(empty);
-          }
+          const popoverContent = buildDayPopoverContent(day);
 
+          clearActivePopoverTargets();
           popover.appendChild(popoverClose);
           popover.appendChild(popoverContent);
           heatmapPopoverLayer.replaceChildren(popover);
           heatmapPopoverLayer.classList.add('is-open');
-          if (activeHeatmapCell) activeHeatmapCell.classList.remove('is-active');
           activeHeatmapCell = cell;
           activeHeatmapCell.classList.add('is-active');
         };

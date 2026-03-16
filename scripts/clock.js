@@ -543,6 +543,7 @@ function updateWorkProgressBar(container) {
     // Update indicator position if it exists
     if (indicator) {
       indicator.style.left = `${progress}%`;
+      indicator.title = `現在時刻 ${now.toTimeString().slice(0,5)}`;
       
       // Toggle pulse animation for near end of day
       const shouldPulse = progress >= 90 && progress < 100;
@@ -623,8 +624,7 @@ function getPunchMarkerColor(type) {
 
 function filterTodayPunchEntries(entries) {
   const todayKeys = getTodayDateKeys();
-  const withDate = entries.filter((entry) => entry && entry.date && todayKeys.has(entry.date));
-  return withDate.length > 0 ? withDate : entries;
+  return entries.filter((entry) => entry && entry.date && todayKeys.has(entry.date));
 }
 
 function renderPunchMarkers(track, entries) {

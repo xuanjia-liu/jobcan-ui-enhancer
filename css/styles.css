@@ -2317,12 +2317,12 @@
   }
 
   .jobcan-enhanced .work-progress-indicator {
-    width: var(--work-dot-normal-width);
-    height: var(--work-dot-normal-height);
+    width: 4px;
+    height: 14px;
     border-radius: 999px;
-    background: #ef4444;
+    background: linear-gradient(180deg, var(--color-info, #0ea5e9) 0%, color-mix(in srgb, var(--color-info, #0ea5e9) 72%, #0f172a 28%) 100%);
     border: 2px solid rgba(255, 255, 255, 0.95);
-    box-shadow: 0 1px 4px rgba(15, 23, 42, 0.2);
+    box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.14), 0 2px 8px rgba(14, 165, 233, 0.3);
     z-index: 9;
     transition:
       width 0.18s ease,
@@ -2336,12 +2336,18 @@
     display: none;
   }
 
-  .jobcan-enhanced .work-progress-container:hover .work-punch-marker,
-  .jobcan-enhanced .work-progress-container:hover .work-progress-indicator {
+  .jobcan-enhanced .work-progress-container:hover .work-punch-marker {
     width: var(--work-dot-hover-size);
     height: var(--work-dot-hover-size);
     border-radius: 50%;
     box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.1), 0 6px 16px rgba(15, 23, 42, 0.22);
+  }
+
+  .jobcan-enhanced .work-progress-container:hover .work-progress-indicator {
+    width: 8px;
+    height: 18px;
+    border-radius: 999px;
+    box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.14), 0 8px 18px rgba(14, 165, 233, 0.34);
   }
 
   .jbe-punch-tooltip {
@@ -4299,6 +4305,15 @@
     gap: 6px;
     min-width: 26px;
     height: 100%;
+    position: relative;
+    cursor: pointer;
+    outline: none;
+  }
+
+  .table-report-trend-col:focus-visible .table-report-trend-bar-box,
+  .table-report-trend-col.is-active .table-report-trend-bar-box {
+    border-color: color-mix(in srgb, var(--color-info) 62%, var(--color-primary) 38%);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-info) 28%, transparent 72%);
   }
 
   .table-report-trend-bar-box {
@@ -4364,6 +4379,12 @@
     margin: 0;
     padding: 0;
     white-space: nowrap;
+  }
+
+  .table-report-day-popover.is-trend-popover {
+    width: min(420px, 100%);
+    max-width: 100%;
+    max-height: 58vh;
   }
 
   .table-report-heatmap-grid {
@@ -5117,6 +5138,10 @@
 
     .table-report-trend-bar-box {
       min-height: 112px;
+    }
+
+    .table-report-day-popover.is-trend-popover {
+      width: 100%;
     }
 
     .table-report-heatmap-weekdays {
