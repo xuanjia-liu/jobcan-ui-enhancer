@@ -379,6 +379,51 @@ function setupTableFilterButtons() {
       if (target?.button) target.button.click();
     };
 
+    const NO_INPUT_LABEL = '入力がありません';
+    const ZERO_MAN_HOUR_LABEL = '00:00';
+
+    const getCellDisplayText = (cell) => {
+      if (!cell) return '';
+      return String(cell.textContent || '').trim();
+    };
+
+    const getCellRawText = (cell) => {
+      if (!cell) return '';
+      return String(cell.dataset.jbeOriginalManHourTotal || cell.textContent || '').trim();
+    };
+
+    const hasNoInputLabel = (text) => String(text || '').includes(NO_INPUT_LABEL);
+
+    const getSearchResultManHourDisplayText = (manHourTotalText, dayTotalText) => {
+      if (!hasNoInputLabel(manHourTotalText)) return String(manHourTotalText || '').trim();
+      const workingMinutes = parseMinutesValue(dayTotalText);
+      return workingMinutes <= 0 ? ZERO_MAN_HOUR_LABEL : NO_INPUT_LABEL;
+    };
+
+    const syncSearchResultManHourTotals = () => {
+      const rows = Array.from(container.querySelectorAll('tr')).filter((row) => !row.querySelector('th'));
+
+      rows.forEach((row) => {
+        const totalCell = row.querySelector('td:nth-child(3)');
+        if (!totalCell) return;
+
+        const currentText = getCellDisplayText(totalCell);
+        const renderedText = String(totalCell.dataset.jbeRenderedManHourTotal || '').trim();
+        const hasOwnRenderedValue = renderedText && currentText === renderedText && totalCell.dataset.jbeOriginalManHourTotal;
+
+        const rawText = hasOwnRenderedValue ? getCellRawText(totalCell) : currentText;
+        totalCell.dataset.jbeOriginalManHourTotal = rawText;
+
+        const dayTotalText = getRowTotalText(row);
+        const displayText = getSearchResultManHourDisplayText(rawText, dayTotalText);
+
+        totalCell.dataset.jbeRenderedManHourTotal = displayText;
+        if (currentText !== displayText) {
+          totalCell.textContent = displayText;
+        }
+      });
+    };
+
     const getRowDateText = (row) => {
       const dateCell = row.querySelector('td:first-child');
       return dateCell ? dateCell.textContent.trim() : '';
@@ -388,6 +433,7 @@ function setupTableFilterButtons() {
       const cells = Array.from(row.querySelectorAll('td'));
       if (!cells.length) return '';
       const timeLike = cells
+        .filter((_, index) => index !== 2)
         .map((cell) => cell.textContent.trim())
         .filter((text) => /(\d{1,4}:\d{2})|(\d+\s*時間)|(\d+\s*分)/.test(text));
       return timeLike[timeLike.length - 1] || cells[cells.length - 1].textContent.trim();
@@ -396,7 +442,7 @@ function setupTableFilterButtons() {
     const getRowManHourTotalText = (row) => {
       const totalCell = row.querySelector('td:nth-child(3)');
       if (!totalCell) return '';
-      return totalCell.textContent.trim();
+      return getCellRawText(totalCell);
     };
 
     const buildDaySignature = (dayLike) => {
@@ -2613,13 +2659,34 @@ function setupTableFilterButtons() {
       updateButtonVisibility();
     };
 
+    let isSyncingSearchResultTotals = false;
+    const syncSearchResultManHourTotalsSafely = () => {
+      if (isSyncingSearchResultTotals) return;
+      isSyncingSearchResultTotals = true;
+      try {
+        syncSearchResultManHourTotals();
+      } finally {
+        isSyncingSearchResultTotals = false;
+      }
+    };
+
     updateInitialPosition();
     setTimeout(updateInitialPosition, 500);
+    syncSearchResultManHourTotalsSafely();
     renderFilterState();
     applyCurrentFilter();
 
     window.addEventListener('resize', updateInitialPosition);
     window.addEventListener('scroll', updateFixedVisibility);
+
+    const tableObserver = new MutationObserver(() => {
+      syncSearchResultManHourTotalsSafely();
+    });
+    tableObserver.observe(container, {
+      childList: true,
+      characterData: true,
+      subtree: true
+    });
 
     const modalObserver = new MutationObserver(() => {
       updateButtonVisibility();
