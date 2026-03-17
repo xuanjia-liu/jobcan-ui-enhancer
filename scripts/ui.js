@@ -554,20 +554,11 @@ function autoCollapseExternalPanelMisc() {
         if (panel.parentNode) {
           panel.parentNode.insertBefore(wrapper, panel);
           wrapper.appendChild(panel);
-          
-          // Style panel for floating
-          panel.style.position = 'absolute';
-          panel.style.bottom = '100%'; // Position above instead of below
-          panel.style.left = '0';
           panel.style.zIndex = '1000';
-          panel.style.boxShadow = '0 -4px 12px rgba(0, 0, 0, 0.15)'; // Adjust shadow for upward position
-          panel.style.borderRadius = 'var(--border-radius-md)';
-          panel.style.backgroundColor = 'white';
-          panel.style.padding = '15px';
-          panel.style.marginBottom = '5px'; // Use margin-bottom instead of margin-top
-          panel.style.border = '1px solid var(--color-gray-200)';
-          panel.style.minWidth = '250px';
-          panel.style.maxWidth = '100%';
+          panel.style.left = '0';
+          panel.style.right = 'auto';
+          panel.style.top = 'auto';
+          panel.style.bottom = '100%';
           
           // Hide initially
           panel.style.display = 'none';
@@ -577,28 +568,6 @@ function autoCollapseExternalPanelMisc() {
         const toggleHeader = document.createElement('div');
         toggleHeader.className = 'external-panel-toggle';
         toggleHeader.textContent = '言語設定と他のログイン方法';
-        toggleHeader.style.cssText = `
-          padding: 8px 12px;
-          background-color: var(--color-gray-100);
-          border: 1px solid var(--color-gray-200);
-          border-radius: var(--border-radius-md);
-          cursor: pointer;
-          font-weight: 600;
-          font-size: 14px;
-          color: var(--color-secondary);
-          text-align: center;
-          transition: all 0.2s ease;
-          position: relative;
-        `;
-        
-        // Add hover effect
-        toggleHeader.addEventListener('mouseenter', () => {
-          toggleHeader.style.backgroundColor = 'var(--color-gray-200)';
-        });
-        
-        toggleHeader.addEventListener('mouseleave', () => {
-          toggleHeader.style.backgroundColor = 'var(--color-gray-100)';
-        });
         
         // Add click handler to toggle visibility
         toggleHeader.addEventListener('click', (e) => {
@@ -623,12 +592,12 @@ function autoCollapseExternalPanelMisc() {
               // If it would go off the top, position it below instead
               panel.style.bottom = 'auto';
               panel.style.top = '100%';
-              panel.style.marginBottom = '0';
-              panel.style.marginTop = '5px';
               
               // Add a class to handle the arrow direction in CSS
               panel.classList.add('position-below');
             } else {
+              panel.style.top = 'auto';
+              panel.style.bottom = '100%';
               panel.classList.remove('position-below');
             }
             

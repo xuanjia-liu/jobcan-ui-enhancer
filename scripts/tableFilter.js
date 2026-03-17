@@ -1731,6 +1731,23 @@ function setupTableFilterButtons() {
           return;
         }
 
+        const themeStyles = getComputedStyle(document.body);
+        const readThemeToken = (name, fallback) => {
+          const value = themeStyles.getPropertyValue(name).trim();
+          return value || fallback;
+        };
+
+        const exportPalette = {
+          background: readThemeToken('--color-export-bg', '#ffffff'),
+          grid: readThemeToken('--color-export-grid', '#d7dde6'),
+          axis: readThemeToken('--color-export-axis', '#94a3b8'),
+          bar: readThemeToken('--color-export-bar', '#3c73f5'),
+          title: readThemeToken('--color-export-title', '#0f172a'),
+          subtitle: readThemeToken('--color-export-subtitle', '#334155'),
+          label: readThemeToken('--color-export-label', '#475569'),
+          caption: readThemeToken('--color-export-caption', '#64748b')
+        };
+
         const chartWidth = 820;
         const chartHeight = 420;
         const margin = { top: 74, right: 30, bottom: 110, left: 58 };
@@ -1742,7 +1759,7 @@ function setupTableFilterButtons() {
 
         const gridLines = [0, 0.25, 0.5, 0.75, 1].map((pct) => {
           const y = margin.top + Math.round(plotHeight * pct);
-          return `<line x1="${margin.left}" y1="${y}" x2="${chartWidth - margin.right}" y2="${y}" stroke="#d7dde6" stroke-width="1" />`;
+          return `<line x1="${margin.left}" y1="${y}" x2="${chartWidth - margin.right}" y2="${y}" stroke="${exportPalette.grid}" stroke-width="1" />`;
         }).join('');
 
         const bars = byDay.map((itemDay, idx) => {
@@ -1752,22 +1769,22 @@ function setupTableFilterButtons() {
           const date = escapeXml(itemDay.date);
           const time = formatMinutesToHHMM(itemDay.minutes);
           return `
-            <rect x="${x}" y="${y}" width="${barWidth}" height="${h}" rx="4" fill="#3c73f5" />
-            <text x="${x + barWidth / 2}" y="${y - 8}" text-anchor="middle" font-size="11" fill="#1f2937">${time}</text>
-            <text x="${x + barWidth / 2}" y="${margin.top + plotHeight + 20}" text-anchor="middle" font-size="11" fill="#475569">${date}</text>
+            <rect x="${x}" y="${y}" width="${barWidth}" height="${h}" rx="4" fill="${exportPalette.bar}" />
+            <text x="${x + barWidth / 2}" y="${y - 8}" text-anchor="middle" font-size="11" fill="${exportPalette.title}">${time}</text>
+            <text x="${x + barWidth / 2}" y="${margin.top + plotHeight + 20}" text-anchor="middle" font-size="11" fill="${exportPalette.label}">${date}</text>
           `;
         }).join('');
 
         const totalMinutes = byDay.reduce((sum, itemDay) => sum + itemDay.minutes, 0);
         const svg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${chartWidth}" height="${chartHeight}" viewBox="0 0 ${chartWidth} ${chartHeight}">
-  <rect width="100%" height="100%" fill="#ffffff" />
-  <text x="${margin.left}" y="34" font-size="20" font-weight="700" fill="#0f172a">プロジェクト日別工数</text>
-  <text x="${margin.left}" y="58" font-size="13" fill="#334155">${escapeXml(projectName)} / 合計 ${formatMinutesToHHMM(totalMinutes)}</text>
+  <rect width="100%" height="100%" fill="${exportPalette.background}" />
+  <text x="${margin.left}" y="34" font-size="20" font-weight="700" fill="${exportPalette.title}">プロジェクト日別工数</text>
+  <text x="${margin.left}" y="58" font-size="13" fill="${exportPalette.subtitle}">${escapeXml(projectName)} / 合計 ${formatMinutesToHHMM(totalMinutes)}</text>
   ${gridLines}
-  <line x1="${margin.left}" y1="${margin.top + plotHeight}" x2="${chartWidth - margin.right}" y2="${margin.top + plotHeight}" stroke="#94a3b8" stroke-width="1.2" />
+  <line x1="${margin.left}" y1="${margin.top + plotHeight}" x2="${chartWidth - margin.right}" y2="${margin.top + plotHeight}" stroke="${exportPalette.axis}" stroke-width="1.2" />
   ${bars}
-  <text x="${margin.left}" y="${chartHeight - 16}" font-size="11" fill="#64748b">Generated at ${escapeXml(new Date().toLocaleString('ja-JP'))}</text>
+  <text x="${margin.left}" y="${chartHeight - 16}" font-size="11" fill="${exportPalette.caption}">Generated at ${escapeXml(new Date().toLocaleString('ja-JP'))}</text>
 </svg>`;
 
         const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });

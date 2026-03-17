@@ -21,7 +21,7 @@ const COLORS = {
       shadow: 'var(--shadow-success, 0 0 8px var(--color-success-border))'
     },
     good: {
-      color: 'var(--color-info, #17a2b8)',
+      color: 'var(--color-info)',
       shadow: 'var(--shadow-info, 0 0 8px var(--color-info-border, rgba(23, 162, 184, 0.3)))'
     },
     halfway: {
@@ -131,8 +131,8 @@ function addFlipClockStyles() {
       border-radius: 50%;
       transform: translate(-50%, -50%);
       z-index: 4;
-      box-shadow: 0 0 4px rgba(0, 0, 0, 0.3);
-      border: 1px solid rgba(255, 255, 255, 0.85);
+      box-shadow: 0 0 4px var(--color-work-progress-marker-shadow, rgba(15, 23, 42, 0.16));
+      border: 1px solid var(--color-work-progress-marker-border, rgba(255, 255, 255, 0.85));
       pointer-events: auto;
       cursor: pointer;
       transition: transform 0.15s ease, box-shadow 0.15s ease;
@@ -140,7 +140,7 @@ function addFlipClockStyles() {
 
     .work-punch-marker:hover {
       transform: translate(-50%, -50%) scale(1.15);
-      box-shadow: 0 0 6px rgba(0, 0, 0, 0.4);
+      box-shadow: 0 0 6px var(--color-work-progress-marker-hover-shadow, rgba(15, 23, 42, 0.22));
     }
     
     .colon {
@@ -163,7 +163,7 @@ function addFlipClockStyles() {
     }
 
     /* Colon colors based on status */
-    .colon-default { color: var(--color-clock-text, white) !important; }
+    .colon-default { color: var(--color-clock-text) !important; }
     .colon-working { color: var(--color-primary) !important; }
     .colon-not-working { color: var(--color-gray-600) !important; }
 
@@ -357,8 +357,8 @@ function createSelfAnimatingDigit(digit) {
   flipCardFront.style.display = 'flex';
   flipCardFront.style.alignItems = 'center';
   flipCardFront.style.justifyContent = 'center';
-  flipCardFront.style.background = 'linear-gradient(135deg, var(--color-primary-dark) 0%, var(--color-primary) 100%)';
-  flipCardFront.style.color = 'var(--color-clock-text, white)';
+  flipCardFront.style.background = COLORS.primary.gradient;
+  flipCardFront.style.color = 'var(--color-clock-text)';
   flipCardFront.style.fontSize = '3.5rem';
   flipCardFront.style.fontWeight = 'bold';
   flipCardFront.style.borderRadius = '8px';
@@ -370,8 +370,8 @@ function createSelfAnimatingDigit(digit) {
   flipCardBack.style.display = 'flex';
   flipCardBack.style.alignItems = 'center';
   flipCardBack.style.justifyContent = 'center';
-  flipCardBack.style.background = 'linear-gradient(135deg, var(--color-primary-dark) 0%, var(--color-primary) 100%)';
-  flipCardBack.style.color = 'var(--color-clock-text, white)';
+  flipCardBack.style.background = COLORS.primary.gradient;
+  flipCardBack.style.color = 'var(--color-clock-text)';
   flipCardBack.style.fontSize = '3.5rem';
   flipCardBack.style.fontWeight = 'bold';
   flipCardBack.style.transform = 'rotateX(180deg)';
@@ -614,12 +614,24 @@ function parsePunchMinutes(time) {
 }
 
 function getPunchMarkerColor(type) {
-  if ((type || '').includes('入室')) return 'var(--color-success, #28a745)';
-  if ((type || '').includes('退室')) return 'var(--color-danger, #dc3545)';
-  if ((type || '').includes('出勤')) return 'var(--color-success, #28a745)';
-  if ((type || '').includes('退勤')) return 'var(--color-danger, #dc3545)';
-  if ((type || '').includes('休憩')) return 'var(--color-warning, #ffc107)';
-  return 'var(--color-info, #17a2b8)';
+  if ((type || '').includes('入室')) return 'var(--color-success)';
+  if ((type || '').includes('退室')) return 'var(--color-danger)';
+  if ((type || '').includes('出勤')) return 'var(--color-success)';
+  if ((type || '').includes('退勤')) return 'var(--color-danger)';
+  if ((type || '').includes('休憩')) return 'var(--color-warning)';
+  return 'var(--color-info)';
+}
+
+function getCelebrationColors() {
+  const styles = getComputedStyle(document.body);
+  return [
+    styles.getPropertyValue('--color-celebration-1').trim() || '#0066DD',
+    styles.getPropertyValue('--color-celebration-2').trim() || '#28A745',
+    styles.getPropertyValue('--color-celebration-3').trim() || '#FFC107',
+    styles.getPropertyValue('--color-celebration-4').trim() || '#DC3545',
+    styles.getPropertyValue('--color-celebration-5').trim() || '#17A2B8',
+    styles.getPropertyValue('--color-celebration-6').trim() || '#6F42C1'
+  ];
 }
 
 function filterTodayPunchEntries(entries) {
@@ -983,10 +995,10 @@ function createDefaultTimeDisplay(container, timeString) {
   timeDiv.textContent = timeString;
   timeDiv.style.fontSize = '3rem';
   timeDiv.style.fontWeight = 'bold';
-  timeDiv.style.color = 'var(--color-clock-text, white)';
+  timeDiv.style.color = 'var(--color-clock-text)';
   timeDiv.style.textAlign = 'center';
   timeDiv.style.padding = '15px';
-  timeDiv.style.background = 'linear-gradient(135deg, var(--color-primary-dark) 0%, var(--color-primary) 100%)';
+  timeDiv.style.background = COLORS.primary.gradient;
   timeDiv.style.borderRadius = '8px';
   timeDiv.style.boxShadow = 'var(--shadow-sm)';
   
@@ -1034,8 +1046,8 @@ function createFlipDigit(digit) {
   frontElement.style.display = 'flex';
   frontElement.style.alignItems = 'center';
   frontElement.style.justifyContent = 'center';
-  frontElement.style.background = 'linear-gradient(135deg, var(--color-primary-dark) 0%, var(--color-primary) 100%)';
-  frontElement.style.color = 'var(--color-clock-text, white)';
+  frontElement.style.background = COLORS.primary.gradient;
+  frontElement.style.color = 'var(--color-clock-text)';
   frontElement.style.fontSize = '3.5rem';
   frontElement.style.fontWeight = 'bold';
   frontElement.style.borderRadius = '8px';
@@ -1049,8 +1061,8 @@ function createFlipDigit(digit) {
   backElement.style.display = 'flex';
   backElement.style.alignItems = 'center';
   backElement.style.justifyContent = 'center';
-  backElement.style.background = 'linear-gradient(135deg, var(--color-primary-dark) 0%, var(--color-primary) 100%)';
-  backElement.style.color = 'var(--color-clock-text, white)';
+  backElement.style.background = COLORS.primary.gradient;
+  backElement.style.color = 'var(--color-clock-text)';
   backElement.style.fontSize = '3.5rem';
   backElement.style.fontWeight = 'bold';
   backElement.style.transform = 'rotateX(180deg)';
@@ -1150,7 +1162,7 @@ function createParticleEffect(clockContainer) {
     spread: randomInRange(50, 70),
     particleCount: randomInRange(50, 100),
     origin: { x: originX, y: originY },
-    colors: ['#0066DD', '#28A745', '#FFC107', '#DC3545', '#17A2B8', '#6F42C1'],
+    colors: getCelebrationColors(),
     ticks: 200,
     gravity: 1,
     decay: 0.94,
@@ -1192,7 +1204,7 @@ function createBurstParticleEffect(clockContainer) {
         spread: randomInRange(50, 70),
         particleCount: randomInRange(30, 50),
         origin: { x: originX, y: originY },
-        colors: ['#0066DD', '#28A745', '#FFC107', '#DC3545', '#17A2B8', '#6F42C1'],
+        colors: getCelebrationColors(),
         ticks: 150,
         gravity: 1.2,
         decay: 0.92,

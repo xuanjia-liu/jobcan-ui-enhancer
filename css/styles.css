@@ -71,10 +71,12 @@
   }
 
   .jobcan-enhanced .jbe-signin-right-container {
-    background-color: var(--color-white);
+    background-color: var(--color-surface-elevated);
+    color: var(--color-text-primary);
     text-align: center;
     border-radius: 12px;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    border: 1px solid var(--color-control-border);
+    box-shadow: var(--shadow-dropdown);
     position: relative;
     padding: 20px;
     flex-direction: column;
@@ -104,9 +106,9 @@
     margin: 4px;
     display: block;
     padding: 1px 6px;
-    background-color: var(--color-white);
-    color: #aaa;
-    border: 1px solid #ddd;
+    background-color: var(--color-control-bg);
+    color: var(--color-text-secondary);
+    border: 1px solid var(--color-control-border);
     border-radius: 10px;
     cursor: pointer;
     font-size: 10px;
@@ -117,6 +119,8 @@
   }
 
   .jobcan-enhanced .jbe-signin-toggle-btn:hover {
+    background-color: var(--color-control-bg-hover);
+    color: var(--color-text-primary);
     opacity: 0.9;
   }
 
@@ -207,7 +211,7 @@
     border-radius: 0 0 16px 16px;
     box-shadow: var(--shadow-header);
     padding: 8px;
-    border: 1px solid var(--color-gray-200, rgba(228, 230, 235, 0.6));
+    border: 1px solid var(--color-gray-200);
     transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
   }
 
@@ -653,21 +657,21 @@
   .jobcan-enhanced body.dark-mode #sidemenu a,
   .jobcan-enhanced body.dark-mode .sidemenu a,
   .jobcan-enhanced body.dark-mode .menuArea a {
-    color: #dbe2ea;
+    color: var(--color-nav-text);
   }
 
   .jobcan-enhanced body.dark-mode #sidemenu a:hover,
   .jobcan-enhanced body.dark-mode .sidemenu a:hover,
   .jobcan-enhanced body.dark-mode .menuArea a:hover {
-    background-color: rgba(255, 255, 255, 0.08);
-    color: #f5f7fb;
+    background-color: var(--color-nav-hover-bg);
+    color: var(--color-nav-hover-text);
   }
 
   .jobcan-enhanced body.dark-mode #sidemenu a.active,
   .jobcan-enhanced body.dark-mode .sidemenu a.active,
   .jobcan-enhanced body.dark-mode .menuArea a.active {
-    background-color: rgba(31, 111, 235, 0.28);
-    color: #eef5ff;
+    background-color: var(--color-nav-active-bg);
+    color: var(--color-nav-active-text);
   }
 
   .jobcan-enhanced body.dark-mode .nav-item.has-submenu > ul,
@@ -677,13 +681,13 @@
 
   .jobcan-enhanced body.dark-mode .nav-item.has-submenu > ul > li > a,
   .jobcan-enhanced body.dark-mode .menu-item.has-children > ul > li > a {
-    color: #d2d9e2 !important;
+    color: var(--color-nav-text) !important;
   }
 
   .jobcan-enhanced body.dark-mode .nav-item.has-submenu > ul > li > a:hover,
   .jobcan-enhanced body.dark-mode .menu-item.has-children > ul > li > a:hover {
-    background-color: rgba(255, 255, 255, 0.08) !important;
-    color: #f5f7fb !important;
+    background-color: var(--color-nav-hover-bg) !important;
+    color: var(--color-nav-hover-text) !important;
   }
 
   .jobcan-enhanced body.dark-mode .nav-item.has-submenu > ul > li > a.active,
@@ -691,8 +695,8 @@
   .jobcan-enhanced body.dark-mode .sidemenu a.selected,
   .jobcan-enhanced body.dark-mode .menu-item.selected > a,
   .jobcan-enhanced body.dark-mode .nav-item.selected > a {
-    background-color: rgba(31, 111, 235, 0.26) !important;
-    color: #eef5ff !important;
+    background-color: var(--color-nav-active-bg) !important;
+    color: var(--color-nav-active-text) !important;
   }
   
   /* Selected menu item styling */
@@ -763,8 +767,8 @@
   
   .jobcan-enhanced .external-panel-toggle {
     padding: 8px 12px;
-    background-color: var(--color-gray-100);
-    border: 1px solid var(--color-gray-200);
+    background-color: var(--color-control-bg);
+    border: 1px solid var(--color-control-border);
     border-radius: var(--border-radius-md);
     cursor: pointer;
     font-weight: 600;
@@ -796,21 +800,25 @@
   }
   
   .jobcan-enhanced .external-panel-toggle:hover {
-    background-color: var(--color-gray-200);
+    background-color: var(--color-control-bg-hover);
     box-shadow: 0 3px 8px var(--color-black-12);
   }
   
   .jobcan-enhanced .external-panel-misc {
-    border: 1px solid var(--color-gray-200);
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    border: 1px solid var(--color-control-border);
     border-radius: var(--border-radius-md);
-    background-color: var(--color-white);
-    box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.15);
+    background-color: var(--color-surface-elevated);
+    box-shadow: var(--shadow-dropdown);
     animation: fadeIn 0.2s ease-in-out;
     z-index: var(--z-index-dropdown);
     padding: 15px;
     min-width: 250px;
+    max-width: 100%;
+    margin-bottom: 5px;
     transform-origin: bottom center;
-    position: relative;
     --arrow-position: 20px;
   }
   
@@ -823,7 +831,7 @@
     height: 0;
     border-left: 8px solid transparent;
     border-right: 8px solid transparent;
-    border-top: 8px solid var(--color-white);
+    border-top: 8px solid var(--color-surface-elevated);
     filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.1));
   }
   
@@ -836,26 +844,30 @@
     height: 0;
     border-left: 9px solid transparent;
     border-right: 9px solid transparent;
-    border-top: 9px solid var(--color-gray-200);
+    border-top: 9px solid var(--color-control-border);
   }
   
   /* Style for when the panel is positioned below the button */
   .jobcan-enhanced .external-panel-misc.position-below {
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    top: 100%;
+    bottom: auto;
+    margin-top: 5px;
+    margin-bottom: 0;
+    box-shadow: var(--shadow-dropdown);
   }
   
   .jobcan-enhanced .external-panel-misc.position-below::after {
     bottom: auto;
     top: -8px;
     border-top: none;
-    border-bottom: 8px solid var(--color-white);
+    border-bottom: 8px solid var(--color-surface-elevated);
   }
   
   .jobcan-enhanced .external-panel-misc.position-below::before {
     bottom: auto;
     top: -9px;
     border-top: none;
-    border-bottom: 9px solid var(--color-gray-200);
+    border-bottom: 9px solid var(--color-control-border);
   }
   
   .jobcan-enhanced .external-panel-misc a {
@@ -1044,7 +1056,7 @@
     font-size: 14px;
     transition: var(--transition);
     width: 100%;
-    background-color: var(--color-white);
+    background-color: var(--color-control-bg);
     color: var(--color-text-primary);
     box-sizing: border-box;
   }
@@ -1057,7 +1069,7 @@
     font-size: 1rem;
     font-weight: 400;
     line-height: 1;
-    background-color: var(--color-white);
+    background-color: var(--color-control-bg);
     border: 1px solid var(--color-border);
     border-radius: var(--border-radius-md);
     transition: var(--transition);
@@ -1067,7 +1079,7 @@
   .jobcan-enhanced select:focus,
   .jobcan-enhanced textarea:focus {
     border-color: var(--color-primary);
-    box-shadow: 0 0 0 3px var(--color-primary-light);
+    box-shadow: 0 0 0 3px var(--color-focus-ring);
     outline: none;
   }
   
@@ -1341,7 +1353,7 @@
   
   .jobcan-enhanced .table tr.danger:hover td,
   .jobcan-enhanced .jbc-table tr.danger:hover td {
-    background-color: rgba(231, 76, 60, 0.12);
+    background-color: var(--color-danger-bg);
   }
 
   /* Table cell alignment with improved spacing */
@@ -1517,6 +1529,13 @@
      ========================================================================== */
   /* Custom select dropdown styling */
   .jobcan-enhanced .custom-select-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    border: 1px solid var(--color-border);
+    background-color: var(--color-surface);
+    cursor: pointer;
+    transition: border-color 150ms ease, box-shadow 150ms ease, background-color 150ms ease;
     padding: 10px 16px;
     border-radius: var(--border-radius-md) !important;
   }
@@ -1524,6 +1543,11 @@
   .jobcan-enhanced .custom-select-wrapper:hover {
     border-color: var(--color-primary);
     background-color: var(--color-gray-150);
+  }
+
+  .jobcan-enhanced .custom-select-wrapper.is-hovered:not([data-invalid="true"]) {
+    border-color: var(--color-primary-border);
+    box-shadow: var(--shadow-button-sm);
   }
   
   .jobcan-enhanced .project-select {
@@ -1536,6 +1560,7 @@
   
   .jobcan-enhanced .select-display {
     flex: 1;
+    padding: 0.25rem;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1565,8 +1590,8 @@
     top: 0px;
     width: 400px;
     height: 100vh;
-    background-color: var(--color-white);
-    box-shadow: 0 0 20px var(--color-black-20);
+    background-color: var(--color-card);
+    box-shadow: var(--shadow-modal);
     z-index: var(--z-index-modal);
     display: flex;
     flex-direction: column;
@@ -1670,10 +1695,11 @@
   }
   
   .jobcan-enhanced .option-item.keyboard-focused {
-    background-color: #f0f7ff;
-    border-left-color: #7fb5ff;
+    background-color: var(--color-primary-focus-bg);
+    border-left-color: var(--color-primary-border);
     position: relative;
     outline: none;
+    box-shadow: inset 0 0 0 1px var(--color-focus-ring-strong);
   }
   
   .jobcan-enhanced .option-item.keyboard-focused:after {
@@ -1766,7 +1792,7 @@
     overflow-y: auto !important;
     transform: translateX(100%);
     transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-    box-shadow: -5px 0 25px rgba(0, 0, 0, 0.15) !important;
+    box-shadow: var(--shadow-modal) !important;
     will-change: transform;
   }
   
@@ -1787,7 +1813,7 @@
     height: 100% !important;
     border-radius: var(--border-radius-10) 0 0 var(--border-radius-10) !important;
     border: none !important;
-    box-shadow: -2px 0 10px rgba(0, 0, 0, 0.1) !important;
+    box-shadow: var(--shadow-modal-content) !important;
     display: flex !important;
     flex-direction: column !important;
     padding: 0 !important;
@@ -1804,7 +1830,7 @@
     justify-content: space-between !important;
     position: sticky !important;
     top: 0 !important;
-    background-color: white !important;
+    background-color: var(--color-surface) !important;
     z-index: var(--z-index-sidemenu) !important;
   }
   
@@ -1856,9 +1882,9 @@
     border-top: 1px solid var(--color-border) !important;
     position: sticky !important;
     bottom: 0 !important;
-    background-color: white !important;
+    background-color: var(--color-surface) !important;
     z-index: var(--z-index-sidemenu) !important;
-    box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.05) !important;
+    box-shadow: var(--shadow-sm) !important;
     display: flex !important;
     justify-content: flex-end !important;
     align-items: center !important;
@@ -2038,7 +2064,7 @@
     justify-content: center;
     margin: var(--spacing-lg) 0;
     padding: var(--spacing-md);
-    background-color: var(--color-surface, #ffffff);
+    background-color: var(--color-surface);
     border-radius: var(--border-radius-xl);
     box-shadow: var(--shadow-sm);
     position: relative;
@@ -2142,7 +2168,7 @@
   /* Clock style variations */
   .jobcan-enhanced .flip-clock-digit.style-gradient .flip-card-front,
   .jobcan-enhanced .flip-clock-digit.style-gradient .flip-card-back {
-    background: linear-gradient(135deg, var(--color-primary-dark, #0055b3) 0%, var(--color-primary, #0078ff) 100%);
+    background: linear-gradient(135deg, var(--color-primary-dark) 0%, var(--color-primary) 100%);
   }
   
   .jobcan-enhanced .flip-clock-digit.style-working .flip-card-front,
@@ -2182,15 +2208,15 @@
     min-height: 60px;
     border-radius: 16px;
     padding: 10px 12px 8px;
-    background: linear-gradient(180deg, #f9fafb 0%, #f1f3f5 100%);
-    border: 1px solid rgba(0, 0, 0, 0.08);
-    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.55);
+    background: linear-gradient(180deg, var(--color-work-progress-surface-start) 0%, var(--color-work-progress-surface-end) 100%);
+    border: 1px solid var(--color-work-progress-border);
+    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.06);
     transition: box-shadow 0.2s ease, border-color 0.2s ease;
   }
 
   .jobcan-enhanced .work-progress-container:hover {
-    border-color: rgba(0, 102, 221, 0.25);
-    box-shadow: 0 3px 10px rgba(16, 24, 40, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.65);
+    border-color: var(--color-work-progress-hover-border);
+    box-shadow: 0 3px 10px rgba(16, 24, 40, 0.08);
   }
   
   .jobcan-enhanced .work-progress-container.hidden {
@@ -2205,11 +2231,11 @@
     --work-segment-boundary-gap: 8px;
     height: 20px;
     width: 100%;
-    background: linear-gradient(180deg, #d7dde5 0%, #c8d0da 100%);
+    background: linear-gradient(180deg, var(--color-work-progress-track-start) 0%, var(--color-work-progress-track-end) 100%);
     border-radius: 999px;
     overflow: hidden;
     position: relative;
-    border: 1px solid rgba(15, 23, 42, 0.12);
+    border: 1px solid var(--color-work-progress-track-border);
     margin-top: 0;
   }
 
@@ -2232,12 +2258,10 @@
 
   .jobcan-enhanced .work-schedule-segment.segment-working {
     background: linear-gradient(90deg, var(--color-work-segment-working-start) 0%, var(--color-work-segment-working-end) 100%);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.26);
   }
 
   .jobcan-enhanced .work-schedule-segment.segment-off {
-    background: linear-gradient(90deg, #aeb8c5 0%, #9ca8b8 100%);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.26);
+    background: linear-gradient(90deg, var(--color-work-segment-off-start) 0%, var(--color-work-segment-off-end) 100%);
   }
   
   .jobcan-enhanced .work-progress-percentage {
@@ -2255,13 +2279,13 @@
 
   .jobcan-enhanced .work-progress-inline-label {
     font-weight: 700;
-    color: #465365;
+    color: var(--color-work-progress-label);
     font-size: 11px;
   }
 
   .jobcan-enhanced .work-progress-inline-status {
     font-weight: 700;
-    color: #1f2a37;
+    color: var(--color-work-progress-status);
     min-width: 0;
     text-align: center;
     white-space: nowrap;
@@ -2286,10 +2310,10 @@
     top: 5px;
     width: 1px;
     height: 8px;
-    background-color: rgba(54, 70, 90, 0.52);
+    background-color: var(--color-work-progress-scale);
     z-index: 6;
     border-radius: 999px;
-    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.32);
+    box-shadow: 0 0 0 1px var(--color-work-progress-scale-ring);
   }
 
   .jobcan-enhanced .time-scale-marker.first-scale-marker {
@@ -2299,15 +2323,12 @@
   .jobcan-enhanced .work-punch-marker {
     width: var(--work-dot-normal-width);
     height: var(--work-dot-normal-height);
-    border: 2px solid rgba(255, 255, 255, 0.96);
+    border: 2px solid var(--color-work-progress-marker-border);
     border-radius: 999px;
-    box-shadow: 0 1px 4px rgba(15, 23, 42, 0.16);
+    box-shadow: 0 1px 4px var(--color-work-progress-marker-shadow);
     cursor: pointer;
     z-index: 4;
     transition:
-      width 0.18s ease,
-      height 0.18s ease,
-      border-radius 0.18s ease,
       transform 0.18s ease,
       box-shadow 0.18s ease;
   }
@@ -2320,14 +2341,11 @@
     width: 4px;
     height: 14px;
     border-radius: 999px;
-    background: linear-gradient(180deg, var(--color-info, #0ea5e9) 0%, color-mix(in srgb, var(--color-info, #0ea5e9) 72%, #0f172a 28%) 100%);
-    border: 2px solid rgba(255, 255, 255, 0.95);
-    box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.14), 0 2px 8px rgba(14, 165, 233, 0.3);
+    background: linear-gradient(180deg, var(--color-info) 0%, color-mix(in srgb, var(--color-info) 72%, var(--color-black-85) 28%) 100%);
+    border: 2px solid var(--color-work-progress-marker-border);
+    box-shadow: 0 0 0 2px var(--color-work-progress-indicator-ring), 0 2px 8px var(--color-work-progress-indicator-shadow);
     z-index: 9;
     transition:
-      width 0.18s ease,
-      height 0.18s ease,
-      border-radius 0.18s ease,
       transform 0.18s ease,
       box-shadow 0.18s ease;
   }
@@ -2340,21 +2358,21 @@
     width: var(--work-dot-hover-size);
     height: var(--work-dot-hover-size);
     border-radius: 50%;
-    box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.1), 0 6px 16px rgba(15, 23, 42, 0.22);
+    box-shadow: 0 0 0 3px var(--color-work-progress-marker-hover-ring), 0 6px 16px var(--color-work-progress-marker-hover-shadow);
   }
 
   .jobcan-enhanced .work-progress-container:hover .work-progress-indicator {
     width: 8px;
     height: 18px;
     border-radius: 999px;
-    box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.14), 0 8px 18px rgba(14, 165, 233, 0.34);
+    box-shadow: 0 0 0 4px var(--color-work-progress-indicator-ring), 0 8px 18px var(--color-work-progress-indicator-shadow);
   }
 
   .jbe-punch-tooltip {
     position: fixed;
     z-index: 2147483647;
-    background: rgba(15, 23, 42, 0.94);
-    color: #f8fafc;
+    background: var(--color-work-progress-tooltip-bg);
+    color: var(--color-work-progress-tooltip-text);
     font-size: 11px;
     font-weight: 600;
     letter-spacing: 0.01em;
@@ -2372,30 +2390,6 @@
     transform: translateY(0);
   }
 
-  .jobcan-enhanced body.dark-mode .work-progress-container {
-    background: linear-gradient(180deg, #2526282e 0%, #18191b5b 100%);
-    border-color: rgba(255, 255, 255, 0.1);
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-  }
-
-  .jobcan-enhanced body.dark-mode .work-progress-track {
-    background: linear-gradient(180deg, #455063 0%, #3b4558 100%);
-    border-color: rgba(255, 255, 255, 0.12);
-  }
-
-  .jobcan-enhanced body.dark-mode .work-progress-inline-label {
-    color: #d6deea;
-  }
-
-  .jobcan-enhanced body.dark-mode .work-progress-inline-status {
-    color: #e2e8f0;
-  }
-
-  .jobcan-enhanced body.dark-mode .time-scale-marker {
-    background-color: rgba(248, 250, 252, 0.62);
-    box-shadow: 0 0 0 1px rgba(2, 6, 23, 0.28);
-  }
-  
   .jobcan-enhanced .current-time-indicator {
     position: absolute;
     top: 2px;
@@ -2542,7 +2536,7 @@
 
   .jobcan-enhanced body.dark-mode .jobcan-fab-action::after {
     background: color-mix(in srgb, var(--color-card) 58%, var(--color-black) 42%);
-    color: #f5f7fb;
+    color: var(--color-text-primary);
     border: 1px solid color-mix(in srgb, var(--color-border) 70%, var(--color-white) 30%);
     box-shadow: 0 8px 22px rgba(0, 0, 0, 0.38);
   }
@@ -2590,7 +2584,7 @@
   #screenshot-selection {
     position: absolute;
     border: 2px dashed var(--color-white);
-    background-color: rgba(66, 133, 244, 0.2);
+    background-color: var(--color-screenshot-selection-fill);
     box-shadow: 0 0 0 1px var(--color-white-50);
     will-change: transform, width, height;
   }
@@ -2598,7 +2592,7 @@
   .screenshot-selection {
     position: absolute;
     border: 2px dashed var(--color-white);
-    background-color: rgba(66, 133, 244, 0.2);
+    background-color: var(--color-screenshot-selection-fill);
     box-shadow: 0 0 0 1px var(--color-white-50);
     will-change: transform, width, height;
   }
@@ -2626,11 +2620,11 @@
     position: fixed;
     bottom: 24px;
     left: 20px;
-    background-color: var(--color-notification-bg, #4285f4);
-    color: var(--color-notification-text, white);
+    background-color: var(--color-notification-bg);
+    color: var(--color-notification-text);
     padding: 10px 20px;
     border-radius: var(--border-radius-sm);
-    box-shadow: var(--shadow-md, 0 2px 10px rgba(0,0,0,0.2));
+    box-shadow: var(--shadow-md);
     z-index: var(--z-index-notification);
     opacity: 0;
     transform: translateY(20px);
@@ -2991,6 +2985,10 @@
     animation: pulse-danger 2s infinite;
   }
 
+  .jobcan-enhanced .validation-tooltip.is-visible {
+    display: block;
+  }
+
   /* Add arrow to tooltip */
   .jobcan-enhanced .validation-tooltip::after {
     content: '';
@@ -3063,7 +3061,7 @@
   }
 
   .work-time-overlay-content {
-    background: white;
+    background: var(--color-card);
     padding: 0;
     border-radius: var(--border-radius-lg);
     max-width: 450px;
@@ -3072,13 +3070,14 @@
     box-shadow: 0 5px 15px var(--shadow-md);
     max-height: 80vh;
     overflow-y: auto;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: var(--color-text-primary);
+    font-family: var(--font-family-base);
   }
 
   .work-time-overlay-header {
     padding: 15px 20px;
-    border-bottom: 1px solid #e9ecef;
-    background-color: #f8f9fa;
+    border-bottom: 1px solid var(--color-border-light);
+    background-color: var(--color-surface);
     border-top-left-radius: 4px;
     border-top-right-radius: 4px;
     display: flex;
@@ -3088,7 +3087,7 @@
 
   .work-time-overlay-header h3 {
     margin: 0;
-    color: var(--color-primary, #3a5a79);
+    color: var(--color-primary);
     font-size: 18px;
     font-weight: 500;
   }
@@ -3101,9 +3100,9 @@
 
   .work-time-overlay-close {
     position: relative;
-    background-color: var(--color-white);
-    color: var(--color-primary)!important;
-    border: none;
+    background-color: var(--color-control-bg);
+    color: var(--color-primary) !important;
+    border: 1px solid var(--color-control-border);
     font-size: 16px;
     cursor: pointer;
     padding: 0;
@@ -3129,7 +3128,7 @@
     padding: 10px 0;
     display: flex;
     justify-content: space-between;
-    border-bottom: 1px solid #f0f0f0;
+    border-bottom: 1px solid var(--color-border-light);
     font-size: 14px;
   }
 
@@ -3139,27 +3138,27 @@
 
   .work-time-data-label {
     font-weight: 500;
-    color: #495057;
+    color: var(--color-text-secondary);
   }
 
   .work-time-data-value {
     font-weight: 600;
-    color: #212529;
+    color: var(--color-text-primary);
   }
 
   .work-time-overlay-footer {
     padding: 15px 20px;
-    border-top: 1px solid #e9ecef;
+    border-top: 1px solid var(--color-border-light);
     display: flex;
     justify-content: flex-end;
-    background-color: #f8f9fa;
+    background-color: var(--color-surface);
     border-bottom-left-radius: 4px;
     border-bottom-right-radius: 4px;
   }
 
   .work-time-action-btn {
-    background-color: var(--color-primary, #3c5e7e);
-    color: white;
+    background-color: var(--color-primary);
+    color: var(--color-text-on-primary);
     border: none;
     font-size: 14px;
     padding: 0.375rem 0.75rem;
@@ -3169,13 +3168,13 @@
   }
 
   .work-time-action-btn:hover {
-    background-color: var(--color-primary-dark, #2a4b6a);
+    background-color: var(--color-primary-dark);
   }
 
   .work-time-no-data {
     padding: 30px 20px;
     text-align: center;
-    color: #6c757d;
+    color: var(--color-text-muted);
   }
 
   .work-time-no-data p {
@@ -3189,13 +3188,13 @@
     text-align: center;
     margin: 15px 0;
     padding-bottom: 10px;
-    border-bottom: 1px dashed #e9ecef;
+    border-bottom: 1px dashed var(--color-border-light);
   }
 
   
 
   .work-time-overlay .zero-value-item {
-    color: var(--color-text-muted, #6c757d);
+    color: var(--color-text-muted);
   }
 
   .work-time-overlay-title-container {
@@ -3206,7 +3205,7 @@
 
   .work-time-overlay-header h3 {
     margin: 0;
-    color: var(--color-primary, #3a5a79);
+    color: var(--color-primary);
     font-size: 18px;
     font-weight: 500;
   }
@@ -3215,7 +3214,7 @@
 
   .attendance-page-link:hover {
     text-decoration: underline;
-    color: var(--color-primary-dark, #2a4b6a);
+    color: var(--color-primary-dark);
   }
 
   .work-time-action-link {
@@ -3230,7 +3229,7 @@
   .work-time-divider {
     border: none;
     height: 1px;
-    background-color: var(--color-border-light, #dee2e6);
+    background-color: var(--color-border-light);
     margin: 15px 0;
   }
 
@@ -3246,11 +3245,11 @@
   .work-time-refresh-note {
     margin-top: 20px;
     font-size: 12px;
-    color: var(--color-text-muted, #6c757d);
+    color: var(--color-text-muted);
     font-style: italic;
     text-align: center;
     padding-top: 10px;
-    border-top: 1px dashed var(--color-border-light, #e9ecef);
+    border-top: 1px dashed var(--color-border-light);
   }
 
 
@@ -3290,7 +3289,7 @@
   }
 
   .jobcan-enhanced .month-selector-btn {
-    background-color: var(--color-white, #fff);
+    background-color: var(--color-white);
     border: 1px solid var(--color-gray-200);
     color: var(--color-gray-600);
     padding: 2px 6px;
@@ -3323,7 +3322,7 @@
     position: absolute;
     width: 8px;
     height: 8px;
-    border: 1.5px solid var(--color-white, #fff);
+    border: 1.5px solid var(--color-white);
     border-radius: var(--border-radius-circle);
     border-top-color: transparent;
     left: 50%;
@@ -3345,14 +3344,14 @@
   .jobcan-enhanced .validation-tooltip {
     position: absolute;
     background-color: var(--color-danger);
-    color: white;
+    color: var(--color-white);
     padding: 6px 10px;
     border-radius: var(--border-radius-sm);
     font-size: 12px;
     z-index: var(--z-index-dropdown);
     top: -30px;
     left: 0;
-    box-shadow: 0 2px 8px var(--shadow-md);
+    box-shadow: var(--shadow-md);
     pointer-events: none;
     white-space: nowrap;
     text-align: center;
@@ -3394,13 +3393,13 @@
 
   @keyframes pulse-attention {
     0% {
-      box-shadow: 0 0 0 0 rgba(255, 15, 39, 0.8);
+      box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-danger) 80%, transparent 20%);
     }
     70% {
-      box-shadow: 0 0 0 6px rgba(220, 53, 70, 0.01);
+      box-shadow: 0 0 0 6px color-mix(in srgb, var(--color-danger) 1%, transparent 99%);
     }
     100% {
-      box-shadow: 0 0 0 0 rgba(220, 53, 70, 0.01);
+      box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-danger) 1%, transparent 99%);
     }
   }
 
@@ -3591,9 +3590,9 @@
 
   /* Prediction card styling */
   .work-time-card.prediction-card {
-    background: linear-gradient(135deg, #fff8f0 0%, #ffffff 100%);
+    background: linear-gradient(135deg, var(--color-prediction-card-start) 0%, var(--color-prediction-card-end) 100%);
     border: 2px solid var(--color-warning);
-    box-shadow: 0 3px 8px rgba(255, 193, 7, 0.15);
+    box-shadow: 0 3px 8px var(--color-prediction-card-shadow);
     position: relative;
   }
 
@@ -3603,7 +3602,7 @@
     top: -8px;
     left: 8px;
     background: var(--color-warning);
-    color: white;
+    color: var(--color-text-on-primary);
     padding: 2px 6px;
     border-radius: 3px;
     font-size: 10px;
@@ -3613,30 +3612,30 @@
 
   .work-time-card.prediction-card:hover {
     transform: translateY(-3px);
-    box-shadow: 0 5px 12px rgba(255, 193, 7, 0.25);
+    box-shadow: 0 5px 12px var(--color-prediction-card-shadow-hover);
   }
 
   .work-time-card.prediction-card .work-time-card-label {
-    color: var(--color-warning-dark, #d39e00);
+    color: var(--color-warning-dark);
     font-weight: 600;
   }
 
   .work-time-card.prediction-card .work-time-card-value {
-    color: var(--color-warning-dark, #d39e00);
+    color: var(--color-warning-dark);
     font-weight: 700;
     font-size: 18px;
   }
 
   .work-time-card.prediction-card .work-time-card-subvalue {
     color: var(--color-gray-600);
-    background-color: rgba(255, 193, 7, 0.05);
+    background-color: var(--color-prediction-card-subvalue-bg);
     padding: 2px 4px;
     border-radius: 2px;
     margin-bottom: 4px;
   }
 
   .work-time-card.prediction-card .work-time-card-subvalue-data {
-    color: var(--color-warning-dark, #d39e00);
+    color: var(--color-warning-dark);
     font-weight: 600;
   }
 
@@ -3731,7 +3730,7 @@
   }
 
   .attendance-page-link {
-    color: var(--color-primary, #3a5a79);
+    color: var(--color-primary);
     text-decoration: none;
     font-weight: 500;
     transition: color 0.2s;
@@ -3739,7 +3738,7 @@
 
   .attendance-page-link:hover {
     text-decoration: underline;
-    color: var(--color-primary-dark, #2a4b6a);
+    color: var(--color-primary-dark);
   }
  
 
@@ -3899,12 +3898,12 @@
   }
 
   .table-filter-btn[data-filter="danger"]:hover {
-    background-color: rgba(220, 53, 69, 0.12);
+    background-color: var(--color-danger-bg);
     color: var(--color-danger);
   }
 
   .table-filter-btn[data-filter="report"]:hover {
-    background-color: rgba(255, 193, 7, 0.18);
+    background-color: var(--color-warning-bg);
     color: var(--color-warning);
   }
 
@@ -3926,7 +3925,7 @@
   .table-report-modal-overlay {
     position: fixed;
     inset: 0;
-    background: color-mix(in srgb, var(--color-black-50) 78%, #0f172a 22%);
+    background: var(--color-report-overlay-bg);
     z-index: var(--z-index-notification);
     display: flex;
     align-items: center;
@@ -4062,19 +4061,19 @@
   .jobcan-enhanced body.dark-mode .table-report-month-tab {
     background: color-mix(in srgb, var(--color-card) 86%, var(--color-black-10) 14%);
     border-color: color-mix(in srgb, var(--color-border) 78%, var(--color-white) 22%);
-    color: #d6dde8;
+    color: var(--color-text-primary);
   }
 
   .jobcan-enhanced body.dark-mode .table-report-month-tab:hover {
     background: color-mix(in srgb, var(--color-primary) 22%, var(--color-card) 78%);
     border-color: color-mix(in srgb, var(--color-primary) 62%, var(--color-border) 38%);
-    color: #eef4ff;
+    color: var(--color-report-tab-hover-text);
   }
 
   .jobcan-enhanced body.dark-mode .table-report-month-tab.active {
-    background: color-mix(in srgb, var(--color-primary) 78%, #0b1c35 22%);
+    background: color-mix(in srgb, var(--color-primary) 78%, var(--color-card) 22%);
     border-color: color-mix(in srgb, var(--color-primary) 72%, var(--color-white) 28%);
-    color: #f5f9ff;
+    color: var(--color-report-tab-active-text);
   }
 
   .table-report-kpis {
@@ -4237,7 +4236,7 @@
   }
 
   .table-report-trend-color-legend-item i.is-overtime {
-    background: linear-gradient(180deg, color-mix(in srgb, var(--color-warning) 72%, #ffffff 28%), var(--color-warning));
+    background: linear-gradient(180deg, var(--color-report-overtime-start), var(--color-warning));
     border-color: color-mix(in srgb, var(--color-warning) 65%, var(--color-border) 35%);
   }
 
@@ -4313,7 +4312,7 @@
   .table-report-trend-col:focus-visible .table-report-trend-bar-box,
   .table-report-trend-col.is-active .table-report-trend-bar-box {
     border-color: color-mix(in srgb, var(--color-info) 62%, var(--color-primary) 38%);
-    box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-info) 28%, transparent 72%);
+    box-shadow: 0 0 0 3px var(--color-focus-ring);
   }
 
   .table-report-trend-bar-box {
@@ -4336,7 +4335,7 @@
     --regular-cutoff: 100%;
     --trend-regular-start: var(--color-primary);
     --trend-regular-end: var(--color-info);
-    --trend-overwork-start: color-mix(in srgb, var(--color-warning) 72%, #ffffff 28%);
+    --trend-overwork-start: var(--color-report-overtime-start);
     --trend-overwork-end: var(--color-warning);
     background: linear-gradient(
       to top,
@@ -4352,10 +4351,10 @@
   }
 
   .table-report-trend-col.is-mismatch .table-report-trend-bar {
-    --trend-regular-start: color-mix(in srgb, var(--color-danger) 85%, #fff 15%);
-    --trend-regular-end: color-mix(in srgb, var(--color-danger) 70%, #8b1e2d 30%);
-    --trend-overwork-start: color-mix(in srgb, var(--color-warning) 80%, #fff 20%);
-    --trend-overwork-end: color-mix(in srgb, var(--color-warning) 78%, #7a4a00 22%);
+    --trend-regular-start: var(--color-report-mismatch-regular-start);
+    --trend-regular-end: var(--color-report-mismatch-regular-end);
+    --trend-overwork-start: var(--color-report-mismatch-overtime-start);
+    --trend-overwork-end: var(--color-report-mismatch-overtime-end);
   }
 
   .table-report-trend-bar-box.has-average::after {
@@ -4481,7 +4480,7 @@
     max-height: 58vh;
     border: 1px solid color-mix(in srgb, var(--color-border) 68%, var(--color-primary) 32%);
     border-radius: 10px;
-    background: color-mix(in srgb, var(--color-background) 95%, #08142a 5%);
+    background: var(--color-report-popover-bg);
     box-shadow: 0 14px 30px var(--color-black-35);
     overflow: visible;
   }

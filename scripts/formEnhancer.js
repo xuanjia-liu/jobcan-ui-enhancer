@@ -422,25 +422,9 @@ function enhanceSelectElement(selectElement) {
     selectElement.dataset.selectRole = 'task';
   }
   
-  // Apply modern styling directly
-  customSelect.style.position = 'relative';
-  customSelect.style.display = 'flex';
-  customSelect.style.alignItems = 'center';
-  customSelect.style.border = '1px solid var(--color-border)';
-  customSelect.style.borderRadius = '0.25rem';
-  customSelect.style.backgroundColor = 'var(--color-surface)';
-  customSelect.style.padding = '0.25rem 0.5rem';
-  customSelect.style.cursor = 'pointer';
-  customSelect.style.transition = 'border-color 150ms ease, box-shadow 150ms ease';
-  
   // Create the select display that shows the current selection
   const selectDisplay = document.createElement('div');
   selectDisplay.className = 'select-display';
-  selectDisplay.style.flexGrow = '1';
-  selectDisplay.style.padding = '0.25rem';
-  selectDisplay.style.overflow = 'hidden';
-  selectDisplay.style.textOverflow = 'ellipsis';
-  selectDisplay.style.whiteSpace = 'nowrap';
   
   // Set initial display text
   const selectedOption = selectElement.options[selectElement.selectedIndex];
@@ -468,21 +452,6 @@ function enhanceSelectElement(selectElement) {
     validationTooltip.textContent = selectElement.getAttribute('title') || 
                                    selectElement.getAttribute('data-title') || 
                                    'リスト内の項目を選択してください。';
-    validationTooltip.style.position = 'absolute';
-    validationTooltip.style.backgroundColor = 'var(--color-danger)';
-    validationTooltip.style.color = 'var(--color-white)';
-    validationTooltip.style.padding = '4px 8px';
-    validationTooltip.style.borderRadius = '4px';
-    validationTooltip.style.fontSize = '12px';
-    validationTooltip.style.top = '-30px';
-    validationTooltip.style.left = '0';
-    validationTooltip.style.zIndex = '100';
-    validationTooltip.style.display = 'none';
-    validationTooltip.style.whiteSpace = 'nowrap';
-    
-    // Add tooltip arrow
-    validationTooltip.style.boxShadow = 'var(--shadow-tooltip)';
-    validationTooltip.style.fontWeight = '500';
     
     // Add tooltip to custom select
     customSelect.appendChild(validationTooltip);
@@ -494,8 +463,6 @@ function enhanceSelectElement(selectElement) {
       
       if (!hasValue) {
         // Not valid - show validation state
-        customSelect.style.borderColor = 'var(--color-danger)';
-        customSelect.style.boxShadow = '0 0 0 0.2rem var(--color-danger-light)';
         customSelect.setAttribute('data-invalid', 'true');
         
         // Add mouse hover to show tooltip
@@ -503,8 +470,6 @@ function enhanceSelectElement(selectElement) {
         customSelect.addEventListener('mouseleave', hideTooltip);
       } else {
         // Valid - return to normal state
-        customSelect.style.borderColor = 'var(--color-border)';
-        customSelect.style.boxShadow = 'none';
         customSelect.removeAttribute('data-invalid');
         
         // Remove mouse hover for tooltip
@@ -515,11 +480,11 @@ function enhanceSelectElement(selectElement) {
     
     // Define tooltip show/hide functions
     const showTooltip = () => {
-      validationTooltip.style.display = 'block';
+      validationTooltip.classList.add('is-visible');
     };
     
     const hideTooltip = () => {
-      validationTooltip.style.display = 'none';
+      validationTooltip.classList.remove('is-visible');
     };
     
     // Run initially
@@ -574,7 +539,7 @@ function enhanceSelectElement(selectElement) {
     searchInput.style.flex = '1';
     searchInput.style.padding = '6px 10px';
     searchInput.style.borderRadius = '6px';
-    searchInput.style.border = '1px solid var(--border-color, #DEE2E6)';
+    searchInput.style.border = '1px solid var(--color-control-border)';
     searchInput.style.fontSize = '13px';
     
     // Add search functionality
@@ -852,13 +817,11 @@ function enhanceSelectElement(selectElement) {
   
   // Add hover effect
   customSelect.addEventListener('mouseenter', () => {
-    customSelect.style.borderColor = 'var(--color-primary-border)';
-    customSelect.style.boxShadow = 'var(--shadow-button-sm)';
+    customSelect.classList.add('is-hovered');
   });
   
   customSelect.addEventListener('mouseleave', () => {
-    customSelect.style.borderColor = 'var(--color-border)';
-    customSelect.style.boxShadow = 'none';
+    customSelect.classList.remove('is-hovered');
   });
   
   // Hide the original select

@@ -15,7 +15,7 @@
     background: linear-gradient(135deg,var(--color-background-gradient-start) 0%, var(--color-background-gradient-end) 100%) fixed; /* apply gradient on body */
     background-repeat: no-repeat;
     min-height: 100vh; /* ensure body covers full viewport height */
-    font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+    font-family: var(--font-family-base);
     color: var(--color-text-primary);
     line-height: 1.5;
     padding: 0;
