@@ -457,6 +457,40 @@
       border-color: var(--color-gray-400);
       color: var(--color-text-primary);
     }
+
+    .calendar-arrow-btn,
+    [id^="cal"][id$="_img"] {
+      background-color: var(--color-surface) !important;
+      color: var(--color-text-secondary) !important;
+      border: 1px solid var(--color-border) !important;
+      border-radius: var(--border-radius-md) !important;
+      box-shadow: var(--shadow-button-sm) !important;
+      opacity: 1 !important;
+    }
+
+    .calendar-arrow-btn:hover,
+    [id^="cal"][id$="_img"]:hover {
+      background-color: var(--color-gray-200) !important;
+      border-color: var(--color-gray-400) !important;
+      color: var(--color-text-primary) !important;
+      box-shadow: var(--shadow-button-sm-hover) !important;
+    }
+
+    .calendar-arrow-btn svg,
+    .calendar-arrow-btn svg path,
+    [id^="cal"][id$="_img"] svg,
+    [id^="cal"][id$="_img"] svg path {
+      fill: var(--color-text-secondary) !important;
+      stroke: var(--color-text-secondary) !important;
+    }
+
+    .calendar-arrow-btn:hover svg,
+    .calendar-arrow-btn:hover svg path,
+    [id^="cal"][id$="_img"]:hover svg,
+    [id^="cal"][id$="_img"]:hover svg path {
+      fill: var(--color-primary-light) !important;
+      stroke: var(--color-primary-light) !important;
+    }
     
     /* Sidemenu */
     #sidemenu, .sidemenu, .jbc-sidemenu,
@@ -500,8 +534,37 @@
        background-color: var(--color-card) !important;
        box-shadow: var(--shadow) !important;
     }
+    [id^="cal"] > div:first-child {
+        background-color: var(--color-card) !important;
+        border: 1px solid var(--color-border) !important;
+        border-radius: var(--border-radius-sm) !important;
+        overflow: hidden;
+    }
     [id^="cal"] table[style*="background: #E6E6E6"] {
         background-color: var(--color-primary) !important;
+    }
+    [id^="cal"] table[style*="background: #E6E6E6"] td {
+        background-color: color-mix(in srgb, var(--color-primary) 16%, var(--color-card) 84%) !important;
+        color: var(--color-text-primary) !important;
+    }
+    [id^="cal"] table[style*="background: #E6E6E6"] td[style*="font-weight: bold"]:not([id]) {
+        background-color: var(--color-primary) !important;
+        color: var(--color-text-on-primary) !important;
+    }
+    [id^="cal"] td[id*="_btn_prev_year"],
+    [id^="cal"] td[id*="_btn_close"],
+    [id^="cal"] td[id*="_btn_next_year"] {
+        background-color: color-mix(in srgb, var(--color-primary) 16%, var(--color-card) 84%) !important;
+        color: var(--color-text-primary) !important;
+    }
+    [id^="cal"] td[id*="_btn_prev_year"]:hover,
+    [id^="cal"] td[id*="_btn_close"]:hover,
+    [id^="cal"] td[id*="_btn_next_year"]:hover {
+        background-color: color-mix(in srgb, var(--color-primary) 28%, var(--color-card) 72%) !important;
+        color: var(--color-text-on-primary) !important;
+    }
+    [id^="cal"] table[style*="background: #FFFFFF"] {
+        background-color: var(--color-card) !important;
     }
     [id^="cal"] th {
         background: var(--color-surface) !important;
@@ -509,6 +572,11 @@
     }
     [id^="cal"] td {
         color: var(--color-text-primary) !important;
+    }
+    [id^="cal"] td[style*="background: rgb(255, 255, 255)"],
+    [id^="cal"] td[style*="background:#FFFFFF"],
+    [id^="cal"] td[style*="background: #FFFFFF"] {
+        background-color: var(--color-card) !important;
     }
     [id^="cal"] td:hover {
         background-color: var(--color-surface) !important;
@@ -520,6 +588,16 @@
     [id^="cal"] td[bgcolor="#CCCCFF"] {
         background-color: var(--color-primary-light) !important;
         color: var(--color-white) !important;
+    }
+    [id^="cal"] td[id*="_tdjump"] {
+        color: var(--color-text-secondary) !important;
+    }
+    [id^="cal"] td[id*="_tdjump"]:hover {
+        color: var(--color-text-primary) !important;
+    }
+    [id^="cal"] td[style*="color: rgb(30, 184, 217)"] {
+        color: var(--color-primary-light) !important;
+        box-shadow: inset 0 -2px 0 var(--color-primary-light);
     }
     [id^="cal"] font[color="#000000"] {
         color: var(--color-text-on-primary) !important;
