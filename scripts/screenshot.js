@@ -1,5 +1,174 @@
 // scripts/screenshot.js
 
+const JBE_GIF_FRAME_DELAYS = [70, 70, 80, 90, 110, 140, 520];
+let jbeGifWorkerBlobUrlPromise = null;
+
+function parseTimeTextToMinutes(raw) {
+  const text = String(raw || '').trim();
+  if (!text) return 0;
+
+  if (/^\d+$/.test(text)) return Math.max(0, parseInt(text, 10));
+
+  const hhmm = text.match(/^(\d{1,4}):(\d{1,2})$/);
+  if (hhmm) {
+    const hours = parseInt(hhmm[1], 10) || 0;
+    const minutes = parseInt(hhmm[2], 10) || 0;
+    return Math.max(0, hours * 60 + minutes);
+  }
+
+  const jpHourMin = text.match(/(\d+)\s*時間(?:\s*(\d+)\s*分)?/);
+  if (jpHourMin) {
+    const hours = parseInt(jpHourMin[1], 10) || 0;
+    const minutes = parseInt(jpHourMin[2] || '0', 10) || 0;
+    return Math.max(0, hours * 60 + minutes);
+  }
+
+  const jpMin = text.match(/(\d+)\s*分/);
+  if (jpMin) {
+    return Math.max(0, parseInt(jpMin[1], 10) || 0);
+  }
+
+  return 0;
+}
+
+function formatMinutesToHHMM(minutes) {
+  const safe = Number.isFinite(minutes) ? Math.max(0, Math.round(minutes)) : 0;
+  const hours = Math.floor(safe / 60);
+  const mins = safe % 60;
+  return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
+}
+
+function easeOutQuint(progress) {
+  const p = Math.min(Math.max(progress, 0), 1);
+  return 1 - Math.pow(1 - p, 5);
+}
+
+function waitForAnimationFrame(frameCount = 1) {
+  return new Promise((resolve) => {
+    const step = (remaining) => {
+      if (remaining <= 0) {
+        resolve();
+        return;
+      }
+      requestAnimationFrame(() => step(remaining - 1));
+    };
+    step(frameCount);
+  });
+}
+
+async function copyBlobToClipboard(blob, mimeType) {
+  if (
+    typeof ClipboardItem === 'undefined' ||
+    !navigator.clipboard ||
+    typeof navigator.clipboard.write !== 'function'
+  ) {
+    return { ok: false, reason: 'clipboard-api-unavailable' };
+  }
+
+  try {
+    const clipboardItem = new ClipboardItem({ [mimeType]: blob });
+    await navigator.clipboard.write([clipboardItem]);
+    return { ok: true };
+  } catch (error) {
+    console.error(`Clipboard write failed for ${mimeType}:`, error);
+    return { ok: false, reason: 'clipboard-write-failed', error };
+  }
+}
+
+function canvasToBlob(canvas, type = 'image/png', quality) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) {
+        resolve(blob);
+      } else {
+        reject(new Error(`Failed to convert canvas to ${type}`));
+      }
+    }, type, quality);
+  });
+}
+
+async function copyGifToClipboard(gifBlob, fallbackCanvas) {
+  if (
+    typeof ClipboardItem === 'undefined' ||
+    !navigator.clipboard ||
+    typeof navigator.clipboard.write !== 'function'
+  ) {
+    return { ok: false, reason: 'clipboard-api-unavailable' };
+  }
+
+  try {
+    const pngBlob = fallbackCanvas ? await canvasToBlob(fallbackCanvas, 'image/png') : null;
+
+    const attempts = [];
+
+    // Try native GIF first. Some macOS targets can consume this even when browser support docs are unclear.
+    attempts.push({
+      mode: 'image-gif',
+      payload: pngBlob ? { 'image/gif': gifBlob, 'image/png': pngBlob } : { 'image/gif': gifBlob }
+    });
+
+    // Then try Chromium custom format plus PNG fallback.
+    attempts.push({
+      mode: 'web-image-gif',
+      payload: pngBlob ? { 'web image/gif': gifBlob, 'image/png': pngBlob } : { 'web image/gif': gifBlob }
+    });
+
+    // Last resort: PNG only, so paste still works somewhere.
+    if (pngBlob) {
+      attempts.push({
+        mode: 'image-png',
+        payload: { 'image/png': pngBlob }
+      });
+    }
+
+    let lastError = null;
+    for (const attempt of attempts) {
+      try {
+        const clipboardItem = new ClipboardItem(attempt.payload);
+        await navigator.clipboard.write([clipboardItem]);
+        return {
+          ok: true,
+          mode: attempt.mode,
+          includesGif: attempt.mode !== 'image-png',
+          includesPngFallback: !!attempt.payload['image/png']
+        };
+      } catch (error) {
+        lastError = error;
+        console.error(`Clipboard write failed for ${attempt.mode}:`, error);
+      }
+    }
+
+    return { ok: false, reason: 'clipboard-write-failed', error: lastError };
+  } catch (error) {
+    console.error('Clipboard write failed for GIF payload:', error);
+    return { ok: false, reason: 'clipboard-write-failed', error };
+  }
+}
+
+async function ensureGifWorkerBlobUrl() {
+  if (jbeGifWorkerBlobUrlPromise) {
+    return jbeGifWorkerBlobUrlPromise;
+  }
+
+  jbeGifWorkerBlobUrlPromise = (async () => {
+    const workerUrl = chrome.runtime.getURL('gif.worker.js');
+    const response = await fetch(workerUrl);
+    if (!response.ok) {
+      throw new Error(`Failed to load gif.worker.js (${response.status})`);
+    }
+
+    const workerSource = await response.text();
+    return URL.createObjectURL(
+      new Blob([workerSource], { type: 'application/javascript' })
+    );
+  })().catch((error) => {
+    jbeGifWorkerBlobUrlPromise = null;
+    throw error;
+  });
+
+  return jbeGifWorkerBlobUrlPromise;
+}
+
 function getFabState() {
   if (!window.__jbe_fabState) {
     window.__jbe_fabState = {
@@ -426,10 +595,22 @@ function captureScreenshot(area) {
 }
 
 // Show a small preview of the captured screenshot with controls
-function showScreenshotPreview(imageData) {
+function showScreenshotPreview(imageData, options = {}) {
+  const {
+    alt = 'Screenshot preview',
+    downloadBaseName = 'screenshot',
+    extension = 'png',
+    downloadNotification = 'Screenshot downloaded',
+    autoDownload = false
+  } = options;
+
   // Remove existing preview if any
   const existingPreview = document.getElementById('screenshot-preview-container');
   if (existingPreview) {
+    const existingImage = existingPreview.querySelector('.screenshot-preview-image');
+    if (existingImage && existingImage.dataset.objectUrl === 'true') {
+      URL.revokeObjectURL(existingImage.src);
+    }
     existingPreview.remove();
   }
   
@@ -444,8 +625,11 @@ function showScreenshotPreview(imageData) {
   // Create image preview
   const previewImage = document.createElement('img');
   previewImage.src = imageData;
-  previewImage.alt = 'Screenshot preview';
+  previewImage.alt = alt;
   previewImage.className = 'screenshot-preview-image';
+  if (typeof imageData === 'string' && imageData.startsWith('blob:')) {
+    previewImage.dataset.objectUrl = 'true';
+  }
   
   // Add click event listener to preview image
   previewImage.addEventListener('click', () => {
@@ -463,6 +647,9 @@ function showScreenshotPreview(imageData) {
   previewCloseBtn.addEventListener('click', () => {
     previewContainer.classList.add('closing');
     setTimeout(() => {
+      if (previewImage.dataset.objectUrl === 'true') {
+        URL.revokeObjectURL(previewImage.src);
+      }
       if (previewContainer.parentNode) {
         previewContainer.parentNode.removeChild(previewContainer);
       }
@@ -486,14 +673,14 @@ function showScreenshotPreview(imageData) {
   downloadBtn.addEventListener('click', () => {
     const date = new Date();
     const timestamp = date.toISOString().replace(/[:.]/g, '-').substring(0, 19);
-    const filename = `screenshot-${timestamp}.png`;
+    const filename = `${downloadBaseName}-${timestamp}.${extension}`;
     
     const link = document.createElement('a');
     link.href = imageData;
     link.download = filename;
     link.click();
     
-    showNotification('Screenshot downloaded');
+    showNotification(downloadNotification);
   });
   
   // Create close button
@@ -505,6 +692,9 @@ function showScreenshotPreview(imageData) {
   closeBtn.addEventListener('click', () => {
     previewContainer.classList.add('closing');
     setTimeout(() => {
+      if (previewImage.dataset.objectUrl === 'true') {
+        URL.revokeObjectURL(previewImage.src);
+      }
       if (previewContainer.parentNode) {
         previewContainer.parentNode.removeChild(previewContainer);
       }
@@ -538,6 +728,220 @@ function showScreenshotPreview(imageData) {
   setTimeout(() => {
     previewContainer.classList.add('open');
   }, 10);
+
+  if (autoDownload) {
+    setTimeout(() => {
+      downloadBtn.click();
+    }, 80);
+  }
+}
+
+function setButtonBusy(button, isBusy, busyLabel) {
+  if (!button) return;
+
+  if (isBusy) {
+    if (!button.dataset.originalHtml) {
+      button.dataset.originalHtml = button.innerHTML;
+    }
+    button.disabled = true;
+    button.innerHTML = busyLabel;
+    return;
+  }
+
+  button.disabled = false;
+  if (button.dataset.originalHtml) {
+    button.innerHTML = button.dataset.originalHtml;
+  }
+}
+
+function resolveFormElementFromFooter(footer) {
+  const modal = footer.closest('.modal, .modal-content, .jbc-modal');
+  let formElement;
+
+  if (modal) {
+    formElement = modal.querySelector('form');
+  }
+  if (!formElement) {
+    formElement = document.getElementById('save-form');
+  }
+  if (!formElement) {
+    const forms = document.querySelectorAll('form');
+    for (const form of forms) {
+      if (form.querySelector('[type="submit"], #save')) {
+        formElement = form;
+        break;
+      }
+    }
+  }
+
+  return formElement || null;
+}
+
+function updateAnimatedScreenshotValues(layoutElem, progress) {
+  if (!layoutElem) return;
+
+  const eased = easeOutQuint(progress);
+  layoutElem.querySelectorAll('[data-jbe-countup-target]').forEach((node) => {
+    const target = parseInt(node.dataset.jbeCountupTarget || '0', 10) || 0;
+    node.textContent = formatMinutesToHHMM(Math.round(target * eased));
+  });
+}
+
+async function renderElementCanvasForExport(layoutElem, screenshotTheme) {
+  return html2canvas(layoutElem, {
+    allowTaint: true,
+    useCORS: true,
+    backgroundColor: screenshotTheme.canvasBackground,
+    scale: 2,
+    logging: false,
+    ignoreElements: (node) => {
+      return node.classList && (
+        node.classList.contains('form-screenshot-button') ||
+        node.classList.contains('btn-close') ||
+        node.classList.contains('close')
+      );
+    }
+  });
+}
+
+async function captureElementAnimatedGif(element, triggerButton) {
+  if (!element) return;
+
+  if (typeof html2canvas !== 'function') {
+    showNotification('html2canvasが読み込まれていません。キャプチャできません。');
+    return;
+  }
+
+  if (typeof GIF !== 'function') {
+    showNotification('GIFライブラリが読み込まれていません。');
+    return;
+  }
+
+  setButtonBusy(triggerButton, true, 'GIF作成中...');
+  if (typeof window.showNotification === 'function') {
+    window.showNotification('GIFを生成中です...', 0);
+  }
+
+  const cloned = element.cloneNode(true);
+  cleanupAndEnhanceContent(cloned);
+  const layoutElem = buildScreenshotLayout(cloned, { animateValues: true });
+  layoutElem.style.position = 'fixed';
+  layoutElem.style.top = '0';
+  layoutElem.style.left = '0';
+  layoutElem.style.zIndex = '9999';
+  document.body.appendChild(layoutElem);
+
+  const screenshotTheme = getScreenshotTheme();
+
+  try {
+    const workerScriptUrl = await ensureGifWorkerBlobUrl();
+    const frameCanvases = [];
+    const frameCount = JBE_GIF_FRAME_DELAYS.length;
+
+    for (let index = 0; index < frameCount; index += 1) {
+      const progress = frameCount === 1 ? 1 : index / (frameCount - 1);
+      updateAnimatedScreenshotValues(layoutElem, progress);
+      await waitForAnimationFrame(2);
+      const frameCanvas = await renderElementCanvasForExport(layoutElem, screenshotTheme);
+      frameCanvases.push(frameCanvas);
+    }
+
+    const firstFrame = frameCanvases[0];
+    const gif = new GIF({
+      workers: 2,
+      quality: 10,
+      workerScript: workerScriptUrl,
+      width: firstFrame.width,
+      height: firstFrame.height,
+      repeat: 0,
+      background: screenshotTheme.canvasBackground
+    });
+
+    frameCanvases.forEach((frameCanvas, index) => {
+      gif.addFrame(frameCanvas, {
+        copy: true,
+        delay: JBE_GIF_FRAME_DELAYS[index] || 100
+      });
+    });
+
+    const gifBlob = await new Promise((resolve, reject) => {
+      gif.on('finished', resolve);
+      gif.on('abort', () => reject(new Error('GIF encoding aborted')));
+      gif.on('progress', () => {});
+      gif.render();
+    });
+
+    const notification = document.querySelector('.screenshot-notification');
+    if (notification) {
+      notification.remove();
+    }
+
+    const clipboardResult = await copyGifToClipboard(gifBlob, firstFrame);
+    const gifUrl = URL.createObjectURL(gifBlob);
+    showScreenshotPreview(gifUrl, {
+      alt: 'Animated report preview',
+      downloadBaseName: 'animated-report',
+      extension: 'gif',
+      downloadNotification: 'GIF downloaded',
+      autoDownload: true
+    });
+    if (clipboardResult.ok) {
+      if (clipboardResult.mode === 'image-gif') {
+        showNotification('工数レポートのGIFをクリップボードにコピーしました。');
+      } else if (clipboardResult.mode === 'web-image-gif') {
+        showNotification('工数レポートのGIFを書き出しました。対応先ではGIF、その他ではPNGとして貼り付けられます。');
+      } else {
+        showNotification('工数レポートのGIFを書き出しました。クリップボードにはPNGとしてコピーしています。');
+      }
+    } else {
+      showNotification('工数レポートのGIFを作成しました。クリップボードにはPNG/GIF形式でコピーできませんでした。');
+    }
+  } catch (error) {
+    console.error('Error creating animated gif:', error);
+    showNotification('GIFの作成に失敗しました。');
+  } finally {
+    if (layoutElem && layoutElem.parentNode) {
+      layoutElem.parentNode.removeChild(layoutElem);
+    }
+    setButtonBusy(triggerButton, false);
+  }
+}
+
+function createFooterCaptureButtons(footer, saveButton) {
+  if (!saveButton || footer.querySelector('.form-screenshot-btn, .form-screenshot-gif-btn')) return;
+
+  const gifBtn = document.createElement('button');
+  gifBtn.type = 'button';
+  gifBtn.className = 'btn jbc-btn-secondary form-screenshot-gif-btn';
+  gifBtn.title = 'GIFを作成';
+  gifBtn.setAttribute('aria-label', 'GIFを作成');
+  gifBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24"><path fill="currentColor" d="M1.5 6.75A3.75 3.75 0 0 1 5.25 3h13.5a3.75 3.75 0 0 1 3.75 3.75v10.5A3.75 3.75 0 0 1 18.75 21H5.25a3.75 3.75 0 0 1-3.75-3.75V6.75Zm6.078 3.309c.721-.075 1.28.054 1.479.155a.749.749 0 1 0 .67-1.341c-.526-.264-1.392-.401-2.305-.305-1.44.15-2.922 1.401-2.922 3.446 0 2.077 1.581 3.45 3.45 3.45.87 0 1.65-.41 2.096-.83.393-.372.454-.867.454-1.175v-1.445a.75.75 0 0 0-.75-.75H8.54a.75.75 0 1 0 0 1.5H9v.694a.6.6 0 0 1-.009.108c-.292.245-.66.385-1.041.396-1.096 0-1.95-.756-1.95-1.95 0-1.226.85-1.877 1.578-1.953Zm5.922-.744a.75.75 0 1 0-1.5 0v5.4a.75.75 0 1 0 1.5 0v-5.4Zm2.25-.75a.75.75 0 0 0-.75.75v5.4a.75.75 0 1 0 1.5 0v-1.957l1.505-.01a.75.75 0 0 0-.01-1.5l-1.495.011v-1.196h2.25a.75.75 0 1 0 0-1.5l-3 .002Z"/></svg>';
+  gifBtn.addEventListener('click', async (e) => {
+    e.preventDefault();
+    const formElement = resolveFormElementFromFooter(footer);
+    if (formElement) {
+      await captureElementAnimatedGif(formElement, gifBtn);
+    } else {
+      showNotification('フォームの要素が見つかりません');
+    }
+  });
+
+  const screenshotBtn = document.createElement('button');
+  screenshotBtn.type = 'button';
+  screenshotBtn.className = 'btn jbc-btn-secondary form-screenshot-btn';
+  screenshotBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg> キャプチャ';
+  screenshotBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    const formElement = resolveFormElementFromFooter(footer);
+    if (formElement) {
+      captureElementScreenshot(formElement);
+    } else {
+      showNotification('フォームの要素が見つかりません');
+    }
+  });
+
+  saveButton.parentNode.insertBefore(gifBtn, saveButton);
+  saveButton.parentNode.insertBefore(screenshotBtn, saveButton);
 }
 
 // Show full-size screenshot in a modal overlay
@@ -705,36 +1109,7 @@ function addFormScreenshotButton() {
         saveButton = footer.querySelector('button');
       }
       if (!saveButton) return;
-      const screenshotBtn = document.createElement('button');
-      screenshotBtn.type = 'button';
-      screenshotBtn.className = 'btn jbc-btn-secondary form-screenshot-btn';
-      screenshotBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg> キャプチャ';
-      screenshotBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        const modal = footer.closest('.modal, .modal-content, .jbc-modal');
-        let formElement;
-        if (modal) {
-          formElement = modal.querySelector('form');
-        }
-        if (!formElement) {
-          formElement = document.getElementById('save-form');
-        }
-        if (!formElement) {
-          const forms = document.querySelectorAll('form');
-          for (const form of forms) {
-            if (form.querySelector('[type="submit"], #save')) {
-              formElement = form;
-              break;
-            }
-          }
-        }
-        if (formElement) {
-          captureElementScreenshot(formElement);
-        } else {
-          showNotification('フォームの要素が見つかりません');
-        }
-      });
-      saveButton.parentNode.insertBefore(screenshotBtn, saveButton);
+      createFooterCaptureButtons(footer, saveButton);
     });
   });
   observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
@@ -750,36 +1125,7 @@ function addFormScreenshotButton() {
       saveButton = footer.querySelector('button');
     }
     if (!saveButton) return;
-    const screenshotBtn = document.createElement('button');
-    screenshotBtn.type = 'button';
-    screenshotBtn.className = 'btn jbc-btn-secondary form-screenshot-btn';
-    screenshotBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg> キャプチャ';
-    screenshotBtn.addEventListener('click', (e) => {
-      e.preventDefault();
-      const modal = footer.closest('.modal, .modal-content, .jbc-modal');
-      let formElement;
-      if (modal) {
-        formElement = modal.querySelector('form');
-      }
-      if (!formElement) {
-        formElement = document.getElementById('save-form');
-      }
-      if (!formElement) {
-        const forms = document.querySelectorAll('form');
-        for (const form of forms) {
-          if (form.querySelector('[type="submit"], #save')) {
-            formElement = form;
-            break;
-          }
-        }
-      }
-      if (formElement) {
-        captureElementScreenshot(formElement);
-      } else {
-        showNotification('フォームの要素が見つかりません');
-      }
-    });
-    saveButton.parentNode.insertBefore(screenshotBtn, saveButton);
+    createFooterCaptureButtons(footer, saveButton);
   });
 }
 
@@ -1011,7 +1357,8 @@ function getScreenshotTheme() {
 }
 
 // Build a custom layout showing only total, project list, tasks, and work hours.
-function buildScreenshotLayout(element) {
+function buildScreenshotLayout(element, options = {}) {
+  const { animateValues = false } = options;
   const theme = getScreenshotTheme();
   const container = document.createElement('div');
   container.style.padding = '32px';
@@ -1025,6 +1372,7 @@ function buildScreenshotLayout(element) {
   // Total sum
   const sumElem = element.querySelector('.man-hour-sum');
   const totalText = sumElem ? sumElem.textContent : '';
+  const totalMinutes = parseTimeTextToMinutes(totalText);
   const totalDiv = document.createElement('div');
   
   // Create a nicer header with logo and total
@@ -1044,13 +1392,16 @@ function buildScreenshotLayout(element) {
   titleDiv.style.color = theme.accent;
   
   // Style the total text
-  totalDiv.textContent = totalText;
+  totalDiv.textContent = animateValues ? '00:00' : totalText;
   totalDiv.style.fontSize = '26px';
   totalDiv.style.fontWeight = 'bold';
   totalDiv.style.color = theme.accent;
   totalDiv.style.padding = '6px 16px';
   totalDiv.style.backgroundColor = theme.accentSoft;
   totalDiv.style.borderRadius = '6px';
+  if (animateValues) {
+    totalDiv.dataset.jbeCountupTarget = String(totalMinutes);
+  }
   
   // Add to header
   headerDiv.appendChild(titleDiv);
@@ -1139,6 +1490,10 @@ function buildScreenshotLayout(element) {
       } else if (index === 2) { // Work hours
         cell.style.fontWeight = '600';
         cell.style.textAlign = 'center';
+        if (animateValues) {
+          cell.dataset.jbeCountupTarget = String(parseTimeTextToMinutes(text));
+          cell.textContent = '00:00';
+        }
       }
       grid.appendChild(cell);
     });

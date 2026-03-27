@@ -1232,19 +1232,51 @@
     justify-content: center;
     gap: 5px;
     background-color: var(--color-gray-150);
-    color: var(--color-gray-600);
+    color: var(--color-text-secondary);
     border: 1px solid var(--color-gray-300);
   }
   
   .jobcan-enhanced .form-screenshot-btn:hover {
     background-color: var(--color-gray-200);
+    color: var(--color-primary);
     box-shadow: 0 1px 2px var(--color-black-10);
+    border: 1px solid var(--color-gray-300);
   }
   
   .jobcan-enhanced .form-screenshot-btn svg {
     width: 16px;
     height: 16px;
     margin-right: 2px;
+  }
+
+  .jobcan-enhanced .form-screenshot-gif-btn {
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    padding: 0;
+    border-radius: 999px;
+    margin-right: 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--color-gray-150);
+    color: var(--color-text-secondary);
+    border: 1px solid var(--color-gray-300);
+    box-sizing: border-box;
+    transition: all 0.2s;
+  }
+
+  .jobcan-enhanced .form-screenshot-gif-btn:hover {
+    background-color: var(--color-gray-200);
+    color: var(--color-primary);
+    box-shadow: 0 1px 2px var(--color-black-10);
+    border: 1px solid var(--color-gray-300);
+  }
+
+  .jobcan-enhanced .form-screenshot-gif-btn svg {
+    width: 18px;
+    height: 18px;
+    display: block;
   }
   
   /* ==========================================================================
