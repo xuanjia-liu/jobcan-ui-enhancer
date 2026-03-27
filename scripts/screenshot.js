@@ -810,10 +810,11 @@ function captureElementScreenshot(element) {
   }
 
   // Capture screenshot of the custom layout
+  const screenshotTheme = getScreenshotTheme();
   html2canvas(layoutElem, {
     allowTaint: true,
     useCORS: true,
-    backgroundColor: '#ffffff',
+    backgroundColor: screenshotTheme.canvasBackground,
     scale: 2,
     logging: false,
     ignoreElements: (node) => {
@@ -981,15 +982,44 @@ function convertInteractiveElements(container) {
   });
 }
 
+function getScreenshotTheme() {
+  const styles = getComputedStyle(document.body);
+  const darkMode = document.body.classList.contains('dark-mode');
+  const getColor = (name, fallback) => styles.getPropertyValue(name).trim() || fallback;
+
+  return {
+    canvasBackground: getColor('--color-background', darkMode ? '#1e1e2e' : '#ffffff'),
+    containerBackground: getColor('--color-card', darkMode ? '#272736' : '#ffffff'),
+    containerText: getColor('--color-text-primary', darkMode ? '#e4e6eb' : '#333333'),
+    accent: getColor('--color-primary', '#1a73e8'),
+    accentSoft: darkMode ? '#2d3345' : '#f1f8ff',
+    border: getColor('--color-border', darkMode ? '#3a3a4c' : '#eaeaea'),
+    mutedText: getColor('--color-text-secondary', darkMode ? '#b0b3b8' : '#5f6368'),
+    headerText: getColor('--color-text-secondary', darkMode ? '#dbe2ea' : '#3c4043'),
+    headerBackgrounds: darkMode
+      ? ['#323246', '#2d3345', '#2b313f']
+      : ['#f6f8fa', '#f0f4f9', '#ebf1f5'],
+    rowBackgroundEven: getColor('--color-card', darkMode ? '#272736' : '#ffffff'),
+    rowBackgroundOdd: getColor('--color-surface', darkMode ? '#2a2a3c' : '#f9fafc'),
+    valueText: darkMode ? '#7ee2a8' : '#137333',
+    containerShadow: getColor(
+      '--shadow',
+      darkMode ? '0 4px 12px rgba(0, 0, 0, 0.3)' : '0 4px 12px rgba(0, 0, 0, 0.05)'
+    ),
+    gridShadow: darkMode ? '0 1px 3px rgba(0, 0, 0, 0.22)' : '0 1px 3px rgba(0, 0, 0, 0.04)'
+  };
+}
+
 // Build a custom layout showing only total, project list, tasks, and work hours.
 function buildScreenshotLayout(element) {
+  const theme = getScreenshotTheme();
   const container = document.createElement('div');
   container.style.padding = '32px';
-  container.style.backgroundColor = '#ffffff';
-  container.style.color = '#333333';
+  container.style.backgroundColor = theme.containerBackground;
+  container.style.color = theme.containerText;
   container.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
   container.style.borderRadius = '8px';
-  container.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.05)';
+  container.style.boxShadow = theme.containerShadow;
   container.style.maxWidth = '900px';
 
   // Total sum
@@ -1003,7 +1033,7 @@ function buildScreenshotLayout(element) {
   headerDiv.style.justifyContent = 'space-between';
   headerDiv.style.alignItems = 'center';
   headerDiv.style.marginBottom = '24px';
-  headerDiv.style.borderBottom = '1px solid #eaeaea';
+  headerDiv.style.borderBottom = `1px solid ${theme.border}`;
   headerDiv.style.paddingBottom = '20px';
   
   // Add title
@@ -1011,15 +1041,15 @@ function buildScreenshotLayout(element) {
   titleDiv.textContent = '工数レポート';
   titleDiv.style.fontSize = '20px';
   titleDiv.style.fontWeight = '600';
-  titleDiv.style.color = '#1a73e8';
+  titleDiv.style.color = theme.accent;
   
   // Style the total text
   totalDiv.textContent = totalText;
   totalDiv.style.fontSize = '26px';
   totalDiv.style.fontWeight = 'bold';
-  totalDiv.style.color = '#1a73e8';
+  totalDiv.style.color = theme.accent;
   totalDiv.style.padding = '6px 16px';
-  totalDiv.style.backgroundColor = '#f1f8ff';
+  totalDiv.style.backgroundColor = theme.accentSoft;
   totalDiv.style.borderRadius = '6px';
   
   // Add to header
@@ -1034,11 +1064,11 @@ function buildScreenshotLayout(element) {
   grid.style.gap = '0';
   grid.style.borderRadius = '8px';
   grid.style.overflow = 'hidden';
-  grid.style.border = '1px solid #eaeaea';
-  grid.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.04)';
+  grid.style.border = `1px solid ${theme.border}`;
+  grid.style.boxShadow = theme.gridShadow;
 
   // Add headers
-  const headerBgColors = ['#f6f8fa', '#f0f4f9', '#ebf1f5'];
+  const headerBgColors = theme.headerBackgrounds;
   let i = 0;
   ['プロジェクト一覧', 'タスク', '工数'].forEach(headerText => {
     const headerCell = document.createElement('div');
@@ -1046,9 +1076,9 @@ function buildScreenshotLayout(element) {
     headerCell.style.fontSize = '14px';
     headerCell.style.fontWeight = '600';
     headerCell.style.backgroundColor = headerBgColors[i++];
-    headerCell.style.color = '#3c4043';
+    headerCell.style.color = theme.headerText;
     headerCell.style.padding = '12px 16px';
-    headerCell.style.borderBottom = '1px solid #eaeaea';
+    headerCell.style.borderBottom = `1px solid ${theme.border}`;
     grid.appendChild(headerCell);
   });
 
@@ -1092,7 +1122,7 @@ function buildScreenshotLayout(element) {
     
     if (!projectText && !taskText && !workText) return;
     
-    const rowBgColor = rowIndex % 2 === 0 ? '#ffffff' : '#f9fafc';
+    const rowBgColor = rowIndex % 2 === 0 ? theme.rowBackgroundEven : theme.rowBackgroundOdd;
     rowIndex++;
     
     [projectText, taskText, workText].forEach((text, index) => {
@@ -1100,9 +1130,9 @@ function buildScreenshotLayout(element) {
       cell.textContent = text;
       cell.style.fontSize = '14px';
       cell.style.padding = '12px 16px';
-      cell.style.borderBottom = '1px solid #eaeaea';
+      cell.style.borderBottom = `1px solid ${theme.border}`;
       cell.style.backgroundColor = rowBgColor;
-      cell.style.color = index === 2 ? '#137333' : '#202124';
+      cell.style.color = index === 2 ? theme.valueText : theme.containerText;
       
       if (index === 0) {
         cell.style.fontWeight = '500';
@@ -1118,7 +1148,7 @@ function buildScreenshotLayout(element) {
   const footerDiv = document.createElement('div');
   footerDiv.style.marginTop = '16px';
   footerDiv.style.fontSize = '12px';
-  footerDiv.style.color = '#5f6368';
+  footerDiv.style.color = theme.mutedText;
   footerDiv.style.textAlign = 'right';
   footerDiv.textContent = `作成日時: ${new Date().toLocaleString('ja-JP')}`;
   
