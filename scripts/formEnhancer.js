@@ -1,5 +1,98 @@
 // scripts/formEnhancer.js
 
+function setupManHourModalResize(modal) {
+  if (!modal || modal.dataset.resizeEnabled === 'true') return;
+
+  modal.dataset.resizeEnabled = 'true';
+
+  const RESIZE_STORAGE_KEY = 'jbeManHourModalWidth';
+  const MIN_WIDTH = 420;
+  const DEFAULT_WIDTH = 550;
+  const MAX_WIDTH_RATIO = 0.9;
+
+  const clampWidth = (width) => {
+    const maxWidth = Math.max(MIN_WIDTH, Math.floor(window.innerWidth * MAX_WIDTH_RATIO));
+    return Math.min(Math.max(width, MIN_WIDTH), maxWidth);
+  };
+
+  const applyWidth = (width) => {
+    const nextWidth = clampWidth(width);
+    modal.style.setProperty('width', `${nextWidth}px`, 'important');
+    return nextWidth;
+  };
+
+  const savedWidth = Number.parseInt(window.localStorage.getItem(RESIZE_STORAGE_KEY) || '', 10);
+  applyWidth(Number.isFinite(savedWidth) ? savedWidth : DEFAULT_WIDTH);
+
+  let resizeHandle = modal.querySelector('.jbe-modal-resize-handle');
+  if (!resizeHandle) {
+    resizeHandle = document.createElement('div');
+    resizeHandle.className = 'jbe-modal-resize-handle';
+    resizeHandle.innerHTML = '<span class="jbe-modal-resize-grip" aria-hidden="true"></span>';
+    resizeHandle.setAttribute('role', 'separator');
+    resizeHandle.setAttribute('aria-orientation', 'vertical');
+    resizeHandle.setAttribute('aria-label', 'Resize panel width');
+    resizeHandle.setAttribute('title', 'Drag to resize');
+    modal.appendChild(resizeHandle);
+  }
+
+  let isDragging = false;
+  let previousUserSelect = '';
+  let previousTransition = '';
+
+  const stopResize = () => {
+    if (!isDragging) return;
+
+    isDragging = false;
+    modal.classList.remove('is-resizing');
+    document.body.style.userSelect = previousUserSelect;
+    modal.style.transition = previousTransition;
+    document.removeEventListener('mousemove', handleMouseMove);
+    document.removeEventListener('mouseup', handleMouseUp);
+  };
+
+  const updateWidthFromPointer = (clientX) => {
+    const nextWidth = applyWidth(window.innerWidth - clientX);
+    window.localStorage.setItem(RESIZE_STORAGE_KEY, String(nextWidth));
+  };
+
+  const handleMouseMove = (event) => {
+    if (!isDragging) return;
+    updateWidthFromPointer(event.clientX);
+  };
+
+  const handleMouseUp = () => {
+    stopResize();
+  };
+
+  resizeHandle.addEventListener('mousedown', (event) => {
+    if (event.button !== 0) return;
+
+    isDragging = true;
+    previousUserSelect = document.body.style.userSelect;
+    previousTransition = modal.style.transition;
+
+    document.body.style.userSelect = 'none';
+    modal.style.transition = 'none';
+    modal.classList.add('is-resizing');
+    updateWidthFromPointer(event.clientX);
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    event.preventDefault();
+  });
+
+  resizeHandle.addEventListener('dragstart', (event) => {
+    event.preventDefault();
+  });
+
+  window.addEventListener('resize', () => {
+    const currentWidth = Number.parseInt(modal.style.width || '', 10);
+    if (Number.isFinite(currentWidth)) {
+      applyWidth(currentWidth);
+    }
+  });
+}
+
 // Convert the man-hour modal to a side panel with date navigation
 function convertManHourModalToSidePanel() {
   if (window.__jbe_convertModalInited) return;
@@ -53,6 +146,7 @@ function convertManHourModalToSidePanel() {
         }
       }
       // Remove date selector navigation controls section
+      setupManHourModalResize(modal);
     }
   }, 500); // Check every 500ms
 }

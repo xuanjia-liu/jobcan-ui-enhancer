@@ -1852,6 +1852,65 @@
     overflow: hidden !important;
     background-color: var(--color-card) !important;
   }
+
+  .jobcan-enhanced #man-hour-manage-modal .jbe-modal-resize-handle {
+    position: absolute !important;
+    top: 0 !important;
+    bottom: 0 !important;
+    left: -12px !important;
+    width: 20px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    cursor: ew-resize !important;
+    z-index: calc(var(--z-index-popover) + 2) !important;
+    touch-action: none !important;
+    appearance: none !important;
+  }
+
+  .jobcan-enhanced #man-hour-manage-modal .jbe-modal-resize-handle::before {
+    content: "" !important;
+    position: absolute !important;
+    top: 50% !important;
+    left: 8px !important;
+    width: 4px !important;
+    height: 96px !important;
+    border-radius: 999px !important;
+    transform: translateY(-50%) !important;
+    background: linear-gradient(180deg, rgba(21, 127, 204, 0.85), rgba(21, 127, 204, 0.45)) !important;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.95), 0 6px 14px rgba(21, 127, 204, 0.28) !important;
+    opacity: 0.7 !important;
+    transition: opacity 0.18s ease, transform 0.18s ease !important;
+  }
+
+  .jobcan-enhanced #man-hour-manage-modal .jbe-modal-resize-handle:hover,
+  .jobcan-enhanced #man-hour-manage-modal.is-resizing .jbe-modal-resize-handle {
+    background: linear-gradient(90deg, rgba(21, 127, 204, 0.16), rgba(21, 127, 204, 0)) !important;
+  }
+
+  .jobcan-enhanced #man-hour-manage-modal .jbe-modal-resize-handle:hover::before,
+  .jobcan-enhanced #man-hour-manage-modal.is-resizing .jbe-modal-resize-handle::before {
+    opacity: 1 !important;
+    transform: translateY(-50%) scaleX(1.2) !important;
+  }
+
+  .jobcan-enhanced #man-hour-manage-modal .jbe-modal-resize-grip {
+    position: absolute;
+    top: 50%;
+    left: 6px;
+    width: 4px;
+    height: 58px;
+    border-radius: 999px;
+    transform: translateY(-50%);
+    background-image: radial-gradient(circle, rgba(255, 255, 255, 0.95) 1px, transparent 1.5px);
+    background-size: 4px 8px;
+    background-position: center;
+    background-repeat: repeat-y;
+    opacity: 0.95;
+    pointer-events: none;
+    z-index: 1;
+  }
   
   .jobcan-enhanced #man-hour-manage-modal .modal-header {
     padding: 12px 20px !important;
@@ -2061,11 +2120,41 @@
   .jobcan-enhanced #man-hour-manage-modal .table,
   .jobcan-enhanced #man-hour-manage-modal .jbc-table {
     margin: 0 !important;
+    table-layout: fixed !important;
   }
   
   .jobcan-enhanced #man-hour-manage-modal .jbc-table th:first-child,
   .jobcan-enhanced #man-hour-manage-modal .jbc-table td:first-child {
     display: none !important;
+  }
+
+  .jobcan-enhanced #man-hour-manage-modal .jbc-table th:nth-child(2),
+  .jobcan-enhanced #man-hour-manage-modal .jbc-table td:nth-child(2),
+  .jobcan-enhanced #man-hour-manage-modal .table th:nth-child(2),
+  .jobcan-enhanced #man-hour-manage-modal .table td:nth-child(2) {
+    width: 52% !important;
+  }
+
+  .jobcan-enhanced #man-hour-manage-modal .jbc-table th:nth-child(3),
+  .jobcan-enhanced #man-hour-manage-modal .jbc-table td:nth-child(3),
+  .jobcan-enhanced #man-hour-manage-modal .table th:nth-child(3),
+  .jobcan-enhanced #man-hour-manage-modal .table td:nth-child(3) {
+    width: 18% !important;
+  }
+
+  .jobcan-enhanced #man-hour-manage-modal .jbc-table th:nth-child(4),
+  .jobcan-enhanced #man-hour-manage-modal .jbc-table td:nth-child(4),
+  .jobcan-enhanced #man-hour-manage-modal .table th:nth-child(4),
+  .jobcan-enhanced #man-hour-manage-modal .table td:nth-child(4) {
+    width: 92px !important;
+    min-width: 92px !important;
+    max-width: 92px !important;
+    text-align: center !important;
+  }
+
+  .jobcan-enhanced #man-hour-manage-modal .jbc-table td,
+  .jobcan-enhanced #man-hour-manage-modal .table td {
+    vertical-align: middle !important;
   }
   
   .jobcan-enhanced #man-hour-manage-modal .jbc-table input,
@@ -2083,6 +2172,104 @@
     border-color: var(--color-primary) !important;
     box-shadow: 0 0 0 2px var(--shadow-primary) !important;
     outline: none !important;
+  }
+
+  .jobcan-enhanced #man-hour-manage-modal .jbc-table td .custom-select-wrapper,
+  .jobcan-enhanced #man-hour-manage-modal .table td .custom-select-wrapper {
+    width: 100% !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    min-height: 32px !important;
+    padding: 3px 10px !important;
+    box-sizing: border-box !important;
+    border-radius: var(--border-radius-md) !important;
+    font-size: 12px !important;
+  }
+
+  .jobcan-enhanced #man-hour-manage-modal .jbc-table td .project-select,
+  .jobcan-enhanced #man-hour-manage-modal .jbc-table td .task-select,
+  .jobcan-enhanced #man-hour-manage-modal .table td .project-select,
+  .jobcan-enhanced #man-hour-manage-modal .table td .task-select {
+    width: 100% !important;
+    max-width: none !important;
+  }
+
+  .jobcan-enhanced #man-hour-manage-modal .jbc-table td .select-display,
+  .jobcan-enhanced #man-hour-manage-modal .table td .select-display {
+    display: flex !important;
+    align-items: center !important;
+    min-width: 0 !important;
+    min-height: 24px !important;
+    padding: 0 !important;
+    line-height: 1.4 !important;
+    font-size: 12px !important;
+  }
+
+  .jobcan-enhanced #man-hour-manage-modal input.man-hour-input[name="minutes[]"] {
+    min-height: 32px !important;
+    height: 32px !important;
+    width: 56px !important;
+    min-width: 56px !important;
+    max-width: 56px !important;
+    box-sizing: border-box !important;
+    padding: 3px 10px !important;
+    font-size: 12px !important;
+    line-height: 1.2 !important;
+    text-align: center !important;
+  }
+
+  .jobcan-enhanced #man-hour-manage-modal .dropdown-btn {
+    flex: 0 0 auto !important;
+    width: 16px !important;
+    height: 16px !important;
+    margin-left: 8px !important;
+  }
+
+  .jobcan-enhanced #man-hour-manage-modal .dropdown-btn svg {
+    width: 10px !important;
+    height: 6px !important;
+  }
+
+  .jobcan-enhanced #man-hour-manage-modal .jbc-table th:last-child,
+  .jobcan-enhanced #man-hour-manage-modal .jbc-table td:last-child,
+  .jobcan-enhanced #man-hour-manage-modal .table th:last-child,
+  .jobcan-enhanced #man-hour-manage-modal .table td:last-child {
+    width: 96px !important;
+    min-width: 96px !important;
+    max-width: 96px !important;
+    text-align: center !important;
+  }
+
+  .jobcan-enhanced #man-hour-manage-modal .jbc-table td:last-child,
+  .jobcan-enhanced #man-hour-manage-modal .table td:last-child {
+    white-space: nowrap !important;
+  }
+
+  .jobcan-enhanced #man-hour-manage-modal .jbc-table td:last-child > *,
+  .jobcan-enhanced #man-hour-manage-modal .table td:last-child > * {
+    vertical-align: middle !important;
+  }
+
+  .jobcan-enhanced #man-hour-manage-modal .jbc-table td:last-child .btn,
+  .jobcan-enhanced #man-hour-manage-modal .jbc-table td:last-child button,
+  .jobcan-enhanced #man-hour-manage-modal .jbc-table td:last-child a.btn,
+  .jobcan-enhanced #man-hour-manage-modal .jbc-table td:last-child span.btn,
+  .jobcan-enhanced #man-hour-manage-modal .table td:last-child .btn,
+  .jobcan-enhanced #man-hour-manage-modal .table td:last-child button,
+  .jobcan-enhanced #man-hour-manage-modal .table td:last-child a.btn,
+  .jobcan-enhanced #man-hour-manage-modal .table td:last-child span.btn {
+    width: 32px !important;
+    min-width: 32px !important;
+    height: 32px !important;
+    min-height: 32px !important;
+    padding: 0 !important;
+    border-radius: 999px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 16px !important;
+    line-height: 1 !important;
+    margin: 0 4px !important;
   }
   
   /* ==========================================================================
