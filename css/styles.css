@@ -2124,32 +2124,78 @@
   }
   
   .jobcan-enhanced #man-hour-manage-modal .jbc-table th:first-child,
-  .jobcan-enhanced #man-hour-manage-modal .jbc-table td:first-child {
+  .jobcan-enhanced #man-hour-manage-modal .jbc-table td:first-child,
+  .jobcan-enhanced #man-hour-manage-modal .table th:first-child,
+  .jobcan-enhanced #man-hour-manage-modal .table td:first-child {
     display: none !important;
+    width: 0 !important;
+    min-width: 0 !important;
+    max-width: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+  }
+
+  .jobcan-enhanced #man-hour-manage-modal .jbe-man-hour-hidden-cell {
+    display: none !important;
+    width: 0 !important;
+    min-width: 0 !important;
+    max-width: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .jobcan-enhanced #man-hour-manage-modal .jbe-man-hour-project-cell {
+    width: 50% !important;
   }
 
   .jobcan-enhanced #man-hour-manage-modal .jbc-table th:nth-child(2),
   .jobcan-enhanced #man-hour-manage-modal .jbc-table td:nth-child(2),
   .jobcan-enhanced #man-hour-manage-modal .table th:nth-child(2),
   .jobcan-enhanced #man-hour-manage-modal .table td:nth-child(2) {
-    width: 52% !important;
+    width: 50% !important;
   }
 
-  .jobcan-enhanced #man-hour-manage-modal .jbc-table th:nth-child(3),
-  .jobcan-enhanced #man-hour-manage-modal .jbc-table td:nth-child(3),
-  .jobcan-enhanced #man-hour-manage-modal .table th:nth-child(3),
-  .jobcan-enhanced #man-hour-manage-modal .table td:nth-child(3) {
-    width: 18% !important;
+  .jobcan-enhanced #man-hour-manage-modal .jbe-man-hour-task-cell {
+    width: auto !important;
+  }
+
+  .jobcan-enhanced #man-hour-manage-modal .jbe-man-hour-minutes-cell {
+    width: 72px !important;
+    min-width: 72px !important;
+    max-width: 72px !important;
+    text-align: center !important;
+    white-space: nowrap !important;
   }
 
   .jobcan-enhanced #man-hour-manage-modal .jbc-table th:nth-child(4),
   .jobcan-enhanced #man-hour-manage-modal .jbc-table td:nth-child(4),
   .jobcan-enhanced #man-hour-manage-modal .table th:nth-child(4),
   .jobcan-enhanced #man-hour-manage-modal .table td:nth-child(4) {
-    width: 92px !important;
-    min-width: 92px !important;
-    max-width: 92px !important;
+    width: 72px !important;
+    min-width: 72px !important;
+    max-width: 72px !important;
     text-align: center !important;
+    white-space: nowrap !important;
+  }
+
+  .jobcan-enhanced #man-hour-manage-modal .jbe-man-hour-actions-cell {
+    width: 96px !important;
+    min-width: 96px !important;
+    max-width: 96px !important;
+    text-align: center !important;
+    white-space: nowrap !important;
+  }
+
+  .jobcan-enhanced #man-hour-manage-modal .jbc-table th:nth-child(5),
+  .jobcan-enhanced #man-hour-manage-modal .jbc-table td:nth-child(5),
+  .jobcan-enhanced #man-hour-manage-modal .table th:nth-child(5),
+  .jobcan-enhanced #man-hour-manage-modal .table td:nth-child(5) {
+    width: 96px !important;
+    min-width: 96px !important;
+    max-width: 96px !important;
+    text-align: center !important;
+    white-space: nowrap !important;
   }
 
   .jobcan-enhanced #man-hour-manage-modal .jbc-table td,
@@ -2187,8 +2233,12 @@
   }
 
   .jobcan-enhanced #man-hour-manage-modal .jbc-table td .project-select,
+  .jobcan-enhanced #man-hour-manage-modal .table td .project-select {
+    width: 100% !important;
+    max-width: none !important;
+  }
+
   .jobcan-enhanced #man-hour-manage-modal .jbc-table td .task-select,
-  .jobcan-enhanced #man-hour-manage-modal .table td .project-select,
   .jobcan-enhanced #man-hour-manage-modal .table td .task-select {
     width: 100% !important;
     max-width: none !important;
@@ -2230,34 +2280,14 @@
     height: 6px !important;
   }
 
-  .jobcan-enhanced #man-hour-manage-modal .jbc-table th:last-child,
-  .jobcan-enhanced #man-hour-manage-modal .jbc-table td:last-child,
-  .jobcan-enhanced #man-hour-manage-modal .table th:last-child,
-  .jobcan-enhanced #man-hour-manage-modal .table td:last-child {
-    width: 96px !important;
-    min-width: 96px !important;
-    max-width: 96px !important;
-    text-align: center !important;
-  }
-
-  .jobcan-enhanced #man-hour-manage-modal .jbc-table td:last-child,
-  .jobcan-enhanced #man-hour-manage-modal .table td:last-child {
-    white-space: nowrap !important;
-  }
-
-  .jobcan-enhanced #man-hour-manage-modal .jbc-table td:last-child > *,
-  .jobcan-enhanced #man-hour-manage-modal .table td:last-child > * {
+  .jobcan-enhanced #man-hour-manage-modal .jbe-man-hour-actions-cell > * {
     vertical-align: middle !important;
   }
 
-  .jobcan-enhanced #man-hour-manage-modal .jbc-table td:last-child .btn,
-  .jobcan-enhanced #man-hour-manage-modal .jbc-table td:last-child button,
-  .jobcan-enhanced #man-hour-manage-modal .jbc-table td:last-child a.btn,
-  .jobcan-enhanced #man-hour-manage-modal .jbc-table td:last-child span.btn,
-  .jobcan-enhanced #man-hour-manage-modal .table td:last-child .btn,
-  .jobcan-enhanced #man-hour-manage-modal .table td:last-child button,
-  .jobcan-enhanced #man-hour-manage-modal .table td:last-child a.btn,
-  .jobcan-enhanced #man-hour-manage-modal .table td:last-child span.btn {
+  .jobcan-enhanced #man-hour-manage-modal .jbe-man-hour-actions-cell .btn,
+  .jobcan-enhanced #man-hour-manage-modal .jbe-man-hour-actions-cell button,
+  .jobcan-enhanced #man-hour-manage-modal .jbe-man-hour-actions-cell a.btn,
+  .jobcan-enhanced #man-hour-manage-modal .jbe-man-hour-actions-cell span.btn {
     width: 32px !important;
     min-width: 32px !important;
     height: 32px !important;
@@ -3119,6 +3149,7 @@
     max-width: 240px;
     white-space: normal;
     word-wrap: break-word;
+    
   }
 
   .jobcan-enhanced td:has([id^="location-"]),

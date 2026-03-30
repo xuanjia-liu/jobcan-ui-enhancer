@@ -93,6 +93,53 @@ function setupManHourModalResize(modal) {
   });
 }
 
+function tagManHourMinutesCells(root = document) {
+  const scope = root && root.querySelectorAll ? root : document;
+  const rows = [];
+
+  if (scope.nodeType === Node.ELEMENT_NODE && scope.matches('tr')) {
+    rows.push(scope);
+  }
+
+  rows.push(...scope.querySelectorAll('tr'));
+
+  rows.forEach((row) => {
+    if (!row.closest('#man-hour-manage-modal')) return;
+
+    const cells = Array.from(row.children).filter((cell) =>
+      cell && (cell.tagName === 'TD' || cell.tagName === 'TH')
+    );
+
+    cells.forEach((cell) => {
+      cell.classList.remove('jbe-man-hour-hidden-cell');
+      cell.classList.remove('jbe-man-hour-project-cell');
+      cell.classList.remove('jbe-man-hour-task-cell');
+      cell.classList.remove('jbe-man-hour-minutes-cell');
+      cell.classList.remove('jbe-man-hour-actions-cell');
+    });
+
+    if (cells[0]) {
+      cells[0].classList.add('jbe-man-hour-hidden-cell');
+    }
+
+    if (cells[1]) {
+      cells[1].classList.add('jbe-man-hour-project-cell');
+    }
+
+    if (cells[2]) {
+      cells[2].classList.add('jbe-man-hour-task-cell');
+    }
+
+    if (cells[3]) {
+      cells[3].classList.add('jbe-man-hour-minutes-cell');
+    }
+
+    if (cells[4]) {
+      cells[4].classList.add('jbe-man-hour-actions-cell');
+    }
+  });
+}
+
 // Convert the man-hour modal to a side panel with date navigation
 function convertManHourModalToSidePanel() {
   if (window.__jbe_convertModalInited) return;
@@ -147,6 +194,7 @@ function convertManHourModalToSidePanel() {
       }
       // Remove date selector navigation controls section
       setupManHourModalResize(modal);
+      tagManHourMinutesCells(modal);
     }
   }, 500); // Check every 500ms
 }
@@ -386,6 +434,7 @@ function enhanceManHourSelectLists() {
       '.man-hour-table-edit select, #man-hour-manage-modal select'
     );
     selectCandidates.forEach(ensureSelectEnhanced);
+    tagManHourMinutesCells(scope);
   };
 
   window.__jbe_refreshEnhancedSelects = refreshEnhancedSelects;
@@ -397,6 +446,7 @@ function enhanceManHourSelectLists() {
           if (node.nodeType === Node.ELEMENT_NODE) {
             const selects = node.querySelectorAll('select');
             selects.forEach(ensureSelectEnhanced);
+            tagManHourMinutesCells(node);
             const inputs = node.querySelectorAll('input.man-hour-input[name="minutes[]"]');
             if (inputs.length > 0) inputs[0].dispatchEvent(new Event('change',{bubbles:true}));
 
