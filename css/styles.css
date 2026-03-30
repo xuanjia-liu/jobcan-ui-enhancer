@@ -1948,8 +1948,8 @@
     align-items: center !important;
     justify-content: center !important;
     border-radius: 50% !important;
-    background-color: transparent !important;
-    transition: background-color 0.2s !important;
+    transition: all 0.2s !important;
+    transform: translateY(0) !important;
     cursor: pointer !important;
     float: none !important;
     line-height: 1 !important;
@@ -1957,11 +1957,18 @@
     appearance: none;
   }
 
+  .jobcan-enhanced #man-hour-manage-modal .close:hover,
+  .jobcan-enhanced #man-hour-manage-modal button.close:hover {
+    background-color: var(--color-primary-hover-bg) !important;
+    color: var(--color-primary) !important;
+    box-shadow: 0 0 4px 2px rgba(21, 127, 204, 0.12) !important;
+  }
+
   .jobcan-enhanced #man-hour-manage-modal .close > span,
   .jobcan-enhanced #man-hour-manage-modal button.close > span {
     display: block;
     line-height: 1;
-    transform: translateY(-3px);
+    box-shadow: none !important;
   }
 
   .jobcan-enhanced #man-hour-manage-modal .modal-body {
