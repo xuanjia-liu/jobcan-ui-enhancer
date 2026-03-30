@@ -108,6 +108,38 @@ function repositionManHourSidepanel() {
   sidepanel.style.height = `${modalRect.height}px`;
 }
 
+function waitForDuration(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function getSelectOptionsSignature(selectElement) {
+  if (!selectElement) return '';
+  return Array.from(selectElement.options || [])
+    .map((option) => `${option.value}::${(option.textContent || '').trim()}`)
+    .join('|');
+}
+
+function findOptionByExactText(selectElement, labelText) {
+  if (!selectElement || !labelText) return null;
+  const target = labelText.trim();
+  return Array.from(selectElement.options || []).find((option) =>
+    (option.textContent || '').trim() === target
+  ) || null;
+}
+
+async function waitForSelectOptionsRefresh(selectElement, previousSignature, timeoutMs = 1200) {
+  if (!selectElement || !previousSignature) return false;
+
+  const started = Date.now();
+  while (Date.now() - started <= timeoutMs) {
+    if (getSelectOptionsSignature(selectElement) !== previousSignature) {
+      return true;
+    }
+    await waitForDuration(80);
+  }
+  return false;
+}
+
 function tagManHourMinutesCells(root = document) {
   const scope = root && root.querySelectorAll ? root : document;
   const rows = [];
@@ -603,15 +635,20 @@ function enhanceSelectElement(selectElement) {
   // Create the select display that shows the current selection
   const selectDisplay = document.createElement('div');
   selectDisplay.className = 'select-display';
-  
-  // Set initial display text
-  const selectedOption = selectElement.options[selectElement.selectedIndex];
-  if (selectedOption && selectedOption.value && selectedOption.text) {
-    selectDisplay.textContent = selectedOption.text;
-  } else {
+
+  const syncSelectDisplay = () => {
+    const selectedOption = selectElement.options[selectElement.selectedIndex];
+    if (selectedOption && selectedOption.value && selectedOption.text) {
+      selectDisplay.textContent = selectedOption.text;
+      selectDisplay.classList.remove('placeholder');
+      return;
+    }
+
     selectDisplay.textContent = isProject ? '(プロジェクト未選択)' : '(タスク未選択)';
     selectDisplay.classList.add('placeholder');
-  }
+  };
+
+  syncSelectDisplay();
   
   // Add dropdown arrow
   const dropdownArrow = document.createElement('div');
@@ -621,6 +658,7 @@ function enhanceSelectElement(selectElement) {
   // Add elements to the custom select
   customSelect.appendChild(selectDisplay);
   customSelect.appendChild(dropdownArrow);
+  selectElement.addEventListener('change', syncSelectDisplay);
   
   // Check if the select is required and transfer validation information
   if (selectElement.required) {
@@ -823,19 +861,55 @@ function enhanceSelectElement(selectElement) {
         }
         
         // Handle option selection
-        optionItem.addEventListener('click', () => {
+        optionItem.addEventListener('click', async () => {
+          let previousTaskState = null;
+          if (isProject) {
+            const row = selectElement.closest('tr');
+            if (row) {
+              const taskWrapper = row.querySelector('.custom-select-wrapper.task-select') ||
+                row.querySelector('.custom-select-wrapper[data-select-role="task"]') ||
+                Array.from(row.querySelectorAll('.custom-select-wrapper')).find(el => el.classList.contains('task-select'));
+
+              const taskSelect = row.querySelector('select[name="tasks[]"]') ||
+                row.querySelector('select[name*="task"]') ||
+                row.querySelector('select[id*="task"]') ||
+                row.querySelector('select[data-select-role="task"]') ||
+                (() => {
+                  const rowSelects = Array.from(row.querySelectorAll('select'));
+                  const index = rowSelects.indexOf(selectElement);
+                  return index >= 0 ? rowSelects[index + 1] || null : null;
+                })() ||
+                (taskWrapper && taskWrapper.previousElementSibling && taskWrapper.previousElementSibling.tagName === 'SELECT'
+                  ? taskWrapper.previousElementSibling
+                  : null);
+
+              if (taskSelect && taskSelect !== selectElement) {
+                const selectedTaskOption = taskSelect.options[taskSelect.selectedIndex];
+                const hasSelectedTask = !!taskSelect.value &&
+                  taskSelect.value !== '' &&
+                  !(selectedTaskOption && /未選択|選択してください/.test(selectedTaskOption.textContent || ''));
+
+                if (hasSelectedTask) {
+                  previousTaskState = {
+                    value: taskSelect.value,
+                    text: (selectedTaskOption?.textContent || '').trim(),
+                    optionsSignature: getSelectOptionsSignature(taskSelect)
+                  };
+                }
+              }
+            }
+          }
+
           selectElement.value = option.value;
           const event = new Event('change', { bubbles: true });
           selectElement.dispatchEvent(event);
-          
-          selectDisplay.textContent = option.text;
-          selectDisplay.classList.remove('placeholder');
+          syncSelectDisplay();
           
           optionsList.querySelectorAll('.option-item').forEach(opt => opt.classList.remove('selected'));
           optionItem.classList.add('selected');
           
           if (isProject) {
-            setTimeout(() => {
+            setTimeout(async () => {
               const row = selectElement.closest('tr');
               if (!row) return;
 
@@ -857,6 +931,30 @@ function enhanceSelectElement(selectElement) {
                   : null);
 
               if (!taskSelect || taskSelect === selectElement) return;
+
+              let restoredPreviousTask = false;
+              if (previousTaskState) {
+                await waitForSelectOptionsRefresh(taskSelect, previousTaskState.optionsSignature, 1200);
+
+                const optionByValue = Array.from(taskSelect.options || []).find((opt) => opt.value === previousTaskState.value);
+                const optionByText = optionByValue || findOptionByExactText(taskSelect, previousTaskState.text);
+
+                if (optionByText) {
+                  if (taskSelect.value !== optionByText.value) {
+                    taskSelect.value = optionByText.value;
+                    taskSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                  } else {
+                    taskSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                  }
+
+                  restoredPreviousTask = true;
+                  if (taskWrapper) {
+                    taskWrapper.removeAttribute('data-needs-attention');
+                  }
+                }
+              }
+
+              if (restoredPreviousTask) return;
 
               const selectedTaskOption = taskSelect.options[taskSelect.selectedIndex];
               const isTaskUnselected = !taskSelect.value ||
