@@ -155,6 +155,23 @@ function tagManHourMinutesCells(root = document) {
   });
 }
 
+function tagManHourSettingsControls(root = document) {
+  const scope = root && root.querySelectorAll ? root : document;
+  const modal = scope.id === 'man-hour-manage-modal'
+    ? scope
+    : scope.closest && scope.closest('#man-hour-manage-modal')
+      ? scope.closest('#man-hour-manage-modal')
+      : document.getElementById('man-hour-manage-modal');
+
+  if (!modal) return;
+
+  modal.querySelectorAll('select').forEach((select) => {
+    select.classList.remove('jbe-man-hour-settings-select');
+    if (select.closest('table, .table, .jbc-table, .man-hour-table-edit')) return;
+    select.classList.add('jbe-man-hour-settings-select');
+  });
+}
+
 // Convert the man-hour modal to a side panel with date navigation
 function convertManHourModalToSidePanel() {
   if (window.__jbe_convertModalInited) return;
@@ -210,6 +227,7 @@ function convertManHourModalToSidePanel() {
       // Remove date selector navigation controls section
       setupManHourModalResize(modal);
       tagManHourMinutesCells(modal);
+      tagManHourSettingsControls(modal);
     }
   }, 500); // Check every 500ms
 }
@@ -446,10 +464,11 @@ function enhanceManHourSelectLists() {
   const refreshEnhancedSelects = (root = document) => {
     const scope = root && root.querySelectorAll ? root : document;
     const selectCandidates = scope.querySelectorAll(
-      '.man-hour-table-edit select, #man-hour-manage-modal select'
+      '.man-hour-table-edit select, #man-hour-manage-modal .man-hour-table-edit select, #man-hour-manage-modal .jbc-table select, #man-hour-manage-modal table tbody select'
     );
     selectCandidates.forEach(ensureSelectEnhanced);
     tagManHourMinutesCells(scope);
+    tagManHourSettingsControls(scope);
   };
 
   window.__jbe_refreshEnhancedSelects = refreshEnhancedSelects;

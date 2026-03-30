@@ -1568,7 +1568,7 @@
     background-color: var(--color-surface);
     cursor: pointer;
     transition: border-color 150ms ease, box-shadow 150ms ease, background-color 150ms ease;
-    padding: 10px 16px;
+    padding: 8px 8px 8px 12px;
     border-radius: var(--border-radius-md) !important;
   }
 
@@ -1611,8 +1611,9 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 16px;
-    height: 16px;
+    width: 8px;
+    height: 8px;
+    margin-left: 2px;
     color: var(--color-gray-650);
   }
   
@@ -1966,6 +1967,25 @@
     padding: 16px !important;
     max-height: calc(100vh - 60px - 70px) !important; /* Adjust based on header and footer heights */
   }
+
+  .jobcan-enhanced #man-hour-manage-modal .jbe-man-hour-settings-select {
+    height: 28px !important;
+    min-height: 28px !important;
+    padding: 2px 10px !important;
+    border-radius: 10px !important;
+    border: 1px solid var(--color-border) !important;
+    background-color: var(--color-surface) !important;
+    box-shadow: none !important;
+    font-size: 12px !important;
+    font-weight: 400 !important;
+    color: var(--color-text-secondary) !important;
+  }
+
+  .jobcan-enhanced #man-hour-manage-modal .jbe-man-hour-settings-select:focus {
+    border-color: var(--color-primary-border) !important;
+    box-shadow: 0 0 0 2px rgba(21, 127, 204, 0.12) !important;
+    outline: none !important;
+  }
   
   .jobcan-enhanced #man-hour-manage-modal .modal-footer,
   .jobcan-enhanced #man-hour-manage-modal .jbc-modal-footer {
@@ -2161,9 +2181,9 @@
   }
 
   .jobcan-enhanced #man-hour-manage-modal .jbe-man-hour-minutes-cell {
-    width: 68px !important;
-    min-width: 68px !important;
-    max-width: 68px !important;
+    width: 48px !important;
+    min-width: 48px !important;
+    max-width: 48px !important;
     text-align: center !important;
     white-space: nowrap !important;
   }
@@ -2172,9 +2192,9 @@
   .jobcan-enhanced #man-hour-manage-modal .jbc-table td:nth-child(4),
   .jobcan-enhanced #man-hour-manage-modal .table th:nth-child(4),
   .jobcan-enhanced #man-hour-manage-modal .table td:nth-child(4) {
-    width: 72px !important;
-    min-width: 72px !important;
-    max-width: 72px !important;
+    width: 56px !important;
+    min-width: 56px !important;
+    max-width: 56px !important;
     text-align: center !important;
     white-space: nowrap !important;
   }
@@ -2227,7 +2247,7 @@
     max-width: none !important;
     min-width: 0 !important;
     min-height: 32px !important;
-    padding: 3px 10px !important;
+    padding: 3px 5px 3px 8px !important;
     box-sizing: border-box !important;
     border-radius: var(--border-radius-md) !important;
     font-size: 12px !important;
@@ -2243,7 +2263,6 @@
   .jobcan-enhanced #man-hour-manage-modal .table td .task-select {
     width: 100% !important;
     max-width: none !important;
-    height: 32px !important;
   }
 
   .jobcan-enhanced #man-hour-manage-modal .jbc-table td .select-display,
@@ -2260,26 +2279,19 @@
   .jobcan-enhanced #man-hour-manage-modal input.man-hour-input[name="minutes[]"] {
     min-height: 32px !important;
     height: 32px !important;
-    width: 56px !important;
-    min-width: 56px !important;
-    max-width: 56px !important;
+    width: 48px !important;
+    min-width: 48px !important;
+    max-width: 48px !important;
     box-sizing: border-box !important;
-    padding: 3px 10px !important;
+    padding: 3px 4px !important;
     font-size: 12px !important;
     line-height: 1.2 !important;
     text-align: center !important;
   }
 
-  .jobcan-enhanced #man-hour-manage-modal .dropdown-btn {
-    flex: 0 0 auto !important;
-    width: 16px !important;
-    height: 16px !important;
-    margin-left: 8px !important;
-  }
-
   .jobcan-enhanced #man-hour-manage-modal .dropdown-btn svg {
-    width: 10px !important;
-    height: 6px !important;
+    width: 8px !important;
+    height: 4px !important;
   }
 
   .jobcan-enhanced #man-hour-manage-modal .jbe-man-hour-actions-cell > * {
