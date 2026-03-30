@@ -2161,9 +2161,9 @@
   }
 
   .jobcan-enhanced #man-hour-manage-modal .jbe-man-hour-minutes-cell {
-    width: 72px !important;
-    min-width: 72px !important;
-    max-width: 72px !important;
+    width: 68px !important;
+    min-width: 68px !important;
+    max-width: 68px !important;
     text-align: center !important;
     white-space: nowrap !important;
   }
@@ -2180,9 +2180,9 @@
   }
 
   .jobcan-enhanced #man-hour-manage-modal .jbe-man-hour-actions-cell {
-    width: 96px !important;
-    min-width: 96px !important;
-    max-width: 96px !important;
+    width: 80px !important;
+    min-width: 80px !important;
+    max-width: 80px !important;
     text-align: center !important;
     white-space: nowrap !important;
   }
@@ -2191,9 +2191,9 @@
   .jobcan-enhanced #man-hour-manage-modal .jbc-table td:nth-child(5),
   .jobcan-enhanced #man-hour-manage-modal .table th:nth-child(5),
   .jobcan-enhanced #man-hour-manage-modal .table td:nth-child(5) {
-    width: 96px !important;
-    min-width: 96px !important;
-    max-width: 96px !important;
+    width: 80px !important;
+    min-width: 80px !important;
+    max-width: 80px !important;
     text-align: center !important;
     white-space: nowrap !important;
   }
@@ -2201,6 +2201,7 @@
   .jobcan-enhanced #man-hour-manage-modal .jbc-table td,
   .jobcan-enhanced #man-hour-manage-modal .table td {
     vertical-align: middle !important;
+    padding: 4px !important;
   }
   
   .jobcan-enhanced #man-hour-manage-modal .jbc-table input,
@@ -2299,7 +2300,6 @@
     justify-content: center !important;
     font-size: 16px !important;
     line-height: 1 !important;
-    margin: 0 4px !important;
   }
   
   /* ==========================================================================
@@ -3149,7 +3149,7 @@
     max-width: 240px;
     white-space: normal;
     word-wrap: break-word;
-    
+
   }
 
   .jobcan-enhanced td:has([id^="location-"]),
