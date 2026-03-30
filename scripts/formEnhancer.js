@@ -112,6 +112,75 @@ function waitForDuration(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+const PROJECT_USAGE_STORAGE_KEY = 'jbeProjectUsageStats';
+
+function normalizeProjectUsageLabel(label) {
+  return String(label || '').trim();
+}
+
+function readProjectUsageStats() {
+  try {
+    const raw = window.localStorage.getItem(PROJECT_USAGE_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch (error) {
+    console.warn('Failed to read project usage stats:', error);
+    return {};
+  }
+}
+
+function writeProjectUsageStats(stats) {
+  try {
+    window.localStorage.setItem(PROJECT_USAGE_STORAGE_KEY, JSON.stringify(stats));
+  } catch (error) {
+    console.warn('Failed to write project usage stats:', error);
+  }
+}
+
+function recordProjectUsage(option) {
+  if (!option || !option.value) return;
+
+  const label = normalizeProjectUsageLabel(option.textContent);
+  if (!label || /未選択|選択してください/.test(label)) return;
+
+  const stats = readProjectUsageStats();
+  const current = stats[label] && typeof stats[label] === 'object' ? stats[label] : {};
+
+  stats[label] = {
+    count: Number.isFinite(current.count) ? current.count + 1 : 1,
+    lastUsedAt: Date.now(),
+    value: option.value
+  };
+
+  writeProjectUsageStats(stats);
+}
+
+function sortProjectOptionsByUsage(options) {
+  const stats = readProjectUsageStats();
+
+  return [...options].sort((a, b) => {
+    const aIsPlaceholder = !a.value;
+    const bIsPlaceholder = !b.value;
+    if (aIsPlaceholder !== bIsPlaceholder) return aIsPlaceholder ? -1 : 1;
+
+    const aLabel = normalizeProjectUsageLabel(a.textContent);
+    const bLabel = normalizeProjectUsageLabel(b.textContent);
+    const aStats = stats[aLabel] && typeof stats[aLabel] === 'object' ? stats[aLabel] : null;
+    const bStats = stats[bLabel] && typeof stats[bLabel] === 'object' ? stats[bLabel] : null;
+
+    const aCount = aStats && Number.isFinite(aStats.count) ? aStats.count : 0;
+    const bCount = bStats && Number.isFinite(bStats.count) ? bStats.count : 0;
+    if (aCount !== bCount) return bCount - aCount;
+
+    const aLastUsedAt = aStats && Number.isFinite(aStats.lastUsedAt) ? aStats.lastUsedAt : 0;
+    const bLastUsedAt = bStats && Number.isFinite(bStats.lastUsedAt) ? bStats.lastUsedAt : 0;
+    if (aLastUsedAt !== bLastUsedAt) return bLastUsedAt - aLastUsedAt;
+
+    return aLabel.localeCompare(bLabel, 'ja');
+  });
+}
+
 function getSelectOptionsSignature(selectElement) {
   if (!selectElement) return '';
   return Array.from(selectElement.options || [])
@@ -838,9 +907,14 @@ function enhanceSelectElement(selectElement) {
       noOptions.textContent = isProject ? 'プロジェクトがありません' : 'タスクがありません';
       optionsList.appendChild(noOptions);
     } else {
+      const sourceOptions = Array.from(selectElement.options || []);
+      const orderedOptions = isProject
+        ? sortProjectOptionsByUsage(sourceOptions)
+        : sourceOptions;
+
       // Add all options to the list and assign categories
-      for (let i = 0; i < selectElement.options.length; i++) {
-        const option = selectElement.options[i];
+      for (let i = 0; i < orderedOptions.length; i++) {
+        const option = orderedOptions[i];
         if (!option.value && i > 0) continue;
         
         const optionItem = document.createElement('li');
@@ -904,6 +978,9 @@ function enhanceSelectElement(selectElement) {
           const event = new Event('change', { bubbles: true });
           selectElement.dispatchEvent(event);
           syncSelectDisplay();
+          if (isProject) {
+            recordProjectUsage(option);
+          }
           
           optionsList.querySelectorAll('.option-item').forEach(opt => opt.classList.remove('selected'));
           optionItem.classList.add('selected');
