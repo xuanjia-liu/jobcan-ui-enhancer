@@ -54,6 +54,7 @@ function setupManHourModalResize(modal) {
   const updateWidthFromPointer = (clientX) => {
     const nextWidth = applyWidth(window.innerWidth - clientX);
     window.localStorage.setItem(RESIZE_STORAGE_KEY, String(nextWidth));
+    repositionManHourSidepanel();
   };
 
   const handleMouseMove = (event) => {
@@ -90,7 +91,21 @@ function setupManHourModalResize(modal) {
     if (Number.isFinite(currentWidth)) {
       applyWidth(currentWidth);
     }
+    repositionManHourSidepanel();
   });
+}
+
+function repositionManHourSidepanel() {
+  const modal = document.getElementById('man-hour-manage-modal');
+  const sidepanel = document.querySelector('.select-sidepanel');
+  if (!modal || !sidepanel) return;
+
+  const modalRect = modal.getBoundingClientRect();
+  const panelWidth = sidepanel.offsetWidth || 400;
+
+  sidepanel.style.top = `${modalRect.top}px`;
+  sidepanel.style.left = `${modalRect.left - panelWidth}px`;
+  sidepanel.style.height = `${modalRect.height}px`;
 }
 
 function tagManHourMinutesCells(root = document) {
@@ -904,13 +919,7 @@ function enhanceSelectElement(selectElement) {
     });
     
     document.body.appendChild(sidepanel);
-    
-    const modal = document.getElementById('man-hour-manage-modal');
-    if (modal) {
-      const modalRect = modal.getBoundingClientRect();
-      sidepanel.style.top = `${modalRect.top}px`;
-      sidepanel.style.left = `${modalRect.left - 400}px`;
-    }
+    repositionManHourSidepanel();
     
     setTimeout(() => {
       sidepanel.classList.add('open');
