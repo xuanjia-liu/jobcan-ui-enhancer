@@ -256,6 +256,65 @@ function tagManHourMinutesCells(root = document) {
   });
 }
 
+// Bare numbers (e.g. "3", "3.5") are treated as decimal hours → "3:00", "3:30".
+// Applied in capture phase on blur/change so it runs before Jobcan's MM-only parsing ("3" → 0:03).
+function formatManHourTotalMinutesAsHMM(totalMinutes) {
+  const safe = Math.max(0, Math.round(Number(totalMinutes) || 0));
+  const h = Math.floor(safe / 60);
+  const m = safe % 60;
+  return `${h}:${String(m).padStart(2, '0')}`;
+}
+
+function normalizeManHourTypedDecimalHours(raw) {
+  const text = String(raw ?? '').trim();
+  if (!text) return text;
+
+  const colon = text.match(/^(\d+)\s*:\s*(\d{1,2})$/);
+  if (colon) {
+    const h = parseInt(colon[1], 10) || 0;
+    let mi = parseInt(colon[2], 10) || 0;
+    if (mi > 59) mi = 59;
+    return formatManHourTotalMinutesAsHMM(h * 60 + mi);
+  }
+
+  if (/^(\d+(?:\.\d+)?|\.\d+)$/.test(text)) {
+    const hours = parseFloat(text);
+    if (Number.isFinite(hours) && hours >= 0) {
+      return formatManHourTotalMinutesAsHMM(hours * 60);
+    }
+  }
+
+  return text;
+}
+
+function attachManHourDecimalHoursInputNormalizer(input) {
+  if (!input || input.dataset.jbeDecimalHoursNormalize === '1') return;
+  input.dataset.jbeDecimalHoursNormalize = '1';
+
+  const commit = () => {
+    const next = normalizeManHourTypedDecimalHours(input.value);
+    if (next === input.value) return;
+    input.value = next;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  };
+
+  input.addEventListener('blur', commit, true);
+  input.addEventListener('change', commit, true);
+}
+
+function wireManHourDecimalHoursInputs(root) {
+  const modal = document.getElementById('man-hour-manage-modal');
+  if (!modal) return;
+  const scope =
+    root && root.nodeType === Node.ELEMENT_NODE && modal.contains(root)
+      ? root
+      : modal;
+  scope.querySelectorAll('input.man-hour-input[name="minutes[]"]').forEach(
+    attachManHourDecimalHoursInputNormalizer
+  );
+}
+
 function tagManHourSettingsControls(root = document) {
   const scope = root && root.querySelectorAll ? root : document;
   const modal = scope.id === 'man-hour-manage-modal'
@@ -328,6 +387,7 @@ function convertManHourModalToSidePanel() {
       // Remove date selector navigation controls section
       setupManHourModalResize(modal);
       tagManHourMinutesCells(modal);
+      wireManHourDecimalHoursInputs(modal);
       tagManHourSettingsControls(modal);
     }
   }, 500); // Check every 500ms
@@ -525,6 +585,7 @@ function setupManHourSumUpdater(sumElement) {
           }
         }); if(upd){ updateSum(); if(added){ const {totalMinutes:t}=calculateManHourSum(); const diffInner=getActualWorkTimeInMinutes()-t; if(diffInner) { removeSuggestionChips(); createSuggestionChips(diffInner,t); } } }});
       obs.observe(table,{attributes:true,attributeFilter:['value'],attributeOldValue:true,childList:true,subtree:true});
+      wireManHourDecimalHoursInputs(table);
       document.querySelectorAll('input.man-hour-input[name="minutes[]"]').forEach(i=>{ i.addEventListener('input',updateSum); i.addEventListener('change', updateSum); });
       const form=document.querySelector('form'); if(form) form.addEventListener('change',updateSum);
     }
@@ -570,6 +631,7 @@ function enhanceManHourSelectLists() {
     selectCandidates.forEach(ensureSelectEnhanced);
     tagManHourMinutesCells(scope);
     tagManHourSettingsControls(scope);
+    wireManHourDecimalHoursInputs(scope);
   };
 
   window.__jbe_refreshEnhancedSelects = refreshEnhancedSelects;
@@ -583,6 +645,7 @@ function enhanceManHourSelectLists() {
             selects.forEach(ensureSelectEnhanced);
             tagManHourMinutesCells(node);
             const inputs = node.querySelectorAll('input.man-hour-input[name="minutes[]"]');
+            wireManHourDecimalHoursInputs(node);
             if (inputs.length > 0) inputs[0].dispatchEvent(new Event('change',{bubbles:true}));
 
             // After a new row is created, open the project list automatically
