@@ -66,25 +66,9 @@
   }
 }
 
-/* Mobile responsiveness for flip clock */
+/* Flip clock uses container-query fluid sizing in styles.css; avoid !important overrides here */
 @media (max-width: 768px) {
-  .jobcan-enhanced .flip-clock-digit {
-    width: 50px !important;
-    height: 75px !important;
-  }
-
-  .jobcan-enhanced .flip-clock-digit .flip-card-front,
-  .jobcan-enhanced .flip-clock-digit .flip-card-back {
-    font-size: 2rem !important;
-  }
-
-  .jobcan-enhanced .colon {
-    width: 20px !important;
-    height: 75px !important;
-    font-size: 2rem !important;
-  }
-
   .jobcan-enhanced .flip-clock-settings-menu {
-    width: 180px !important;
+    width: min(180px, calc(100vw - 24px)) !important;
   }
 } 

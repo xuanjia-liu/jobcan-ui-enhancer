@@ -202,6 +202,7 @@ function createSelfAnimatingClock(clockElement) {
   
   const flipClockContainer = document.createElement('div');
   flipClockContainer.className = 'flip-clock-container';
+  flipClockContainer.dataset.clockSize = 'medium';
   const clockDigitsContainer = document.createElement('div');
   clockDigitsContainer.className = 'flip-clock-digits-container';
   flipClockContainer.appendChild(clockDigitsContainer);
@@ -258,6 +259,20 @@ function createSelfAnimatingClock(clockElement) {
   };
   progressContainer.addEventListener('mouseenter', rerenderScheduleSegmentsForHover);
   progressContainer.addEventListener('mouseleave', rerenderScheduleSegmentsForHover);
+  if (typeof ResizeObserver !== 'undefined') {
+    const scheduleResizeObserver = new ResizeObserver(() => {
+      if (!document.body.contains(flipClockContainer)) {
+        scheduleResizeObserver.disconnect();
+        return;
+      }
+      const cachedEntries = Array.isArray(flipClockContainer._cachedPunchEntries)
+        ? flipClockContainer._cachedPunchEntries
+        : [];
+      renderWorkScheduleSegments(progressTrack, cachedEntries);
+    });
+    scheduleResizeObserver.observe(progressTrack);
+    flipClockContainer._scheduleResizeObserver = scheduleResizeObserver;
+  }
   chrome.storage.sync.get(['showProgressBar'], function(result) {
     const showProgressBar = result.showProgressBar !== false;
     progressContainer.classList.toggle('hidden', !showProgressBar);
@@ -269,6 +284,7 @@ function createSelfAnimatingClock(clockElement) {
   setupSelfAnimatingClockDigits(clockDigitsContainer, initialTime);
   parentElement.appendChild(flipClockContainer);
   syncProgressContainerWidth(flipClockContainer);
+  applyClockSettings(flipClockContainer);
   // Initial color sync (apply working status color on load)
   updateFlipClockColors(flipClockContainer);
   // Start self-updating clock (optimized)
@@ -303,6 +319,11 @@ function cleanupClockContainer(container) {
     clearInterval(parseInt(progressIntervalId));
   }
   
+  if (container._scheduleResizeObserver) {
+    container._scheduleResizeObserver.disconnect();
+    delete container._scheduleResizeObserver;
+  }
+
   // Clear any cached elements
   const progressContainer = container.querySelector('.work-progress-container');
   if (progressContainer && progressContainer._cachedElements) {
@@ -329,7 +350,6 @@ function setupSelfAnimatingClockDigits(container, timeString) {
       container.appendChild(digitElement);
     }
   }
-  setTimeout(() => applyClockSettings(container.parentElement), 0);
 }
 
 // Create a self-animating digit element
@@ -347,9 +367,6 @@ function createSelfAnimatingDigit(digit) {
   flipCardBack.className = 'flip-card-back';
   flipCardBack.textContent = digit;
   digitElement.style.position = 'relative';
-  digitElement.style.width = '80px';
-  digitElement.style.height = '120px';
-  digitElement.style.margin = '0 4px';
   digitElement.style.perspective = '1000px'; // Increased perspective for more dramatic effect
   flipCard.style.position = 'relative';
   flipCard.style.width = '100%';
@@ -365,7 +382,6 @@ function createSelfAnimatingDigit(digit) {
   flipCardFront.style.justifyContent = 'center';
   flipCardFront.style.background = COLORS.primary.gradient;
   flipCardFront.style.color = 'var(--color-clock-text)';
-  flipCardFront.style.fontSize = '3.5rem';
   flipCardFront.style.fontWeight = 'bold';
   flipCardFront.style.borderRadius = '8px';
   flipCardFront.style.boxShadow = 'var(--shadow-sm)';
@@ -378,7 +394,6 @@ function createSelfAnimatingDigit(digit) {
   flipCardBack.style.justifyContent = 'center';
   flipCardBack.style.background = COLORS.primary.gradient;
   flipCardBack.style.color = 'var(--color-clock-text)';
-  flipCardBack.style.fontSize = '3.5rem';
   flipCardBack.style.fontWeight = 'bold';
   flipCardBack.style.transform = 'rotateX(180deg)';
   flipCardBack.style.borderRadius = '8px';
@@ -960,15 +975,10 @@ function normalizeTimeFormat(timeString) {
 
 function syncProgressContainerWidth(container) {
   if (!container) return;
-  const digitsContainer = container.querySelector('.flip-clock-digits-container');
   const progressContainer = container.querySelector('.work-progress-container');
-  if (!digitsContainer || !progressContainer) return;
-
-  const width = Math.ceil(digitsContainer.getBoundingClientRect().width);
-  if (!width) return;
-
-  progressContainer.style.width = `${width}px`;
-  progressContainer.style.maxWidth = `${width}px`;
+  if (!progressContainer) return;
+  progressContainer.style.width = '';
+  progressContainer.style.maxWidth = '';
 }
 
 function applyClockSettingsToContainer(container, settings) {
@@ -976,15 +986,17 @@ function applyClockSettingsToContainer(container, settings) {
   const showSeconds = settings.showSeconds !== false;
   const showProgressBar = settings.showProgressBar !== false;
 
+  container.dataset.clockSize = clockSize;
+
   const digits = container.querySelectorAll('.flip-clock-digit');
   digits.forEach(digit => {
-    digit.style.width = clockSize === 'small' ? '60px' : clockSize === 'large' ? '100px' : '80px';
-    digit.style.height = clockSize === 'small' ? '90px' : clockSize === 'large' ? '150px' : '120px';
-    const fontSize = clockSize === 'small' ? '2.5rem' : clockSize === 'large' ? '4.5rem' : '3.5rem';
+    digit.style.width = '';
+    digit.style.height = '';
+    digit.style.margin = '';
     const front = digit.querySelector('.flip-card-front');
     const back = digit.querySelector('.flip-card-back');
-    if (front) front.style.fontSize = fontSize;
-    if (back) back.style.fontSize = fontSize;
+    if (front) front.style.fontSize = '';
+    if (back) back.style.fontSize = '';
 
     const isSec = digit.dataset.position === 'seconds' || Number(digit.dataset.index) >= 6;
     if (isSec) {
@@ -997,8 +1009,9 @@ function applyClockSettingsToContainer(container, settings) {
   });
 
   container.querySelectorAll('.colon').forEach(col => {
-    col.style.height = clockSize === 'small' ? '90px' : clockSize === 'large' ? '150px' : '120px';
-    col.style.fontSize = clockSize === 'small' ? '2rem' : clockSize === 'large' ? '4rem' : '3rem';
+    col.style.width = '';
+    col.style.height = '';
+    col.style.fontSize = '';
   });
 
   const prog = container.querySelector('.work-progress-container');

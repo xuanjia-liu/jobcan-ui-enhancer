@@ -2333,7 +2333,7 @@
   .jobcan-enhanced .flip-clock-container {
     display: flex;
     flex-direction: column;
-    align-items: center;
+    align-items: stretch;
     justify-content: center;
     margin: var(--spacing-lg) 0;
     padding: var(--spacing-md);
@@ -2343,25 +2343,64 @@
     position: relative;
     /* Remove will-change from container - only apply to animating elements */
     transition: transform 0.3s ease, box-shadow 0.3s ease;
-    /* Add containment for better performance */
-    contain: layout style;
+    /* Fluid layout: shrink inside flexparents; enable container units for digits/track */
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    container-type: inline-size;
+    container-name: flip-clock;
+    /* Fluid digit caps (overridden by data-clock-size) */
+    --flip-digit-min: 26px;
+    --flip-digit-max: 80px;
+    --flip-font-min: 1.05rem;
+    --flip-font-max: 3.5rem;
+    --flip-colon-max: 30px;
+  }
+
+  .jobcan-enhanced .flip-clock-container[data-clock-size='small'] {
+    --flip-digit-min: 22px;
+    --flip-digit-max: 60px;
+    --flip-font-min: 0.95rem;
+    --flip-font-max: 2.5rem;
+    --flip-colon-max: 22px;
+  }
+
+  .jobcan-enhanced .flip-clock-container[data-clock-size='large'] {
+    --flip-digit-min: 34px;
+    --flip-digit-max: 100px;
+    --flip-font-min: 1.35rem;
+    --flip-font-max: 4.5rem;
+    --flip-colon-max: 38px;
   }
 
   /* Clock digits container */
   .jobcan-enhanced .flip-clock-digits-container {
     display: flex;
-    align-items: center;
+    align-items: stretch;
     justify-content: center;
+    flex-wrap: nowrap;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
     /* Add containment */
     contain: layout style;
   }
   
-  /* Digits */
+  /* Digits — width scales with container (~6 digits + 3 colons) */
   .jobcan-enhanced .flip-clock-digit {
     position: relative;
-    width: 80px;
-    height: 120px;
-    margin: 0 4px;
+    box-sizing: border-box;
+    flex: 0 1 auto;
+    width: clamp(
+      var(--flip-digit-min),
+      calc((100cqi - clamp(28px, 8cqi, 48px)) / 7.5),
+      var(--flip-digit-max)
+    );
+    aspect-ratio: 2 / 3;
+    height: auto;
+    margin: 0 clamp(2px, 0.9cqi, 4px);
     perspective: 800px;
     /* Add containment for digit elements */
     contain: layout style paint;
@@ -2376,6 +2415,8 @@
   
   .jobcan-enhanced .display-2 {
     font-weight: 600;
+    min-width: 0;
+    max-width: 100%;
   }
   
   /* Self-animating digits - optimized for performance */
@@ -2390,9 +2431,13 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 3rem;
-    width: 30px;
-    height: 120px;
+    box-sizing: border-box;
+    flex: 0 0 auto;
+    align-self: stretch;
+    width: clamp(10px, calc(var(--flip-digit-max, 80px) * 0.35), var(--flip-colon-max, 30px));
+    min-height: 0;
+    font-size: clamp(var(--flip-font-min), 8cqi, var(--flip-font-max));
+    line-height: 1;
     color: var(--color-primary);
     font-weight: bold;
     /* Add containment as size doesn't change */
@@ -2424,7 +2469,7 @@
     justify-content: center;
     background: linear-gradient(135deg, var(--color-primary-dark) 0%, var(--color-primary) 100%);
     color: var(--color-text-on-primary);
-    font-size: 3rem;
+    font-size: clamp(var(--flip-font-min), 9cqi, var(--flip-font-max));
     font-weight: 700;
     border-radius: var(--border-radius-lg);
     box-shadow: var(--shadow-md);
@@ -2474,13 +2519,16 @@
   
   /* Work progress elements with improved performance */
   .jobcan-enhanced .work-progress-container {
-    width: auto;
-    max-width: none;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    align-self: stretch;
     margin-top: 16px;
     position: relative;
     min-height: 60px;
     border-radius: 16px;
-    padding: 10px 12px 8px;
+    padding: 10px clamp(8px, 2cqi, 12px) 8px;
     background: linear-gradient(180deg, var(--color-work-progress-surface-start) 0%, var(--color-work-progress-surface-end) 100%);
     border: 1px solid var(--color-work-progress-border);
     box-shadow: 0 1px 2px rgba(16, 24, 40, 0.06);
@@ -2501,9 +2549,10 @@
     --work-dot-normal-height: 12px;
     --work-dot-hover-size: 12px;
     --work-dot-active-width: var(--work-dot-normal-width);
-    --work-segment-boundary-gap: 8px;
-    height: 20px;
+    --work-segment-boundary-gap: clamp(4px, 1.4cqi, 8px);
+    height: clamp(16px, 4cqi, 20px);
     width: 100%;
+    min-width: 0;
     background: linear-gradient(180deg, var(--color-work-progress-track-start) 0%, var(--color-work-progress-track-end) 100%);
     border-radius: 999px;
     overflow: hidden;
@@ -2570,6 +2619,26 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  @container flip-clock (max-width: 520px) {
+    .jobcan-enhanced .work-progress-percentage {
+      font-size: 11px;
+      column-gap: clamp(4px, 1.5cqi, 10px);
+    }
+
+    .jobcan-enhanced .work-progress-inline-label {
+      font-size: 10px;
+    }
+
+    .jobcan-enhanced .work-progress-inline-status {
+      white-space: normal;
+      text-wrap: balance;
+      overflow: visible;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+      text-overflow: unset;
+    }
   }
   
   .jobcan-enhanced .work-progress-marker {
