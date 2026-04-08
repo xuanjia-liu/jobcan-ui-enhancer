@@ -91,6 +91,8 @@ function setupFlipClock() {
       });
     });
   }
+
+  ensureWorkingStatusObserver();
 }
 
 // Add required styles for enhanced animations
@@ -380,7 +382,6 @@ function createSelfAnimatingDigit(digit) {
   flipCardFront.style.display = 'flex';
   flipCardFront.style.alignItems = 'center';
   flipCardFront.style.justifyContent = 'center';
-  flipCardFront.style.background = COLORS.primary.gradient;
   flipCardFront.style.color = 'var(--color-clock-text)';
   flipCardFront.style.fontWeight = 'bold';
   flipCardFront.style.borderRadius = '8px';
@@ -392,7 +393,6 @@ function createSelfAnimatingDigit(digit) {
   flipCardBack.style.display = 'flex';
   flipCardBack.style.alignItems = 'center';
   flipCardBack.style.justifyContent = 'center';
-  flipCardBack.style.background = COLORS.primary.gradient;
   flipCardBack.style.color = 'var(--color-clock-text)';
   flipCardBack.style.fontWeight = 'bold';
   flipCardBack.style.transform = 'rotateX(180deg)';
@@ -1158,24 +1158,78 @@ function createFlipDigit(digit) {
   return digitElement;
 }
 
+/**
+ * Map #working_status label to flip-digit color class.
+ * Keeps previous class when text is momentarily empty (DOM churn) so colors stay stable.
+ */
+function resolveClockColorClassFromStatus(statusEl, fallbackClass) {
+  const safeFallback = fallbackClass || 'style-gradient';
+  if (!statusEl) return safeFallback;
+
+  const raw = (statusEl.textContent || '').replace(/\s+/g, ' ').trim();
+  if (!raw) return safeFallback;
+
+  const lower = raw.toLowerCase();
+
+  // On duty: Jobcan may show 勤務中 or 入室中 (or 出勤中); any of these → working colors
+  const isWorking =
+    raw.includes('勤務中') ||
+    raw.includes('入室中') ||
+    raw.includes('出勤中') ||
+    lower.includes('working');
+
+  const isNotWorking =
+    raw.includes('退室中') ||
+    raw.includes('未出勤') ||
+    lower.includes('not arrived');
+
+  if (isWorking) return 'style-working';
+  if (isNotWorking) return 'style-not-working';
+  return 'style-gradient';
+}
+
+function ensureWorkingStatusObserver() {
+  if (window.__jbe_workingStatusObserverInited) return;
+
+  const bind = (el) => {
+    if (!el || el.dataset.jbeStatusObserved === 'true') return;
+    el.dataset.jbeStatusObserved = 'true';
+    const obs = new MutationObserver(() => {
+      document.querySelectorAll('.flip-clock-container').forEach(updateFlipClockColors);
+    });
+    obs.observe(el, {
+      subtree: true,
+      childList: true,
+      characterData: true,
+      attributes: true,
+      attributeFilter: ['class', 'data-status', 'title']
+    });
+    window.__jbe_workingStatusObserverInited = true;
+  };
+
+  const tryBind = () => {
+    const el = document.getElementById('working_status');
+    if (el) {
+      bind(el);
+      return true;
+    }
+    return false;
+  };
+
+  if (tryBind()) return;
+
+  const mo = new MutationObserver(() => {
+    if (tryBind()) mo.disconnect();
+  });
+  mo.observe(document.documentElement, { childList: true, subtree: true });
+}
+
 // New function to determine working status colors and update the clock
 function updateFlipClockColors(container) {
   // Remember previously applied color to detect changes
   const previousColorClass = container?.dataset?.clockColorClass || '';
-  // Get current working status
   const workingStatus = document.getElementById('working_status');
-  let colorClass = 'style-gradient'; // Default style
-  
-  if (workingStatus) {
-    const statusText = workingStatus.textContent.trim().toLowerCase();
-    if (statusText.includes('勤務中') || statusText.includes('working')) {
-      // Working - blue gradient
-      colorClass = 'style-working';
-    } else if (statusText.includes('退室中') || statusText.includes('未出勤') || statusText.includes('Not Arrived')) {
-      // Left - grey gradient
-      colorClass = 'style-not-working';
-    }
-  }
+  const colorClass = resolveClockColorClassFromStatus(workingStatus, previousColorClass);
   
   // Find the digits container
   const digitsContainer = container.querySelector('.flip-clock-digits-container');
@@ -1193,10 +1247,11 @@ function updateFlipClockColors(container) {
   // Update colon colors by class
   const colonElements = digitsContainer.querySelectorAll('.colon');
   colonElements.forEach(colon => {
-    // Remove existing style classes
     colon.classList.remove('colon-default', 'colon-working', 'colon-not-working');
-    // Apply the matching colon class
-    const colonClass = colorClass.replace('style-', 'colon-');
+    const colonClass =
+      colorClass === 'style-gradient'
+        ? 'colon-default'
+        : colorClass.replace('style-', 'colon-');
     colon.classList.add(colonClass || 'colon-default');
   });
 
