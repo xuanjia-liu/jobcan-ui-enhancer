@@ -2536,6 +2536,12 @@
   .jobcan-enhanced .work-schedule-segment.segment-off {
     background: linear-gradient(90deg, var(--color-work-segment-off-start) 0%, var(--color-work-segment-off-end) 100%);
   }
+
+  .jobcan-enhanced .work-schedule-segment.segment-noon {
+    background: linear-gradient(90deg, var(--color-work-segment-noon-start) 0%, var(--color-work-segment-noon-end) 100%);
+    opacity: 0.96;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-work-segment-noon-end) 35%, transparent 65%);
+  }
   
   .jobcan-enhanced .work-progress-percentage {
     width: 100%;

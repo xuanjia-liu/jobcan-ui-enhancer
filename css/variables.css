@@ -200,6 +200,8 @@
     --color-work-segment-working-end: #13a26b;
     --color-work-segment-off-start: #858e99;
     --color-work-segment-off-end: #77818e;
+    --color-work-segment-noon-start: #e8b931;
+    --color-work-segment-noon-end: #d4a017;
     --color-work-progress-surface-start: #f9fafb;
     --color-work-progress-surface-end: #f1f3f5;
     --color-work-progress-border: rgba(0, 0, 0, 0.08);
@@ -311,6 +313,8 @@
     --color-work-segment-working-end: #2ac18e;
     --color-work-segment-off-start: #3c424b;
     --color-work-segment-off-end: #31363e;
+    --color-work-segment-noon-start: #c9a227;
+    --color-work-segment-noon-end: #a67c0d;
     --color-work-progress-surface-start: rgba(37, 38, 40, 0.18);
     --color-work-progress-surface-end: rgba(24, 25, 27, 0.36);
     --color-work-progress-border: rgba(255, 255, 255, 0.1);

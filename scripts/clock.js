@@ -55,6 +55,12 @@ const WORK_HOURS = {
   }
 };
 
+/** Fixed lunch band in minutes since midnight (13:00–14:00, 1h). Excluded from 本日勤務 totals and drawn as segment-noon. */
+const NOON_BREAK_MINUTES = {
+  start: 13 * 60,
+  end: 14 * 60
+};
+
 // Animation durations
 const ANIMATION = {
   flip: 600, // Slightly longer for smoother animation
@@ -524,6 +530,12 @@ function updateWorkProgressBar(container) {
     else 
       stateClass = 'progress-state-starting'; 
   }
+
+  let statusTextWithDuration = statusText;
+  if (Array.isArray(container._cachedPunchEntries)) {
+    const workedMinutes = getWorkedMinutesToday(container._cachedPunchEntries);
+    statusTextWithDuration = `${statusText} • 本日勤務 ${formatWorkedDurationMinutes(workedMinutes)}`;
+  }
   
   // Batch DOM updates to avoid multiple reflows
   requestAnimationFrame(() => {
@@ -551,7 +563,7 @@ function updateWorkProgressBar(container) {
     }
     
     // Update text content
-    renderProgressText(percentage, statusText);
+    renderProgressText(percentage, statusTextWithDuration);
   });
 
   refreshPunchMarkers(container, false);
@@ -568,6 +580,7 @@ function renderProgressText(percentageElement, statusText) {
   const center = document.createElement('span');
   center.className = 'work-progress-inline-status';
   center.textContent = statusText;
+  center.title = statusText;
 
   const endLabel = document.createElement('span');
   endLabel.className = 'work-progress-inline-label end';
@@ -763,6 +776,57 @@ function buildWorkScheduleSegments(entries) {
   return segments;
 }
 
+/**
+ * Split schedule segments at the noon window so 13:00–14:00 is always `noon` (rest band).
+ * Preserves working/off outside that window; working time overlapping lunch becomes non-counted via `noon` state.
+ */
+function splitSegmentAtNoon(segment) {
+  const { start, end, state } = segment;
+  if (end <= start) return [];
+  const nb = NOON_BREAK_MINUTES.start;
+  const ne = NOON_BREAK_MINUTES.end;
+  if (end <= nb || start >= ne) {
+    return [segment];
+  }
+  const out = [];
+  if (start < nb) {
+    out.push({ start, end: Math.min(end, nb), state });
+  }
+  const lunchStart = Math.max(start, nb);
+  const lunchEnd = Math.min(end, ne);
+  if (lunchStart < lunchEnd) {
+    out.push({ start: lunchStart, end: lunchEnd, state: 'noon' });
+  }
+  if (end > ne) {
+    out.push({ start: Math.max(start, ne), end, state });
+  }
+  return out;
+}
+
+function splitAllSegmentsForNoonBreak(segments) {
+  const result = [];
+  for (const seg of segments) {
+    result.push(...splitSegmentAtNoon(seg));
+  }
+  return result;
+}
+
+function formatWorkedDurationMinutes(totalMinutes) {
+  const m = Math.max(0, Math.floor(totalMinutes));
+  const h = Math.floor(m / 60);
+  const min = m % 60;
+  if (h > 0 && min > 0) return `${h}時間 ${min}分`;
+  if (h > 0) return `${h}時間`;
+  return `${min}分`;
+}
+
+function getWorkedMinutesToday(entries) {
+  const segments = splitAllSegmentsForNoonBreak(buildWorkScheduleSegments(entries));
+  return segments
+    .filter((s) => s.state === 'working')
+    .reduce((acc, s) => acc + (s.end - s.start), 0);
+}
+
 function getOrCreateWorkScheduleLayer(track) {
   let layer = track.querySelector('.work-schedule-layer');
   if (layer) return layer;
@@ -789,13 +853,16 @@ function renderWorkScheduleSegments(track, entries) {
     0;
   const boundaryGapPx = Math.max(boundaryGapPxFromVar, dotWidthPxFromVar);
   const boundaryGapPercent = (boundaryGapPx / trackWidth) * 100;
-  const segments = buildWorkScheduleSegments(entries);
+  const segments = splitAllSegmentsForNoonBreak(buildWorkScheduleSegments(entries));
 
   segments.forEach((segment, index) => {
     if (segment.end <= segment.start) return;
 
     const segmentNode = document.createElement('div');
     segmentNode.className = `work-schedule-segment segment-${segment.state}`;
+    if (segment.state === 'noon') {
+      segmentNode.title = '昼休憩 13:00–14:00';
+    }
 
     const leftRaw = ((segment.start - startMinutes) / totalMinutes) * 100;
     const rightRaw = ((segment.end - startMinutes) / totalMinutes) * 100;
@@ -868,6 +935,7 @@ function refreshPunchMarkers(container, force) {
     container._cachedPunchEntries = targetEntries;
     renderWorkScheduleSegments(track, targetEntries);
     renderPunchMarkers(track, targetEntries);
+    updateWorkProgressBar(container);
   });
 }
 
