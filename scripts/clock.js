@@ -253,14 +253,6 @@ function createSelfAnimatingClock(clockElement) {
   percentageIndicator.className = 'work-progress-percentage';
   progressContainer.appendChild(progressTrack);
   progressContainer.appendChild(percentageIndicator);
-  const rerenderScheduleSegmentsForHover = () => {
-    const cachedEntries = Array.isArray(flipClockContainer._cachedPunchEntries)
-      ? flipClockContainer._cachedPunchEntries
-      : [];
-    renderWorkScheduleSegments(progressTrack, cachedEntries);
-  };
-  progressContainer.addEventListener('mouseenter', rerenderScheduleSegmentsForHover);
-  progressContainer.addEventListener('mouseleave', rerenderScheduleSegmentsForHover);
   if (typeof ResizeObserver !== 'undefined') {
     const scheduleResizeObserver = new ResizeObserver(() => {
       if (!document.body.contains(flipClockContainer)) {
@@ -860,19 +852,18 @@ function renderWorkScheduleSegments(track, entries) {
   const startMinutes = WORK_HOURS.start * 60;
   const totalMinutes = WORK_HOURS.totalMinutes;
   const trackWidth = Math.max(track.clientWidth || 0, 1);
+  void layer.offsetWidth;
   const computedTrackStyle = window.getComputedStyle(track);
   const boundaryGapPxFromVar = parseFloat(computedTrackStyle.getPropertyValue('--work-segment-boundary-gap')) || 0;
-  const dotWidthPxFromVar =
-    parseFloat(computedTrackStyle.getPropertyValue('--work-dot-active-width')) ||
-    parseFloat(computedTrackStyle.getPropertyValue('--work-dot-normal-width')) ||
-    0;
-  const boundaryGapPx = Math.max(boundaryGapPxFromVar, dotWidthPxFromVar);
-  const boundaryGapPercent = (boundaryGapPx / trackWidth) * 100;
+  const dotNormal =
+    parseFloat(computedTrackStyle.getPropertyValue('--work-dot-normal-width')) || 0;
+  const boundaryGapPx = Math.max(boundaryGapPxFromVar, dotNormal);
+  const layerWidthPx = Math.max(layer.clientWidth || trackWidth - dotNormal - 2, 1);
+  const boundaryGapPercent = (boundaryGapPx / layerWidthPx) * 100;
   const segments = splitAllSegmentsForNoonBreak(buildWorkScheduleSegments(entries));
+  const visibleSegments = segments.filter((s) => s.end > s.start);
 
-  segments.forEach((segment, index) => {
-    if (segment.end <= segment.start) return;
-
+  visibleSegments.forEach((segment, visIndex) => {
     const segmentNode = document.createElement('div');
     segmentNode.className = `work-schedule-segment segment-${segment.state}`;
     if (segment.state === 'noon') {
@@ -884,9 +875,9 @@ function renderWorkScheduleSegments(track, entries) {
     let left = leftRaw;
     let right = rightRaw;
 
-    // Keep a visible gap around state boundaries so slim punch/current dots have breathing room.
-    if (index > 0) left += boundaryGapPercent / 2;
-    if (index < segments.length - 1) right -= boundaryGapPercent / 2;
+    // Visible gaps only between consecutive *drawn* bands (avoids wrong edges when array slots are skipped).
+    if (visIndex > 0) left += boundaryGapPercent / 2;
+    if (visIndex < visibleSegments.length - 1) right -= boundaryGapPercent / 2;
 
     left = Math.max(0, Math.min(100, left));
     right = Math.max(0, Math.min(100, right));

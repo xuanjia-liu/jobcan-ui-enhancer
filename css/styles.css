@@ -2532,14 +2532,38 @@
     background: linear-gradient(180deg, var(--color-work-progress-surface-start) 0%, var(--color-work-progress-surface-end) 100%);
     border: 1px solid var(--color-work-progress-border);
     box-shadow: 0 1px 2px rgba(16, 24, 40, 0.06);
-    transition: box-shadow 0.2s ease, border-color 0.2s ease;
+    transition:
+      box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+      border-color 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+      transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
-  .jobcan-enhanced .work-progress-container:hover {
-    border-color: var(--color-work-progress-hover-border);
-    box-shadow: 0 3px 10px rgba(16, 24, 40, 0.08);
+  @media (hover: hover) and (pointer: fine) {
+    .jobcan-enhanced .work-progress-container:hover {
+      border-color: var(--color-work-progress-hover-border);
+      box-shadow: 0 3px 10px rgba(16, 24, 40, 0.08);
+      transform: translateY(-1px);
+    }
+
+    .jobcan-enhanced .work-progress-container:hover .work-punch-marker {
+      width: var(--work-dot-hover-size);
+      height: var(--work-dot-hover-size);
+      border-radius: 50%;
+      box-shadow: 0 0 0 3px var(--color-work-progress-marker-hover-ring), 0 6px 16px var(--color-work-progress-marker-hover-shadow);
+    }
+
+    .jobcan-enhanced .work-progress-container:hover .work-progress-indicator {
+      width: 8px;
+      height: 18px;
+      border-radius: 999px;
+      box-shadow: 0 0 0 4px var(--color-work-progress-indicator-ring), 0 8px 18px var(--color-work-progress-indicator-shadow);
+    }
+
+    .jobcan-enhanced .work-progress-container:hover .work-progress-track {
+      --work-dot-active-width: var(--work-dot-hover-size);
+    }
   }
-  
+
   .jobcan-enhanced .work-progress-container.hidden {
     display: none;
   }
@@ -2561,13 +2585,20 @@
     margin-top: 0;
   }
 
+  .jobcan-enhanced .work-progress-fill {
+    transition: width 800ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
   .jobcan-enhanced .work-schedule-layer {
     position: absolute;
     inset: 0;
     z-index: 1;
     pointer-events: none;
-    left: calc(var(--work-dot-normal-width) / 2 + 1px);
-    width: calc(100% - var(--work-dot-normal-width) - 2px);
+    left: calc(var(--work-dot-active-width) / 2 + 1px);
+    width: calc(100% - var(--work-dot-active-width) - 2px);
+    transition:
+      left 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+      width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   .jobcan-enhanced .work-schedule-segment {
@@ -2677,6 +2708,9 @@
     cursor: pointer;
     z-index: 4;
     transition:
+      width 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+      height 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+      border-radius 0.25s cubic-bezier(0.4, 0, 0.2, 1),
       transform 0.18s ease,
       box-shadow 0.18s ease;
   }
@@ -2694,26 +2728,16 @@
     box-shadow: 0 0 0 2px var(--color-work-progress-indicator-ring), 0 2px 8px var(--color-work-progress-indicator-shadow);
     z-index: 9;
     transition:
+      left 800ms cubic-bezier(0.34, 1.56, 0.64, 1),
+      width 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+      height 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+      border-radius 0.25s cubic-bezier(0.4, 0, 0.2, 1),
       transform 0.18s ease,
       box-shadow 0.18s ease;
   }
 
   .jobcan-enhanced .work-progress-indicator::after {
     display: none;
-  }
-
-  .jobcan-enhanced .work-progress-container:hover .work-punch-marker {
-    width: var(--work-dot-hover-size);
-    height: var(--work-dot-hover-size);
-    border-radius: 50%;
-    box-shadow: 0 0 0 3px var(--color-work-progress-marker-hover-ring), 0 6px 16px var(--color-work-progress-marker-hover-shadow);
-  }
-
-  .jobcan-enhanced .work-progress-container:hover .work-progress-indicator {
-    width: 8px;
-    height: 18px;
-    border-radius: 999px;
-    box-shadow: 0 0 0 4px var(--color-work-progress-indicator-ring), 0 8px 18px var(--color-work-progress-indicator-shadow);
   }
 
   .jbe-punch-tooltip {
@@ -5639,7 +5663,4 @@
   .jobcan-enhanced .sidemenu.closed,
   .jobcan-enhanced #sidemenu.closed {
     display: none !important;
-  }
-  .jobcan-enhanced .work-progress-container:hover .work-progress-track {
-    --work-dot-active-width: var(--work-dot-hover-size);
   }

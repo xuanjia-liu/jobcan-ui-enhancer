@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Jobcan UI Enhancer</title>
+  <title>Jobcan UI エンハンサー</title>
   <meta charset="UTF-8">
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
@@ -45,12 +45,50 @@
       
       --transition-fast: 0.15s ease;
       --transition-normal: 0.25s ease;
+
+      --scrollbar-size: 6px;
+      --scrollbar-thumb: rgba(0, 0, 0, 0.22);
+      --scrollbar-thumb-hover: rgba(0, 0, 0, 0.38);
+      --scrollbar-track: transparent;
+    }
+
+    :root:has(body.dark-mode) {
+      --scrollbar-thumb: rgba(255, 255, 255, 0.28);
+      --scrollbar-thumb-hover: rgba(255, 255, 255, 0.45);
+    }
+
+    /* Reserve gutter so scrollbar never changes usable width; thin custom thumb (Firefox) */
+    html {
+      scrollbar-gutter: stable;
+      scrollbar-width: thin;
+      scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+    }
+
+    html::-webkit-scrollbar {
+      width: var(--scrollbar-size);
+      height: var(--scrollbar-size);
+    }
+
+    html::-webkit-scrollbar-track {
+      background: var(--scrollbar-track);
+    }
+
+    html::-webkit-scrollbar-thumb {
+      background-color: var(--scrollbar-thumb);
+      border-radius: var(--radius-full);
+      border: 2px solid transparent;
+      background-clip: content-box;
+    }
+
+    html::-webkit-scrollbar-thumb:hover {
+      background-color: var(--scrollbar-thumb-hover);
     }
     
     body {
       width: 340px;
       font-family: var(--font-family);
       padding: var(--space-md);
+      padding-right: 4px;
       color: var(--color-text-primary);
       background-color: var(--color-background);
       margin: 0;
@@ -60,9 +98,10 @@
     .popup-header {
       display: flex;
       align-items: center;
-      margin-bottom: var(--space-md);
+      margin-bottom: 0;
       padding-bottom: var(--space-sm);
-      border-bottom: 1px solid rgba(0,0,0,0.06);
+      border-bottom: none;
+      border-image: none;
     }
     
     .popup-logo {
@@ -82,11 +121,11 @@
     }
     
     .setting-group {
-      margin-bottom: var(--space-md);
+      margin-bottom: var(--space-sm);
       background-color: var(--color-card);
       border-radius: var(--radius-md);
       padding: var(--space-sm);
-      box-shadow: var(--shadow-sm);
+      box-shadow: none;
       border: 1px solid rgba(0,0,0,0.04);
     }
     
@@ -95,8 +134,9 @@
       align-items: center;
       justify-content: space-between;
       margin-bottom: var(--space-sm);
-      padding: var(--space-xs) var(--space-xs);
-      border-radius: var(--radius-sm);
+      padding: 8px 12px;
+      background-color: var(--color-surface);
+      border-radius: 12px;
       transition: background-color var(--transition-fast);
     }
     
@@ -199,18 +239,20 @@
     #toast {
       visibility: hidden;
       min-width: 250px;
-      background-color: var(--color-primary);
-      color: white;
+      background-color: rgba(0, 102, 221, 0.2);
+      color: var(--color-text-primary);
       text-align: center;
       border-radius: var(--radius-md);
-      padding: var(--space-sm) var(--space-md);
+      padding: 6px 12px;
       position: fixed;
       z-index: 1000;
       left: 50%;
       transform: translateX(-50%);
-      bottom: 30px;
-      font-size: 0.9rem;
-      box-shadow: var(--shadow-md);
+      bottom: 16px;
+      font-size: 12px;
+      line-height: 15px;
+      box-shadow: 0px 4px 8px 0px rgba(0, 0, 0, 0.08);
+      backdrop-filter: blur(20px);
     }
     
     #toast.show {
@@ -220,23 +262,12 @@
     
     @keyframes fadein {
       from {bottom: 0; opacity: 0;}
-      to {bottom: 30px; opacity: 1;}
+      to {bottom: 16px; opacity: 1;}
     }
     
     @keyframes fadeout {
-      from {bottom: 30px; opacity: 1;}
+      from {bottom: 16px; opacity: 1;}
       to {bottom: 0; opacity: 0;}
-    }
-    
-    .note {
-      background-color: var(--color-surface);
-      border-left: 3px solid var(--color-primary);
-      padding: var(--space-sm) var(--space-md);
-      margin-top: var(--space-md);
-      font-size: 0.75rem;
-      color: var(--color-text-secondary);
-      border-radius: var(--radius-sm);
-      box-shadow: var(--shadow-sm);
     }
     
     .footer {
@@ -244,8 +275,9 @@
       color: var(--color-text-secondary);
       margin-top: var(--space-md);
       text-align: center;
-      border-top: 1px solid rgba(0,0,0,0.06);
-      padding-top: var(--space-sm);
+      border-top: none;
+      border-image: none;
+      padding-top: 0;
     }
     
     /* Coming soon badge */
@@ -270,7 +302,7 @@
     body.dark-mode .setting-group {
       background-color: #272736;
       border-color: #3a3a4c;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+      box-shadow: none;
     }
 
     
@@ -278,21 +310,33 @@
       color: #e4e6eb;
     }
     
+    body.dark-mode .setting-item {
+      background-color: #2a2a3c;
+      color: #e4e6eb;
+    }
+    
+    body.dark-mode .setting-item-label {
+      color: #e4e6eb;
+    }
+    
     body.dark-mode .setting-item:hover {
-      background-color: rgba(255, 255, 255, 0.05);
+      background-color: #32324a;
     }
     
     body.dark-mode .setting-item-description {
       color: #b0b3b8;
     }
     
-    body.dark-mode .popup-header {
-      border-bottom-color: #3a3a4c;
+    body.dark-mode .popup-header h1 {
+      color: #ffffff;
     }
     
     body.dark-mode .footer {
-      border-top-color: #3a3a4c;
       color: #b0b3b8;
+    }
+
+    body.dark-mode #toast {
+      color: #e4e6eb;
     }
     
     body.dark-mode .quick-access-btn {
@@ -308,11 +352,17 @@
     body.dark-mode .main-btn {
       background-color: var(--color-primary);
     }
-    
-    body.dark-mode .note {
+
+    body.dark-mode #quickOpenBtn {
       background-color: #2a2a3c;
-      border-left-color: var(--color-primary);
       color: #b0b3b8;
+      border-color: #3a3a4c;
+    }
+
+    body.dark-mode #quickOpenBtn:hover {
+      background-color: var(--color-primary-dark);
+      color: #ffffff;
+      box-shadow: var(--shadow-hover);
     }
     
     body.dark-mode .radio-group {
@@ -370,20 +420,94 @@
       box-shadow: var(--shadow-sm);
     }
     
+    .setting-section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin: 0;
+      padding-bottom: 4px;
+    }
+    
+    .login-settings-icon-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 4px;
+      margin: 0;
+      border: none;
+      background: transparent;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      color: var(--color-text-secondary);
+      flex-shrink: 0;
+      transition: background-color var(--transition-fast), color var(--transition-fast);
+    }
+    
+    .login-settings-icon-btn:hover {
+      background-color: rgba(0, 0, 0, 0.06);
+      color: var(--color-primary);
+    }
+    
+    body.dark-mode .login-settings-icon-btn {
+      color: #b0b3b8;
+    }
+    
+    body.dark-mode .login-settings-icon-btn:hover {
+      background-color: rgba(255, 255, 255, 0.08);
+      color: #e4e6eb;
+    }
+    
     .setting-section-title {
       font-size: 0.9rem;
-      margin: 0 0 10px 0;
+      margin: 0;
       color: var(--color-text-primary);
       font-weight: 600;
-      padding-bottom: 4px;
-      border-bottom: 1px solid var(--color-border-light);
+      flex: 1;
+      min-width: 0;
+    }
+    
+    .setting-group > .setting-section-title {
+      margin: 0 0 10px 0;
+      padding-bottom: 0px;
+    }
+    
+    .quick-open-menu {
+      width: 260px;
+      max-height: min(70vh, 360px);
+      overflow-y: auto;
+      left: 0;
+      right: auto;
+      scrollbar-width: thin;
+      scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+    }
+
+    .quick-open-menu::-webkit-scrollbar {
+      width: var(--scrollbar-size);
+      height: var(--scrollbar-size);
+    }
+
+    .quick-open-menu::-webkit-scrollbar-track {
+      background: var(--scrollbar-track);
+    }
+
+    .quick-open-menu::-webkit-scrollbar-thumb {
+      background-color: var(--scrollbar-thumb);
+      border-radius: var(--radius-full);
+      border: 2px solid transparent;
+      background-clip: content-box;
+    }
+
+    .quick-open-menu::-webkit-scrollbar-thumb:hover {
+      background-color: var(--scrollbar-thumb-hover);
     }
     
     /* Quick access button styling */
     .quick-access-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
+      display: flex;
+      flex-direction: column;
       gap: 8px;
+      height: fit-content;
     }
     
     .quick-access-btn {
@@ -426,13 +550,91 @@
       background-color: var(--color-primary-dark);
     }
 
+    #employeeLoginBtn,
+    #quickOpenBtn {
+      gap: 4px;
+    }
+
+    #employeeLoginBtn {
+      justify-content: center;
+      border: none;
+      border-image: none;
+      padding-top: 10px;
+      padding-bottom: 10px;
+    }
+
+    #employeeLoginBtn span {
+      font-size: 14px;
+    }
+
+    #quickOpenBtn {
+      justify-content: center;
+      background-color: var(--color-background);
+      color: var(--color-text-secondary);
+      width: 100%;
+      min-width: 0;
+      flex: 1 1 auto;
+    }
+
+    #quickOpenBtn:hover {
+      background-color: var(--color-surface);
+      color: var(--color-text-primary);
+      box-shadow: var(--shadow-sm);
+    }
+
+    #quickOpenBtn .btn-icon {
+      display: block;
+      width: 16px;
+      height: 16px;
+      margin-right: 0;
+      margin-left: var(--space-xs);
+    }
+
     .login-form {
       grid-column: span 2;
-      background-color: var(--color-surface);
-      border-radius: var(--radius-md);
-      padding: var(--space-sm);
-      box-shadow: var(--shadow-sm);
-      border: 1px solid rgba(0,0,0,0.04);
+      width: 100%;
+      min-height: 0;
+      background: unset;
+      border-radius: 0;
+      border: 0 none;
+      border-image: none;
+      box-sizing: content-box;
+      /* Collapsed (no .is-open): animate open/close without display toggling */
+      max-height: 0;
+      opacity: 0;
+      overflow: visible;
+      padding-block: 0;
+      padding-inline: 0;
+      margin: 0;
+      box-shadow: none;
+      visibility: hidden;
+      pointer-events: none;
+      transform: translateY(-6px);
+      transition:
+        max-height 0.38s cubic-bezier(0.4, 0, 0.2, 1),
+        opacity 0.28s ease,
+        padding 0.38s cubic-bezier(0.4, 0, 0.2, 1),
+        margin 0.38s ease,
+        transform 0.38s cubic-bezier(0.4, 0, 0.2, 1),
+        visibility 0s linear 0.38s;
+    }
+
+    .login-form.is-open {
+      max-height: 480px;
+      opacity: 1;
+      overflow: visible;
+      padding: var(--space-sm) 0;
+      margin: 0;
+      visibility: visible;
+      pointer-events: auto;
+      transform: translateY(0);
+      transition:
+        max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+        opacity 0.32s ease 0.04s,
+        padding 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+        margin 0.4s ease,
+        transform 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+        visibility 0s linear 0s;
     }
     
     .btn-icon {
@@ -442,17 +644,21 @@
       flex-shrink: 0;
       color: inherit;
     }
+
+    .material-icons.btn-icon {
+      width: 16px;
+      height: 16px;
+    }
     
     /* Dropdown menu styling */
     .dropdown-container {
       position: relative;
-    }
-    
-    .expand-icon {
-      margin-left: auto;
-      font-weight: bold;
-      font-size: 14px;
-      transition: transform var(--transition-fast);
+      grid-column: span 2;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      min-width: 0;
     }
     
     .sub-menu {
@@ -516,6 +722,7 @@
       display: flex;
       flex-direction: column;
       gap: var(--space-md);
+      width: 100%;
     }
     
     .login-field {
@@ -543,6 +750,47 @@
       border-color: var(--color-primary);
       outline: none;
       box-shadow: 0 0 0 2px rgba(0, 102, 221, 0.2);
+    }
+    
+    .login-field-password-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+    
+    .login-field-password-wrap input {
+      width: 100%;
+      box-sizing: border-box;
+      padding-right: 40px;
+    }
+    
+    .password-toggle-btn {
+      position: absolute;
+      right: 4px;
+      top: 50%;
+      transform: translateY(-50%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      padding: 0;
+      margin: 0;
+      border: none;
+      border-radius: var(--radius-sm);
+      background: transparent;
+      color: var(--color-text-secondary);
+      cursor: pointer;
+      transition: background-color var(--transition-fast), color var(--transition-fast);
+    }
+    
+    .password-toggle-btn:hover {
+      background-color: rgba(0, 0, 0, 0.06);
+      color: var(--color-primary);
+    }
+    
+    .password-toggle-btn .material-icons {
+      font-size: 20px;
     }
     
     .remember-me {
@@ -603,11 +851,6 @@
    
     
     /* Dark mode styles for login form */
-    body.dark-mode .login-form {
-      background-color: #2a2a3c;
-      border-color: #3a3a4c;
-    }
-
     body.dark-mode .login-field label {
       color: #e4e6eb;
     }
@@ -621,6 +864,15 @@
     body.dark-mode .login-field input:focus {
       border-color: var(--color-primary);
       box-shadow: 0 0 0 2px rgba(0, 102, 221, 0.3);
+    }
+    
+    body.dark-mode .password-toggle-btn {
+      color: #b0b3b8;
+    }
+    
+    body.dark-mode .password-toggle-btn:hover {
+      background-color: rgba(255, 255, 255, 0.08);
+      color: #e4e6eb;
     }
     
     body.dark-mode .checkbox-container {
@@ -650,56 +902,65 @@
 </head>
 <body>
   <div class="popup-header">
-    <img src="icons/icon48.png" alt="Jobcan UI Enhancer" class="popup-logo">
-    <h1>Jobcan UI Enhancer</h1>
+    <img src="icons/icon48.png" alt="Jobcan UI エンハンサー" class="popup-logo">
+    <h1>Jobcan UI エンハンサー</h1>
   </div>
   
   <div class="setting-group">
-    <h2 class="setting-section-title">Quick Access</h2>
+    <div class="setting-section-header">
+      <h2 class="setting-section-title">クイックアクセス</h2>
+      <button type="button" class="login-settings-icon-btn" aria-label="ログイン設定" title="ログイン設定">
+        <i class="material-icons" id="loginSettingsIcon" style="font-size: 16px;">settings</i>
+      </button>
+    </div>
     
     <div class="quick-access-grid">
-      <button id="employeeLoginBtn" class="quick-access-btn main-btn">
-        <img src="icons/icon48.png" alt="Jobcan" class="btn-icon">
-        <span>Employee Login</span>
-        <i class="material-icons" id="loginSettingsIcon" style="margin-left: auto; font-size: 16px;">settings</i>
-      </button>
-       <!-- Login Form (Hidden by default) -->
-      <div id="loginForm" class="login-form" style="display:none;">
-        <h2 class="setting-section-title">Jobcan Login</h2>
-        
+      <!-- Login Form (Hidden by default) -->
+      <div id="loginForm" class="login-form" inert>
         <div class="login-container">
           <div class="login-field">
-            <label for="loginEmail">Email or ID</label>
-            <input type="text" id="loginEmail" placeholder="Enter your email or ID" />
+            <label for="loginEmail">メールアドレスまたはID</label>
+            <input type="text" id="loginEmail" placeholder="メールアドレスまたはIDを入力" />
           </div>
           
           <div class="login-field">
-            <label for="loginPassword">Password</label>
-            <input type="password" id="loginPassword" placeholder="Enter your password" />
+            <label for="loginPassword">パスワード</label>
+            <div class="login-field-password-wrap">
+              <input type="password" id="loginPassword" placeholder="パスワードを入力" autocomplete="current-password" />
+              <button type="button" class="password-toggle-btn" id="togglePasswordVisibility" aria-label="パスワードを表示" aria-pressed="false" title="パスワードを表示">
+                <i class="material-icons" aria-hidden="true">visibility</i>
+              </button>
+            </div>
           </div>
           
           <div class="remember-me">
             <label class="checkbox-container">
               <input type="checkbox" id="rememberLogin">
               <span class="checkmark"></span>
-              Remember ID and PW
+              IDとパスワードを記憶する
             </label>
-            <div class="security-note" id="securityNote" style="display: none;">⚠️ Use only on personal devices</div>
+            <div class="security-note" id="securityNote" style="display: none;">⚠️ 個人用端末でのみご利用ください</div>
           </div>
         </div>
       </div>
-      <a href="https://ssl.jobcan.jp/employee/attendance" class="quick-access-btn">
-        <i class="material-icons btn-icon">calendar_today</i>
-        <span>出勤簿</span>
-      </a>
+
+      <button id="employeeLoginBtn" class="quick-access-btn main-btn">
+        <img src="icons/icon48.png" alt="ジョブカン" class="btn-icon">
+        <span>ログイン</span>
+      </button>
       
       <div class="dropdown-container">
-        <a href="#" class="quick-access-btn">
-          <i class="material-icons btn-icon">access_time</i>
-          <span>打刻修正</span>
-          <span class="expand-icon" id="timeCorrection-expand">+</span>
-        </a>
-        <div class="sub-menu" id="timeCorrection-menu">
+        <button type="button" class="quick-access-btn main-btn" id="quickOpenBtn">
+          <span>ページを開く</span>
+          <svg class="btn-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+        </button>
+        <div class="sub-menu quick-open-menu" id="quickOpen-menu">
+          <a href="https://ssl.jobcan.jp/employee/attendance" class="sub-menu-item">
+            <i class="material-icons" style="font-size: 16px;">calendar_today</i>
+            出勤簿
+          </a>
           <a href="https://ssl.jobcan.jp/employee/adit" class="sub-menu-item">
             <i class="material-icons" style="font-size: 16px;">edit</i>
             打刻修正(1日1件単位)
@@ -708,16 +969,6 @@
             <i class="material-icons" style="font-size: 16px;">date_range</i>
             出退勤編集(1か月単位)
           </a>
-        </div>
-      </div>
-      
-      <div class="dropdown-container">
-        <a href="#" class="quick-access-btn">
-          <i class="material-icons btn-icon">build</i>
-          <span>工数管理</span>
-          <span class="expand-icon" id="manHour-expand">+</span>
-        </a>
-        <div class="sub-menu" id="manHour-menu">
           <a href="https://ssl.jobcan.jp/employee/man-hour-manage" class="sub-menu-item">
             <i class="material-icons" style="font-size: 16px;">work</i>
             工数管理
@@ -726,16 +977,6 @@
             <i class="material-icons" style="font-size: 16px;">list</i>
             工数かんたん入力設定
           </a>
-        </div>
-      </div>
-      
-      <div class="dropdown-container">
-        <a href="#" class="quick-access-btn">
-          <i class="material-icons btn-icon">description</i>
-          <span>申請</span>
-          <span class="expand-icon" id="application-expand">+</span>
-        </a>
-        <div class="sub-menu" id="application-menu">
           <a href="https://ssl.jobcan.jp/employee/holiday" class="sub-menu-item">
             <i class="material-icons" style="font-size: 16px;">event_available</i>
             休暇申請
@@ -748,40 +989,21 @@
             <i class="material-icons" style="font-size: 16px;">today</i>
             休日出勤申請
           </a>
+          <a href="https://ssl.jobcan.jp/employee/edit-info" class="sub-menu-item">
+            <i class="material-icons" style="font-size: 16px;">settings</i>
+            スタッフ設定
+          </a>
         </div>
       </div>
-      
-      <a href="https://ssl.jobcan.jp/employee/edit-info" class="quick-access-btn">
-        <i class="material-icons btn-icon">settings</i>
-        <span>スタッフ設定</span>
-      </a>
-    </div>
-  </div>
-
- 
-
-  <div class="setting-group">
-    <h2 class="setting-section-title">Debug & Testing</h2>
-    
-    <div class="quick-access-grid">
-      <button id="testParticleBtn" class="quick-access-btn">
-        <i class="material-icons btn-icon">auto_fix_high</i>
-        <span>Test Particles</span>
-      </button>
-      
-      <button id="debugInfoBtn" class="quick-access-btn">
-        <i class="material-icons btn-icon">bug_report</i>
-        <span>Debug Info</span>
-      </button>
     </div>
   </div>
 
   <div class="setting-group">
-    <h2 class="setting-section-title">Display Settings</h2>
+    <h2 class="setting-section-title">表示設定</h2>
     
     <div class="setting-item">
       <div class="setting-info">
-        <span class="setting-item-label">Dark Mode</span>
+        <span class="setting-item-label">ダークモード</span>
       </div>
       <label class="toggle-switch">
         <input type="checkbox" id="darkMode">
@@ -791,7 +1013,7 @@
     
     <div class="setting-item">
       <div class="setting-info">
-        <div class="setting-item-label">Clock Size</div>
+        <div class="setting-item-label">時計のサイズ</div>
       </div>
       <div class="setting-control radio-group">
         <label class="radio-option">
@@ -811,7 +1033,7 @@
     
     <div class="setting-item">
       <div class="setting-info">
-        <div class="setting-item-label">Show Seconds</div>
+        <div class="setting-item-label">秒を表示</div>
       </div>
       <label class="toggle-switch">
         <input type="checkbox" id="showSeconds" checked>
@@ -821,7 +1043,7 @@
     
     <div class="setting-item">
       <div class="setting-info">
-        <div class="setting-item-label">Work Progress Bar</div>
+        <div class="setting-item-label">勤務進捗バー</div>
       </div>
       <label class="toggle-switch">
         <input type="checkbox" id="showProgressBar" checked>
@@ -829,13 +1051,9 @@
       </label>
     </div>
   </div>
-
-  <div class="note">
-    Refresh page after changing settings to apply.
-  </div>
   
   <div class="footer">
-    Version 1.2.3
+    バージョン 1.2.3
   </div>
 
   <div id="toast"></div>
