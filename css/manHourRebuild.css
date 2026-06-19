@@ -216,32 +216,49 @@
 /* ------------------------------------------------------------------ */
 /* Dark-mode skin for the native project/task autocomplete dropdown    */
 /* ------------------------------------------------------------------ */
-/* The project/task search uses Jobcan's own jQuery-UI autocomplete (its
-   search source is widened in scripts/manHourEditSearch.js). The widget is
-   appended to <body> and carries no theme of its own, so in dark mode it
-   renders as a bright white panel floating on the dark UI. Give it a matching
-   dark skin. Light mode is left to the native look — it already matches the
-   light page. Both jQuery-UI markup variants are covered: the newer
-   .ui-menu-item-wrapper and the older .ui-menu-item > a. */
+/* The project/task search uses Jobcan's own jQuery-UI autocomplete (its search
+   source is widened in scripts/manHourEditSearch.js). Verified against the live
+   page: the menu <ul> carries Bootstrap utility classes — notably `bg-white`
+   (background:#fff !important) — and its rows get light (#eee) backgrounds. So
+   the panel stays white on the dark UI and any themed text turns invisible.
+   We therefore override with !important and ul-/li-qualified selectors that
+   out-specify the utility classes. jQuery-UI may put the highlight class on the
+   <li>, on the .ui-menu-item-wrapper, or on an older <a>, so all three are
+   covered. Light mode is left to the native look — it already matches the page. */
 
-.jobcan-enhanced body.dark-mode .ui-autocomplete {
-  background: var(--color-card, #272736);
-  border-color: var(--color-control-border, #4a4a64);
+.jobcan-enhanced body.dark-mode ul.ui-autocomplete,
+.jobcan-enhanced body.dark-mode ul.ui-autocomplete.bg-white {
+  background-color: var(--color-card, #272736) !important;
+  border-color: var(--color-control-border, #4a4a64) !important;
   box-shadow: var(--shadow-dropdown, 0 4px 12px rgba(0, 0, 0, 0.4));
 }
 
-.jobcan-enhanced body.dark-mode .ui-autocomplete .ui-menu-item-wrapper,
-.jobcan-enhanced body.dark-mode .ui-autocomplete .ui-menu-item > a {
-  color: var(--color-text-primary, #e4e6eb);
-  background: transparent;
-  border-color: transparent;
+/* Kill the Bootstrap/jQuery-UI light row backgrounds so the dark panel shows. */
+.jobcan-enhanced body.dark-mode ul.ui-autocomplete > li.ui-menu-item {
+  background-color: transparent !important;
 }
 
-.jobcan-enhanced body.dark-mode .ui-autocomplete .ui-menu-item-wrapper.ui-state-active,
-.jobcan-enhanced body.dark-mode .ui-autocomplete .ui-menu-item-wrapper.ui-state-focus,
-.jobcan-enhanced body.dark-mode .ui-autocomplete .ui-menu-item > a.ui-state-active,
-.jobcan-enhanced body.dark-mode .ui-autocomplete .ui-menu-item > a.ui-state-focus {
-  background: var(--color-primary, #0077ff);
-  color: #ffffff;
-  border-color: var(--color-primary, #0077ff);
+.jobcan-enhanced body.dark-mode ul.ui-autocomplete .ui-menu-item-wrapper,
+.jobcan-enhanced body.dark-mode ul.ui-autocomplete .ui-menu-item > a {
+  color: var(--color-text-primary, #e4e6eb) !important;
+  background-color: transparent !important;
+  border-color: transparent !important;
+}
+
+/* Highlighted (hovered / keyboard-focused) row. */
+.jobcan-enhanced body.dark-mode ul.ui-autocomplete > li.ui-menu-item.ui-state-focus,
+.jobcan-enhanced body.dark-mode ul.ui-autocomplete > li.ui-menu-item.ui-state-active,
+.jobcan-enhanced body.dark-mode ul.ui-autocomplete .ui-menu-item-wrapper.ui-state-active,
+.jobcan-enhanced body.dark-mode ul.ui-autocomplete .ui-menu-item-wrapper.ui-state-focus,
+.jobcan-enhanced body.dark-mode ul.ui-autocomplete .ui-menu-item > a.ui-state-active,
+.jobcan-enhanced body.dark-mode ul.ui-autocomplete .ui-menu-item > a.ui-state-focus {
+  background-color: var(--color-primary, #0077ff) !important;
+  color: #ffffff !important;
+  border-color: var(--color-primary, #0077ff) !important;
+}
+
+/* When the highlight sits on the <li>, force the inner text white for contrast. */
+.jobcan-enhanced body.dark-mode ul.ui-autocomplete > li.ui-menu-item.ui-state-focus .ui-menu-item-wrapper,
+.jobcan-enhanced body.dark-mode ul.ui-autocomplete > li.ui-menu-item.ui-state-active .ui-menu-item-wrapper {
+  color: #ffffff !important;
 }
