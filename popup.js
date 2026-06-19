@@ -67,8 +67,20 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   );
   
-  // Load saved login if "remember me" was checked
-  chrome.storage.sync.get(['rememberedLogin'], function(result) {
+  // Security migration: older builds saved credentials to chrome.storage.sync
+  // (cloud-replicated through the user's Google account). Move any synced copy to
+  // local and delete the synced one. Credentials now live only in storage.local.
+  chrome.storage.sync.get(['rememberedLogin'], function(syncResult) {
+    if (syncResult.rememberedLogin) {
+      chrome.storage.local.set({ rememberedLogin: syncResult.rememberedLogin });
+      chrome.storage.sync.remove(['rememberedLogin']);
+    }
+  });
+
+  // Load saved login if "remember me" was checked. Stored in storage.LOCAL
+  // (device-only): storage.sync would replicate the saved password to every
+  // signed-in device.
+  chrome.storage.local.get(['rememberedLogin'], function(result) {
     if (result.rememberedLogin) {
       loginEmail.value = result.rememberedLogin.email || '';
       // If we have saved password, populate it
@@ -231,15 +243,16 @@ document.addEventListener('DOMContentLoaded', function() {
       
       // Persist or clear stored credentials based on Remember checkbox
       if (rememberLogin.checked) {
-        chrome.storage.sync.set({
+        chrome.storage.local.set({
           rememberedLogin: {
             email: email,
             password: password,
             rememberChecked: true
           }
         });
-        showToast('⚠️ パスワードは拡張機能に保存されます。個人用端末でのみご利用ください。', 5000);
+        showToast('⚠️ パスワードはこの端末内にのみ保存されます。個人用端末でのみご利用ください。', 5000);
       } else {
+        chrome.storage.local.remove(['rememberedLogin']);
         chrome.storage.sync.remove(['rememberedLogin']);
       }
       
@@ -329,6 +342,7 @@ document.addEventListener('DOMContentLoaded', function() {
   rememberLogin.addEventListener('change', function() {
     securityNote.style.display = this.checked ? 'block' : 'none';
     if (!this.checked) {
+      chrome.storage.local.remove(['rememberedLogin']);
       chrome.storage.sync.remove(['rememberedLogin']);
     }
   });

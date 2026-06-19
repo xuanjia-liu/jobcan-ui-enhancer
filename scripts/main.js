@@ -130,10 +130,9 @@ function applyEnhancements() {
   // standalone page (no modal) and the achievement list renders asynchronously
   // via a Web Worker, backed by a new REST API. These handlers target the new
   // DOM and API (see scripts/manHourApi.js, scripts/manHourEdit.js,
-  // scripts/manHourList.js). The legacy modal/select-based handlers
-  // (convertManHourModalToSidePanel, enhanceModalTitle, enhanceManHourSelectLists,
-  // simplifyTableHeaders, setupTableFilterButtons) no longer match anything and
-  // are intentionally no longer invoked.
+  // scripts/manHourList.js). The legacy modal/select-based handlers and the old
+  // scripts/tableFilter.js report were removed in the cleanup after the rebuild,
+  // since they targeted DOM that no longer exists.
   if (isManHourPage && typeof setupFormValidationObserver === 'function') {
     setupFormValidationObserver();
   }

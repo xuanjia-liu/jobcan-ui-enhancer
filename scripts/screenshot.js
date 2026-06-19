@@ -1096,23 +1096,28 @@ function addFormScreenshotButton() {
     form.appendChild(buttonContainer);
   });
   
-  // Add screenshot button to modal footers before save button
-  const observer = new MutationObserver((mutations) => {
-    const modalFooters = document.querySelectorAll('.modal-footer, .jbc-modal-footer');
-    modalFooters.forEach(footer => {
-      // Skip if screenshot button already added to this footer
-      if (footer.dataset.screenshotEnhanced === 'true') return;
-      footer.dataset.screenshotEnhanced = 'true';
-      let saveButton = footer.querySelector('#save, button[type="submit"], input[type="submit"]');
-      if (!saveButton) {
-        // Fallback to first button in footer
-        saveButton = footer.querySelector('button');
-      }
-      if (!saveButton) return;
-      createFooterCaptureButtons(footer, saveButton);
+  // Watch for dynamically-added modal footers. Guard so exactly ONE observer
+  // exists for the page lifetime: addFormScreenshotButton() runs on every
+  // applyEnhancements(), so an unguarded observer leaks one body observer per re-apply.
+  if (!window.__jbe_formScreenshotFooterObserver) {
+    const observer = new MutationObserver(() => {
+      const modalFooters = document.querySelectorAll('.modal-footer, .jbc-modal-footer');
+      modalFooters.forEach(footer => {
+        // Skip if screenshot button already added to this footer
+        if (footer.dataset.screenshotEnhanced === 'true') return;
+        footer.dataset.screenshotEnhanced = 'true';
+        let saveButton = footer.querySelector('#save, button[type="submit"], input[type="submit"]');
+        if (!saveButton) {
+          // Fallback to first button in footer
+          saveButton = footer.querySelector('button');
+        }
+        if (!saveButton) return;
+        createFooterCaptureButtons(footer, saveButton);
+      });
     });
-  });
-  observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+    window.__jbe_formScreenshotFooterObserver = observer;
+  }
 
   // Initial run for existing modal footers
   document.querySelectorAll('.modal-footer, .jbc-modal-footer').forEach(footer => {

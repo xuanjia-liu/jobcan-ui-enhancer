@@ -262,3 +262,238 @@
 .jobcan-enhanced body.dark-mode ul.ui-autocomplete > li.ui-menu-item.ui-state-active .ui-menu-item-wrapper {
   color: #ffffff !important;
 }
+
+/* ------------------------------------------------------------------ */
+/* Dark-mode skin for the 調整 (man-hour adjust) popup #manhour_dialog  */
+/* ------------------------------------------------------------------ */
+/* The 調整 button opens Jobcan's manual-adjust popover (#manhour_dialog): the
+   実労働時間 / 残り時間 radios, a slider, a % input and an 入力 button. It is a
+   Bootstrap `bg-white` panel (background:#fff !important), so it stays white in
+   dark mode while our themed text/controls turn light — washed-out light-on-white
+   where the radio labels and the "hh:mm / hh:mm 時間" summary become nearly
+   invisible (verified live). Re-skin the panel for dark mode (same bg-white
+   problem as the autocomplete dropdown above); the inner controls already theme
+   correctly once the panel itself is dark. Light mode keeps the native white look. */
+
+.jobcan-enhanced body.dark-mode #manhour_dialog,
+.jobcan-enhanced body.dark-mode #manhour_dialog.bg-white {
+  background-color: var(--color-card, #272736) !important;
+  border-color: var(--color-control-border, #4a4a64) !important;
+  color: var(--color-text-primary, #e4e6eb) !important;
+  box-shadow: var(--shadow-dropdown, 0 8px 24px rgba(0, 0, 0, 0.5)) !important;
+}
+
+/* ------------------------------------------------------------------ */
+/* Dark-mode fix: edit table's "empty/incomplete row" indicator        */
+/* ------------------------------------------------------------------ */
+/* Verified against the live edit-achievement page: Jobcan flags rows with
+   no project selected with class `.empty` and paints the <tr>, every input
+   (.unit/.note/.manhour/.select) and the 調整 (.adjust) button
+   rgba(238,238,238,.667) — a light "fill me in" gray that reads fine on the
+   white page but becomes a glaring light band in dark mode. Re-tint for dark:
+   a faint light overlay still marks the row as empty without lighting it up,
+   the inputs use the normal dark control background, and the white utility
+   border (Bootstrap `border-white`) is softened to the themed control border. */
+
+.jobcan-enhanced body.dark-mode .jbc-table tr.empty,
+.jobcan-enhanced body.dark-mode .jbc-table tr.empty > td {
+  background-color: rgba(255, 255, 255, 0.04) !important;
+}
+
+.jobcan-enhanced body.dark-mode .jbc-table input.unit,
+.jobcan-enhanced body.dark-mode .jbc-table input.note,
+.jobcan-enhanced body.dark-mode .jbc-table input.manhour,
+.jobcan-enhanced body.dark-mode .jbc-table input.select,
+.jobcan-enhanced body.dark-mode .jbc-table tr.empty input {
+  background-color: var(--color-control-bg, #2f3042) !important;
+  color: var(--color-text-primary, #e4e6eb) !important;
+}
+
+.jobcan-enhanced body.dark-mode .jbc-table .border-white {
+  border-color: var(--color-control-border, #4a4a64) !important;
+}
+
+.jobcan-enhanced body.dark-mode .jbc-table .btn.adjust {
+  background-color: transparent !important;
+  color: var(--color-primary, #0077ff) !important;
+  border-color: var(--color-primary, #0077ff) !important;
+}
+
+/* ------------------------------------------------------------------ */
+/* "Outline danger" buttons (e.g. 削除 on the man-hour edit page)       */
+/* ------------------------------------------------------------------ */
+/* Jobcan marks its delete button `btn jbc-btn-outline-primary text-danger
+   border-danger` — i.e. an outline-DANGER button (red text + border, no fill).
+   But the extension's generic `.btn` rule (css/styles.css) fills every button
+   solid --color-primary (blue) with white text, which strands the red
+   `.text-danger` label on a blue background — illegible in BOTH themes (verified
+   live). Restore the intended outline-danger affordance: transparent fill with
+   danger-red text/border at rest, solid-red fill with white text on hover —
+   which reads cleanly on the white page and on the dark UI alike. */
+
+.jobcan-enhanced .btn.text-danger.border-danger {
+  background-color: transparent !important;
+  color: var(--color-danger, #DC3545) !important;
+  border: 1px solid var(--color-danger, #DC3545) !important;
+}
+
+.jobcan-enhanced .btn.text-danger.border-danger:hover,
+.jobcan-enhanced .btn.text-danger.border-danger:focus {
+  background-color: var(--color-danger, #DC3545) !important;
+  color: #ffffff !important;
+  border-color: var(--color-danger, #DC3545) !important;
+  box-shadow: 0 4px 12px rgba(220, 53, 69, 0.30) !important;
+}
+
+/* Dark mode: brighten the resting red so the label/border clear the dark toolbar
+   (plain --color-danger sits ~3.7:1 there). Same 72/28 mix as the mismatch-date
+   fix above; hover keeps the solid-red fill with white text. */
+.jobcan-enhanced body.dark-mode .btn.text-danger.border-danger {
+  color: color-mix(in srgb, var(--color-danger, #DC3545) 72%, #ffffff 28%) !important;
+  border-color: color-mix(in srgb, var(--color-danger, #DC3545) 72%, #ffffff 28%) !important;
+}
+
+.jobcan-enhanced body.dark-mode .btn.text-danger.border-danger:hover,
+.jobcan-enhanced body.dark-mode .btn.text-danger.border-danger:focus {
+  background-color: var(--color-danger, #DC3545) !important;
+  color: #ffffff !important;
+  border-color: var(--color-danger, #DC3545) !important;
+}
+
+/* ------------------------------------------------------------------ */
+/* Dark-mode fix: Jobcan's light utility backgrounds                   */
+/* ------------------------------------------------------------------ */
+/* Jobcan paints several surfaces with light utilities that don't follow dark
+   mode. Verified on the live pages: `.jbc-bg-light` (#f7f7f7 — e.g. the
+   achievement-list "表示月度" search bar) and the <thead> element of its data
+   tables (#e6e6e6, while the body rows are already transparent). Re-tint both
+   for dark. (The autocomplete's Bootstrap `bg-white` is handled in its own
+   block above.) */
+
+.jobcan-enhanced body.dark-mode .jbc-bg-light {
+  background-color: var(--color-surface, #2a2a3c) !important;
+  color: var(--color-text-primary, #e4e6eb) !important;
+}
+
+.jobcan-enhanced body.dark-mode .jbc-table thead,
+.jobcan-enhanced body.dark-mode .jbc-table thead tr {
+  background-color: var(--color-gray-100, #33333f) !important;
+}
+
+/* ------------------------------------------------------------------ */
+/* Autocomplete options: pin / copy buttons + dark-mode scrollbar      */
+/* ------------------------------------------------------------------ */
+/* The pin-to-top and copy buttons are injected into each option by
+   scripts/manHourEditSearch.js. We reserve space on the right of every row so
+   they never overlap the label, reveal them on hover, and keep them visible on
+   pinned rows. Buttons use `color: inherit` so the icons read correctly on the
+   light (native) dropdown, the dark (themed) dropdown, and the highlighted row.
+   Applies in both themes. */
+
+/* Two-row option: project name on top, smaller dimmed "ID:…" below. Jobcan
+   renders each option as a single fixed-height line with inline-block children
+   (rule `#autocomplete-base .autocomplete li div`, which carries an ID), so the
+   overrides below need !important to let the option grow to two stacked rows and
+   to make the name/ID divs block-level. Buttons are anchored to the <li>
+   (positioned), and the wrapper reserves room on the right for them. */
+.jobcan-enhanced .ui-autocomplete .ui-menu-item {
+  position: relative;
+  display: block !important;
+  height: auto !important;
+  line-height: 1.3 !important;
+}
+.jobcan-enhanced .ui-autocomplete .ui-menu-item-wrapper {
+  display: block !important;
+  height: auto !important;
+  padding: 5px 58px 5px 0 !important;
+}
+.jobcan-enhanced .ui-autocomplete .jbe-opt-name,
+.jobcan-enhanced .ui-autocomplete .jbe-opt-id {
+  display: block !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.jobcan-enhanced .ui-autocomplete .jbe-opt-name {
+  font-size: 13px;
+  line-height: 1.35;
+}
+.jobcan-enhanced .ui-autocomplete .jbe-opt-id {
+  font-size: 10.5px;
+  line-height: 1.2;
+  opacity: 0.62;
+  margin-top: 1px;
+}
+
+/* Widen the dropdown so more of the (long) project names are visible — jQuery-UI
+   sizes the menu to the (narrow) input width otherwise. Capped to the viewport. */
+.jobcan-enhanced ul.ui-autocomplete {
+  min-width: 480px !important;
+  max-width: 92vw !important;
+}
+
+.jobcan-enhanced .ui-autocomplete .jbe-opt-actions {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  display: flex;
+  gap: 3px;
+  align-items: center;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.jobcan-enhanced .ui-autocomplete .ui-menu-item:hover .jbe-opt-actions,
+.jobcan-enhanced .ui-autocomplete .jbe-pinned-row .jbe-opt-actions {
+  opacity: 1;
+}
+
+.jobcan-enhanced .ui-autocomplete .jbe-opt-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  color: inherit;
+  background: rgba(128, 128, 128, 0.18);
+  line-height: 0;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.jobcan-enhanced .ui-autocomplete .jbe-opt-btn:hover {
+  background: rgba(128, 128, 128, 0.42);
+}
+
+.jobcan-enhanced .ui-autocomplete .jbe-opt-btn svg {
+  width: 13px;
+  height: 13px;
+  display: block;
+}
+
+.jobcan-enhanced .ui-autocomplete .jbe-opt-pin.is-pinned { color: #f5a623; }
+.jobcan-enhanced .ui-autocomplete .jbe-opt-copy.copied { color: #22c55e; }
+
+/* Dark-mode scrollbar for the dropdown (the option list scrolls). */
+.jobcan-enhanced body.dark-mode ul.ui-autocomplete {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-gray-400, #686887) transparent;
+}
+.jobcan-enhanced body.dark-mode ul.ui-autocomplete::-webkit-scrollbar {
+  width: 10px;
+}
+.jobcan-enhanced body.dark-mode ul.ui-autocomplete::-webkit-scrollbar-track {
+  background: transparent;
+}
+.jobcan-enhanced body.dark-mode ul.ui-autocomplete::-webkit-scrollbar-thumb {
+  background-color: var(--color-gray-300, #565670);
+  border-radius: 8px;
+  border: 2px solid var(--color-card, #272736);
+}
+.jobcan-enhanced body.dark-mode ul.ui-autocomplete::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-gray-400, #686887);
+}

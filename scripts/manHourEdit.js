@@ -124,7 +124,15 @@
         chip.className = 'time-suggestion-chip';
         chip.style.display = 'none';
         input.parentElement.appendChild(chip);
-        const show = () => { chip.style.display = 'block'; };
+        // The chip is position:fixed (so it isn't clipped by the man-hour table's
+        // overflow:hidden); place it centered just below the input on each show.
+        // CSS applies translateX(-50%), so `left` is the input's horizontal center.
+        const positionChip = () => {
+          const r = input.getBoundingClientRect();
+          chip.style.left = `${Math.round(r.left + r.width / 2)}px`;
+          chip.style.top = `${Math.round(r.bottom + 6)}px`;
+        };
+        const show = () => { positionChip(); chip.style.display = 'block'; };
         const hide = () => { if (document.activeElement !== input && !chip.matches(':hover')) chip.style.display = 'none'; };
         input.addEventListener('mouseover', show);
         input.addEventListener('focus', show);

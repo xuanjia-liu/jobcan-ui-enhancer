@@ -348,6 +348,12 @@ async function showWorkTimeOverlay() {
     // Keep them in function scope to avoid block-scope reference errors.
     const dataCards = {};
     const zeroValueItems = [];
+    // The work-time cards container is declared here (function scope) — not inside
+    // the work-time block — because the user-info block can append the 有休日数 card
+    // to it first. Declaring it only later caused a temporal-dead-zone ReferenceError
+    // whenever 有休日数 data existed.
+    const cardsContainer = document.createElement('div');
+    cardsContainer.className = 'work-time-cards-container';
 
     // Has any data been loaded?
     const hasWorkTimeData = workTimeData && Object.keys(workTimeData).length > 0;
@@ -489,10 +495,8 @@ async function showWorkTimeOverlay() {
         const workTimeSection = document.createElement('div');
         workTimeSection.className = 'work-time-section work-time-data-section';
         
-        // Create a container for the cards
-        const cardsContainer = document.createElement('div');
-        cardsContainer.className = 'work-time-cards-container';
-        
+        // (cardsContainer is declared in function scope above.)
+
         // Add a legend to explain the category colors
         const legendContainer = document.createElement('div');
         legendContainer.className = 'work-time-cards-legend';
@@ -542,7 +546,7 @@ async function showWorkTimeOverlay() {
           '所定労働日数': { category: 'days', relatedTo: ['実働日数', '欠勤日数', '有休日数'] },
           '実働日数': { category: 'days', relatedTo: ['所定労働日数', '欠勤日数', '有休日数'] },
           '欠勤日数': { category: 'days', relatedTo: ['所定労働日数', '実働日数'] },
-          '有休日数': { category: 'days', relatedTo: ['所定労働日数', '欠勤日数'], category: 'absence' },
+          '有休日数': { category: 'absence', relatedTo: ['所定労働日数', '欠勤日数'] },
           
           // Time relationships
           '始業時刻': { category: 'time', relatedTo: ['終業時刻', '休憩時間'] },
@@ -1046,6 +1050,12 @@ async function showWorkTimeOverlay() {
         workTimeSection.appendChild(cardsContainer);
         bodyDiv.appendChild(workTimeSection);
       }
+
+      // If the user-info block added a card (e.g. 有休日数) but there is no
+      // work-time section to host the container, attach it so the card still shows.
+      if (!hasWorkTimeData && cardsContainer.hasChildNodes()) {
+        bodyDiv.appendChild(cardsContainer);
+      }
     } else {
       // No data found, show suggestion to visit attendance page
       const noDataDiv = document.createElement('div');
@@ -1078,25 +1088,33 @@ async function showWorkTimeOverlay() {
     // Add overlay to document
     document.body.appendChild(overlayDiv);
     
-    // Close button handler
-    closeBtn.addEventListener('click', () => {
+    // Close the overlay and detach the document-level keydown listener together,
+    // so the listener cannot outlive the overlay. It previously leaked on the
+    // close-button, click-outside, and month-switch paths (only the Escape path
+    // removed it), stacking a stale listener on every month switch.
+    const closeOverlay = () => {
+      document.removeEventListener('keydown', handleKeyDown);
       overlayDiv.remove();
-    });
-    
-    // Add escape key listener to close overlay
-    const handleKeyDown = (e) => {
-      if (e.key === 'Escape') {
-        overlayDiv.remove();
-        document.removeEventListener('keydown', handleKeyDown);
-      }
     };
-    document.addEventListener('keydown', handleKeyDown);
-    
-    // Add click outside to close
-    overlayDiv.addEventListener('click', (e) => {
-      if (e.target === overlayDiv) {
-        overlayDiv.remove();
+    function handleKeyDown(e) {
+      // Self-heal if the overlay was already removed elsewhere (e.g. month switch
+      // removes overlayDiv directly before rebuilding).
+      if (!document.body.contains(overlayDiv)) {
+        document.removeEventListener('keydown', handleKeyDown);
+        return;
       }
+      if (e.key === 'Escape') closeOverlay();
+    }
+
+    // Close button handler
+    closeBtn.addEventListener('click', closeOverlay);
+
+    // Escape key to close
+    document.addEventListener('keydown', handleKeyDown);
+
+    // Click outside to close
+    overlayDiv.addEventListener('click', (e) => {
+      if (e.target === overlayDiv) closeOverlay();
     });
     
   } catch (error) {

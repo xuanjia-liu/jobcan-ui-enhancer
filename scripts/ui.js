@@ -171,25 +171,14 @@ function enhanceSidemenuBehavior() {
     closedSideMenu.setAttribute('onclick', 'openSidemenu()');
     closedSideMenu.style.cursor = 'pointer';
   }
-  if (sidemenu) {
+  if (sidemenu && sidemenu.dataset.jbeMouseenterBound !== 'true') {
+    // Guard: enhanceSidemenuBehavior() runs on every applyEnhancements(), so bind
+    // the listener only once per sidemenu element — otherwise a fresh mouseenter
+    // listener stacks on the same element on every re-apply.
+    sidemenu.dataset.jbeMouseenterBound = 'true';
     sidemenu.addEventListener('mouseenter', function() {
       sidemenu.dataset.mouseInside = 'true';
     });
-    // sidemenu.addEventListener('mouseleave', function() {
-    //   sidemenu.dataset.mouseInside = 'false';
-    //   if (typeof closeSidemenu === 'function') {
-    //     setTimeout(() => {
-    //       if (sidemenu.dataset.mouseInside !== 'true') closeSidemenu();
-    //     }, 300);
-    //   } else {
-    //     setTimeout(() => {
-    //       if (sidemenu.dataset.mouseInside !== 'true') {
-    //         const closeTrigger = document.querySelector('[onclick*="closeSidemenu"]');
-    //         if (closeTrigger) closeTrigger.click();
-    //       }
-    //     }, 300);
-    //   }
-    // });
   }
 }
 
@@ -251,11 +240,18 @@ function enhanceManagerNameDisplay() {
         managerNameEl.classList.remove('show');
       } else { managerNameEl.classList.add('show'); }
     });
-    document.addEventListener('click', function(e) {
-      if (!managerNameEl.contains(e.target) && managerNameEl.classList.contains('show')) {
-        managerNameEl.classList.remove('show');
-      }
-    });
+    if (!window.__jbe_managerDropdownDocClickBound) {
+      // Bind the outside-click-to-close listener once, globally. Re-query
+      // #manager-name on each click so it keeps working if Jobcan re-renders the
+      // node — binding per element would leak a document listener on every re-render.
+      window.__jbe_managerDropdownDocClickBound = true;
+      document.addEventListener('click', function(e) {
+        const el = document.querySelector('#manager-name');
+        if (el && !el.contains(e.target) && el.classList.contains('show')) {
+          el.classList.remove('show');
+        }
+      });
+    }
   }
 }
 
