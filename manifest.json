@@ -44,6 +44,12 @@
         "scripts/main.js",
         "scripts/loginInjector.js"
       ]
+    },
+    {
+      "matches": ["*://ssl.jobcan.jp/employee/man-hour-manage/*"],
+      "js": ["scripts/manHourEditSearch.js"],
+      "world": "MAIN",
+      "run_at": "document_idle"
     }
   ],
   

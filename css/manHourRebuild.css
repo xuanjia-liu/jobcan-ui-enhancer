@@ -1,64 +1,11 @@
 /* css/manHourRebuild.css
  *
- * Styles for the features rebuilt against Jobcan's new man-hour-manage pages
- * (~2026-06). The edit screen is now a standalone page (no modal), so the
- * project/task picker side panel is re-anchored to the right edge of the
- * viewport instead of being positioned next to the old modal. Most of the panel
- * styling is inherited from the existing .select-sidepanel / .option-item rules
- * in styles.css; this file only adds the new anchoring + a few list-page bits.
+ * Styles for the features added on Jobcan's rebuilt man-hour-manage pages
+ * (~2026-06): the achievement-list filter buttons, mismatch highlighting, and the
+ * report modal. Project/task selection uses Jobcan's own native autocomplete
+ * (its search is widened in scripts/manHourEditSearch.js — no custom CSS needed),
+ * so there are no custom picker/side-panel styles here.
  */
-
-/* Right-anchored, full-height picker panel (overrides the modal-anchored base). */
-.jobcan-enhanced .select-sidepanel.jbe-anchored-right {
-  left: auto;
-  right: 0;
-  top: 0;
-  height: 100vh;
-  transform: translateX(100%);
-}
-
-.jobcan-enhanced .select-sidepanel.jbe-anchored-right.open {
-  transform: translateX(0);
-}
-
-.jobcan-enhanced .select-sidepanel .sidepanel-search {
-  flex: 1;
-  padding: 6px 10px;
-  border-radius: 6px;
-  border: 1px solid var(--color-control-border, #ccc);
-  font-size: 13px;
-  min-width: 0;
-}
-
-.jobcan-enhanced .select-sidepanel .sidepanel-close {
-  flex-shrink: 0;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  color: var(--color-text-secondary, #666);
-  padding: 4px;
-  display: inline-flex;
-  align-items: center;
-}
-
-/* Result count ("3 / 609 件") shown under the tabs while searching. */
-.jobcan-enhanced .select-sidepanel .sidepanel-count {
-  padding: 6px 16px;
-  font-size: 11px;
-  color: var(--color-text-secondary, #888);
-  border-bottom: 1px solid var(--color-gray-250, #eee);
-}
-
-.jobcan-enhanced .select-sidepanel .sidepanel-count:empty {
-  display: none;
-}
-
-/* While the custom picker is open, suppress the page's native jQuery-UI
- * autocomplete dropdown so the two menus don't overlap. */
-body.jbe-unit-picker-open .ui-autocomplete,
-body.jbe-unit-picker-open #autocomplete-base .ui-menu {
-  display: none !important;
-}
 
 /* ------------------------------------------------------------------ */
 /* Achievement-list page: filter buttons + mismatch highlighting       */
@@ -84,13 +31,13 @@ body.jbe-unit-picker-open #autocomplete-base .ui-menu {
 }
 
 .jobcan-enhanced .jbe-list-filter-btn:hover {
-  border-color: var(--color-primary, #2b8a3e);
-  color: var(--color-primary, #2b8a3e);
+  border-color: var(--color-primary, #0077ff);
+  color: var(--color-primary, #0077ff);
 }
 
 .jobcan-enhanced .jbe-list-filter-btn.active {
-  background: var(--color-primary, #2b8a3e);
-  border-color: var(--color-primary, #2b8a3e);
+  background: var(--color-primary, #0077ff);
+  border-color: var(--color-primary, #0077ff);
   color: #fff;
 }
 
@@ -101,7 +48,13 @@ body.jbe-unit-picker-open #autocomplete-base .ui-menu {
 
 .jobcan-enhanced #list td.date.jbe-mismatch-date {
   font-weight: 600;
-  color: var(--color-danger, #c0392b);
+  color: var(--color-danger, #DC3545);
+}
+
+/* Dark mode: brighten the mismatch-date red so it stays legible on the dark
+   (tinted) mismatch row — plain --color-danger sits at ~3.5:1 there. */
+.jobcan-enhanced body.dark-mode #list td.date.jbe-mismatch-date {
+  color: color-mix(in srgb, var(--color-danger, #DC3545) 72%, #ffffff 28%);
 }
 
 /* ------------------------------------------------------------------ */
@@ -177,7 +130,7 @@ body.jbe-unit-picker-open #autocomplete-base .ui-menu {
 .jobcan-enhanced .jbe-report-kpi-value {
   font-size: 20px;
   font-weight: 700;
-  color: var(--color-primary, #2b8a3e);
+  color: var(--color-primary, #0077ff);
 }
 
 .jobcan-enhanced .jbe-report-kpi-label {
@@ -231,7 +184,7 @@ body.jbe-unit-picker-open #autocomplete-base .ui-menu {
 
 .jobcan-enhanced .jbe-report-bar-fill {
   height: 100%;
-  background: var(--color-primary, #2b8a3e);
+  background: var(--color-primary, #0077ff);
   border-radius: 999px;
 }
 
@@ -258,4 +211,37 @@ body.jbe-unit-picker-open #autocomplete-base .ui-menu {
   padding: 24px;
   text-align: center;
   color: var(--color-text-secondary, #888);
+}
+
+/* ------------------------------------------------------------------ */
+/* Dark-mode skin for the native project/task autocomplete dropdown    */
+/* ------------------------------------------------------------------ */
+/* The project/task search uses Jobcan's own jQuery-UI autocomplete (its
+   search source is widened in scripts/manHourEditSearch.js). The widget is
+   appended to <body> and carries no theme of its own, so in dark mode it
+   renders as a bright white panel floating on the dark UI. Give it a matching
+   dark skin. Light mode is left to the native look — it already matches the
+   light page. Both jQuery-UI markup variants are covered: the newer
+   .ui-menu-item-wrapper and the older .ui-menu-item > a. */
+
+.jobcan-enhanced body.dark-mode .ui-autocomplete {
+  background: var(--color-card, #272736);
+  border-color: var(--color-control-border, #4a4a64);
+  box-shadow: var(--shadow-dropdown, 0 4px 12px rgba(0, 0, 0, 0.4));
+}
+
+.jobcan-enhanced body.dark-mode .ui-autocomplete .ui-menu-item-wrapper,
+.jobcan-enhanced body.dark-mode .ui-autocomplete .ui-menu-item > a {
+  color: var(--color-text-primary, #e4e6eb);
+  background: transparent;
+  border-color: transparent;
+}
+
+.jobcan-enhanced body.dark-mode .ui-autocomplete .ui-menu-item-wrapper.ui-state-active,
+.jobcan-enhanced body.dark-mode .ui-autocomplete .ui-menu-item-wrapper.ui-state-focus,
+.jobcan-enhanced body.dark-mode .ui-autocomplete .ui-menu-item > a.ui-state-active,
+.jobcan-enhanced body.dark-mode .ui-autocomplete .ui-menu-item > a.ui-state-focus {
+  background: var(--color-primary, #0077ff);
+  color: #ffffff;
+  border-color: var(--color-primary, #0077ff);
 }
