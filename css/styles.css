@@ -16,7 +16,23 @@
     padding-right: 8px;
     padding-left: 8px;
   }
-  
+
+  /* `.col` (flex-grow) and `.col-auto` (content-width) must keep Bootstrap's
+     flex sizing. The width:100% above has higher specificity than Bootstrap's
+     own column rules, so without this it stretches these flex columns and
+     breaks flex-row layouts — e.g. Jobcan's rebuilt man-hour search form, where
+     the "表示月度" label (.col-auto) expands to full width and squeezes the
+     year/month selectors + 表示 button off-screen. */
+  .jobcan-enhanced .col {
+    flex: 1 0 0%;
+    width: auto;
+  }
+
+  .jobcan-enhanced .col-auto {
+    flex: 0 0 auto;
+    width: auto;
+  }
+
   .jobcan-enhanced .no-gutters {
     margin-right: 0;
     margin-left: 0;

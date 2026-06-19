@@ -87,6 +87,8 @@ function applyEnhancements() {
   const isEmployeePage = origin === 'https://ssl.jobcan.jp' && (pathname === '/employee' || pathname.startsWith('/employee/'));
   const isAttendancePage = origin === 'https://ssl.jobcan.jp' && pathname.startsWith('/employee/attendance');
   const isManHourPage = origin === 'https://ssl.jobcan.jp' && pathname.startsWith('/employee/man-hour-manage');
+  const isManHourEditPage = isManHourPage && pathname.startsWith('/employee/man-hour-manage/edit-achievement');
+  const isManHourListPage = isManHourPage && pathname.startsWith('/employee/man-hour-manage/achievement-list');
 
   // Draggable tabs
   if (isEmployeePage && typeof setupTabsContainerDragObserver === 'function') {
@@ -124,15 +126,22 @@ function applyEnhancements() {
   if (isSignInPage && typeof foldSignInRightContainer === 'function') foldSignInRightContainer();
   if ((isEmployeePage || isSignInPage) && typeof removeLogoBorder === 'function') removeLogoBorder();
 
-  // Man-hour modal and forms
-  if (isManHourPage) {
-    if (typeof setupManHourKeyboardShortcuts === 'function') setupManHourKeyboardShortcuts();
-    if (typeof setupFormValidationObserver === 'function') setupFormValidationObserver();
-    if (typeof convertManHourModalToSidePanel === 'function') convertManHourModalToSidePanel();
-    if (typeof enhanceModalTitle === 'function') enhanceModalTitle();
-    if (typeof enhanceManHourSelectLists === 'function') enhanceManHourSelectLists();
-    if (typeof simplifyTableHeaders === 'function') simplifyTableHeaders();
-    if (typeof setupTableFilterButtons === 'function') setupTableFilterButtons();
+  // Man-hour pages were rebuilt by Jobcan (~2026-06): the edit screen is now a
+  // standalone page (no modal) and the achievement list renders asynchronously
+  // via a Web Worker, backed by a new REST API. These handlers target the new
+  // DOM and API (see scripts/manHourApi.js, scripts/manHourEdit.js,
+  // scripts/manHourList.js). The legacy modal/select-based handlers
+  // (convertManHourModalToSidePanel, enhanceModalTitle, enhanceManHourSelectLists,
+  // simplifyTableHeaders, setupTableFilterButtons) no longer match anything and
+  // are intentionally no longer invoked.
+  if (isManHourPage && typeof setupFormValidationObserver === 'function') {
+    setupFormValidationObserver();
+  }
+  if (isManHourEditPage && typeof setupManHourEditPage === 'function') {
+    setupManHourEditPage();
+  }
+  if (isManHourListPage && typeof setupManHourListPage === 'function') {
+    setupManHourListPage();
   }
 
   if (isSignInPage && typeof autoCollapseExternalPanelMisc === 'function') {
@@ -184,7 +193,10 @@ applyEnhancements();
     '.select-sidepanel',
     '#table-report-modal-overlay',
     '#fixed-table-filter-buttons',
-    '#table-filter-buttons'
+    '#table-filter-buttons',
+    '.time-suggestion-chip',
+    '#jbe-manhour-report',
+    '#jbe-manhour-list-filters'
   ];
 
   function isIgnoredNode(node) {

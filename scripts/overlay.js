@@ -30,17 +30,24 @@ function buildManHourReportUrl() {
   const now = new Date();
   const year = now.getFullYear();
   const month = now.getMonth() + 1;
-  const baseUrl = 'https://ssl.jobcan.jp/employee/man-hour-manage';
-  return `${baseUrl}?search_type=month&year=${year}&month=${month}&jbe_open_report=1`;
+  // The man-hour list was rebuilt at /achievement-list; jbe_open_report=1 tells
+  // manHourList.js to open the report once the worker-rendered rows are ready.
+  const baseUrl = 'https://ssl.jobcan.jp/employee/man-hour-manage/achievement-list';
+  return `${baseUrl}?year=${year}&month=${month}&day=1&jbe_open_report=1`;
 }
 
-async function waitForTableReportButton(maxAttempts = 12, delayMs = 250) {
+// Wait for the rebuilt list report opener (manHourList.js) and for the
+// worker-rendered rows, so the report has data to aggregate.
+async function waitForManHourReportOpener(maxAttempts = 50, delayMs = 300) {
   for (let i = 0; i < maxAttempts; i += 1) {
-    const reportBtn = document.getElementById('table-report-btn');
-    if (reportBtn) return reportBtn;
+    const list = document.getElementById('list');
+    const hasRows = !!(list && list.querySelector('tr'));
+    if (typeof window.__jbe_openManHourReport === 'function' && hasRows) {
+      return window.__jbe_openManHourReport;
+    }
     await new Promise((resolve) => setTimeout(resolve, delayMs));
   }
-  return null;
+  return typeof window.__jbe_openManHourReport === 'function' ? window.__jbe_openManHourReport : null;
 }
 
 async function getCachedWorkTimeDataByMonth(year, month) {
@@ -1122,21 +1129,20 @@ function setupFloatingWorkTimeButton() {
       order: 30,
       icon: '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>',
       onClick: async () => {
-        const isManHourPage = window.location.pathname.startsWith('/employee/man-hour-manage');
-        if (isManHourPage) {
-          if (typeof window.setupTableFilterButtons === 'function') {
-            window.setupTableFilterButtons();
-          }
-          const reportBtn = await waitForTableReportButton();
-          if (reportBtn) {
-            reportBtn.click();
+        const onListPage = window.location.pathname.startsWith('/employee/man-hour-manage/achievement-list');
+        if (onListPage) {
+          // Already on the list page — open the rebuilt report directly.
+          const opener = await waitForManHourReportOpener();
+          if (typeof opener === 'function') {
+            opener();
             return;
           }
           if (typeof window.showNotification === 'function') {
-            window.showNotification('工数レポートを開けませんでした。ページの読み込み完了後に再度お試しください。', 3000);
+            window.showNotification('工数レポートを開けませんでした。一覧の読み込み完了後に再度お試しください。', 3000);
           }
           return;
         }
+        // Otherwise navigate to the list page and auto-open the report there.
         window.location.href = buildManHourReportUrl();
       }
     });

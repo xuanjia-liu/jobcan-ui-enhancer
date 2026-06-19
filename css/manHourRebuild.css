@@ -1,0 +1,261 @@
+/* css/manHourRebuild.css
+ *
+ * Styles for the features rebuilt against Jobcan's new man-hour-manage pages
+ * (~2026-06). The edit screen is now a standalone page (no modal), so the
+ * project/task picker side panel is re-anchored to the right edge of the
+ * viewport instead of being positioned next to the old modal. Most of the panel
+ * styling is inherited from the existing .select-sidepanel / .option-item rules
+ * in styles.css; this file only adds the new anchoring + a few list-page bits.
+ */
+
+/* Right-anchored, full-height picker panel (overrides the modal-anchored base). */
+.jobcan-enhanced .select-sidepanel.jbe-anchored-right {
+  left: auto;
+  right: 0;
+  top: 0;
+  height: 100vh;
+  transform: translateX(100%);
+}
+
+.jobcan-enhanced .select-sidepanel.jbe-anchored-right.open {
+  transform: translateX(0);
+}
+
+.jobcan-enhanced .select-sidepanel .sidepanel-search {
+  flex: 1;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--color-control-border, #ccc);
+  font-size: 13px;
+  min-width: 0;
+}
+
+.jobcan-enhanced .select-sidepanel .sidepanel-close {
+  flex-shrink: 0;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-secondary, #666);
+  padding: 4px;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Result count ("3 / 609 件") shown under the tabs while searching. */
+.jobcan-enhanced .select-sidepanel .sidepanel-count {
+  padding: 6px 16px;
+  font-size: 11px;
+  color: var(--color-text-secondary, #888);
+  border-bottom: 1px solid var(--color-gray-250, #eee);
+}
+
+.jobcan-enhanced .select-sidepanel .sidepanel-count:empty {
+  display: none;
+}
+
+/* While the custom picker is open, suppress the page's native jQuery-UI
+ * autocomplete dropdown so the two menus don't overlap. */
+body.jbe-unit-picker-open .ui-autocomplete,
+body.jbe-unit-picker-open #autocomplete-base .ui-menu {
+  display: none !important;
+}
+
+/* ------------------------------------------------------------------ */
+/* Achievement-list page: filter buttons + mismatch highlighting       */
+/* ------------------------------------------------------------------ */
+
+.jobcan-enhanced #jbe-manhour-list-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin: 10px 0;
+}
+
+.jobcan-enhanced .jbe-list-filter-btn {
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--color-control-border, #ccc);
+  background: var(--color-card, #fff);
+  color: var(--color-text-primary, #333);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background-color 0.2s, color 0.2s, border-color 0.2s;
+}
+
+.jobcan-enhanced .jbe-list-filter-btn:hover {
+  border-color: var(--color-primary, #2b8a3e);
+  color: var(--color-primary, #2b8a3e);
+}
+
+.jobcan-enhanced .jbe-list-filter-btn.active {
+  background: var(--color-primary, #2b8a3e);
+  border-color: var(--color-primary, #2b8a3e);
+  color: #fff;
+}
+
+/* Highlight days whose man-hour total (合計) differs from working time (総労働時間). */
+.jobcan-enhanced #list tr.jbe-mismatch-row > td {
+  background-color: var(--color-danger-bg, #fdecea) !important;
+}
+
+.jobcan-enhanced #list td.date.jbe-mismatch-date {
+  font-weight: 600;
+  color: var(--color-danger, #c0392b);
+}
+
+/* ------------------------------------------------------------------ */
+/* Achievement-list page: report modal                                 */
+/* ------------------------------------------------------------------ */
+
+.jobcan-enhanced .jbe-report-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: var(--z-index-modal, 1050);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.jobcan-enhanced .jbe-report-modal {
+  background: var(--color-card, #fff);
+  color: var(--color-text-primary, #222);
+  width: min(760px, 100%);
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--border-radius-lg, 12px);
+  box-shadow: var(--shadow-modal, 0 16px 48px rgba(0, 0, 0, 0.3));
+  overflow: hidden;
+}
+
+.jobcan-enhanced .jbe-report-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--color-gray-250, #e5e5e5);
+}
+
+.jobcan-enhanced .jbe-report-header h3 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.jobcan-enhanced .jbe-report-close {
+  background: transparent;
+  border: none;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--color-text-secondary, #777);
+  padding: 0 4px;
+}
+
+.jobcan-enhanced .jbe-report-body {
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.jobcan-enhanced .jbe-report-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
+  margin-bottom: 22px;
+}
+
+.jobcan-enhanced .jbe-report-kpi {
+  background: var(--color-gray-100, #f6f7f9);
+  border-radius: 10px;
+  padding: 12px 14px;
+  text-align: center;
+}
+
+.jobcan-enhanced .jbe-report-kpi-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--color-primary, #2b8a3e);
+}
+
+.jobcan-enhanced .jbe-report-kpi-label {
+  font-size: 12px;
+  color: var(--color-text-secondary, #666);
+  margin-top: 2px;
+}
+
+.jobcan-enhanced .jbe-report-kpi-detail {
+  font-size: 11px;
+  color: var(--color-text-secondary, #999);
+  margin-top: 2px;
+}
+
+.jobcan-enhanced .jbe-report-section-title {
+  margin: 0 0 12px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.jobcan-enhanced .jbe-report-bar-row {
+  margin-bottom: 14px;
+}
+
+.jobcan-enhanced .jbe-report-bar-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.jobcan-enhanced .jbe-report-bar-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jobcan-enhanced .jbe-report-bar-time {
+  flex-shrink: 0;
+  color: var(--color-text-secondary, #555);
+  font-variant-numeric: tabular-nums;
+}
+
+.jobcan-enhanced .jbe-report-bar-track {
+  height: 8px;
+  background: var(--color-gray-200, #eceef1);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.jobcan-enhanced .jbe-report-bar-fill {
+  height: 100%;
+  background: var(--color-primary, #2b8a3e);
+  border-radius: 999px;
+}
+
+.jobcan-enhanced .jbe-report-tasks {
+  margin-top: 6px;
+  padding-left: 4px;
+}
+
+.jobcan-enhanced .jbe-report-tasks summary {
+  font-size: 12px;
+  color: var(--color-text-secondary, #777);
+  cursor: pointer;
+}
+
+.jobcan-enhanced .jbe-report-task-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  padding: 3px 0 3px 14px;
+  color: var(--color-text-secondary, #555);
+}
+
+.jobcan-enhanced .jbe-report-empty {
+  padding: 24px;
+  text-align: center;
+  color: var(--color-text-secondary, #888);
+}
