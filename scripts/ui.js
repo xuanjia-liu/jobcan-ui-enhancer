@@ -339,8 +339,8 @@ function fixSettingsIcon() {
     observer.observe(document.body, { childList: true, subtree: true });
     window.__jbe_fixSettingsIconObserver = observer;
   }
-  if (window.__jbe_fixSettingsIconInterval) clearInterval(window.__jbe_fixSettingsIconInterval);
-  window.__jbe_fixSettingsIconInterval = setInterval(fixSettingsButtons, 4000);
+  // (Removed a redundant 4s setInterval that re-ran fixSettingsButtons — the
+  // MutationObserver above already re-applies when .staff-settings-btn appears.)
 }
 
 // Fold the sign-in right container by default
@@ -466,13 +466,6 @@ function setupFormValidationObserver() {
   attachValidationToForms();
 }
 
-// Monitor and preserve the un-match-time element
-function monitorUnmatchTime() {
-  // Let the original website handle un-match-time updates
-  // This function has been removed to fix issues with 工数 column changes not updating the un-match-time
-  return;
-}
-
 // Keyboard shortcuts within man-hour modal
 function setupManHourKeyboardShortcuts() {
   if (window.__jbe_manHourShortcutsInited) return;
@@ -536,10 +529,8 @@ function autoCollapseExternalPanelMisc() {
         // Mark as enhanced to prevent duplicate processing
         panel.dataset.enhanced = 'true';
         
-        // Store original styling
+        // Store original display so the panel can be restored when expanded
         const originalDisplay = getComputedStyle(panel).display;
-        const originalPosition = getComputedStyle(panel).position;
-        const originalZIndex = getComputedStyle(panel).zIndex;
         
         // Create wrapper for positioning
         const wrapper = document.createElement('div');
@@ -580,7 +571,6 @@ function autoCollapseExternalPanelMisc() {
             toggleHeader.classList.add('active');
             
             // Position adjustment if needed
-            const toggleRect = toggleHeader.getBoundingClientRect();
             const panelRect = panel.getBoundingClientRect();
             
             // Check if panel would go off the top of viewport

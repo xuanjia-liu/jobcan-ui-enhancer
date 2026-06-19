@@ -338,6 +338,26 @@ async function extractAndStoreCollapseInfoData() {
   }
 }
 
+// Evict old month-keyed work-time snapshots. Jobcan data for past months is
+// effectively immutable, but `jobcanWorkTimeData_<year>_<month>` keys were
+// accumulating in chrome.storage.local without bound and never expiring. Keep
+// only the most recent N months.
+async function pruneOldWorkTimeData(keepMonths = 13) {
+  try {
+    const all = await chrome.storage.local.get(null);
+    const monthKeys = Object.keys(all).filter(k => /^jobcanWorkTimeData_\d{4}_\d{1,2}$/.test(k));
+    if (monthKeys.length <= keepMonths) return;
+    const rank = (k) => {
+      const m = k.match(/_(\d{4})_(\d{1,2})$/);
+      return m ? Number(m[1]) * 12 + Number(m[2]) : 0;
+    };
+    const toRemove = monthKeys.sort((a, b) => rank(b) - rank(a)).slice(keepMonths);
+    if (toRemove.length) await chrome.storage.local.remove(toRemove);
+  } catch (error) {
+    console.debug('pruneOldWorkTimeData skipped:', error && error.message);
+  }
+}
+
 // Load attendance page in invisible iframe to extract data
 async function loadAttendancePageInIframe(url = 'https://ssl.jobcan.jp/employee/attendance') {
   return new Promise((resolve, reject) => {
@@ -420,6 +440,9 @@ async function loadAttendancePageInIframe(url = 'https://ssl.jobcan.jp/employee/
               
               // Also save to the default key for immediate display
               await chrome.storage.local.set({ 'jobcanWorkTimeData': workTimeData });
+
+              // Evict stale month snapshots so storage doesn't grow without bound.
+              pruneOldWorkTimeData();
             }
             
             if (hasUserInfoData) {

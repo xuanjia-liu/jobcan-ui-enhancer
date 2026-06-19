@@ -364,51 +364,6 @@ document.addEventListener('DOMContentLoaded', function() {
     );
   }
   
-  // Script injected into the login page to fill and submit credentials
-  function injectLoginScript(email, password) {
-    const emailField = document.querySelector('input[type="email"]') ||
-                       document.querySelector('input[name="user[email]"]') ||
-                       document.querySelector('#user_email');
-    const passwordField = document.querySelector('input[type="password"]') ||
-                          document.querySelector('input[name="user[password]"]') ||
-                          document.querySelector('#user_password');
-    const submitBtn = document.querySelector('button[type="submit"]') ||
-                      document.querySelector('input[type="submit"]');
-    if (emailField && passwordField && submitBtn) {
-      emailField.value = email;
-      emailField.dispatchEvent(new Event('input', { bubbles: true }));
-      passwordField.value = password;
-      passwordField.dispatchEvent(new Event('input', { bubbles: true }));
-      submitBtn.click();
-    }
-  }
-  
-  // Poll the login tab for successful navigation
-  function pollLoginStatus(tabId, callback) {
-    let attempts = 0;
-    const maxAttempts = 20; // allow for 10 seconds at 500ms intervals
-    const interval = setInterval(() => {
-      chrome.tabs.get(tabId, tab => {
-        if (tab.url.includes('/employee')) {
-          clearInterval(interval);
-          handleSuccessfulLogin(tabId);
-          if (callback) callback();
-        } else if (attempts++ >= maxAttempts) {
-          clearInterval(interval);
-          showToast('ログインに失敗しました。IDとパスワードをご確認ください。', 3000);
-          chrome.tabs.update(tabId, { active: true });
-          if (callback) callback();
-        }
-      });
-    }, 500); // check twice as often
-  }
-  
-  // Handle successful login by redirecting to the dashboard
-  function handleSuccessfulLogin(tabId) {
-    showToast('ログインに成功しました', 2000);
-    chrome.tabs.update(tabId, { url: 'https://ssl.jobcan.jp/employee', active: true });
-  }
-  
   // Function to show toast notification
   function showToast(message, duration = 3000) {
     let toast = document.getElementById('toast');

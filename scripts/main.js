@@ -121,7 +121,6 @@ function applyEnhancements() {
   if (isEmployeePage && typeof addFormScreenshotButton === 'function') addFormScreenshotButton();
 
   // Other enhancements
-  if (isEmployeePage && typeof monitorUnmatchTime === 'function') monitorUnmatchTime();
   if (typeof fixSettingsIcon === 'function') fixSettingsIcon();
   if (isSignInPage && typeof foldSignInRightContainer === 'function') foldSignInRightContainer();
   if ((isEmployeePage || isSignInPage) && typeof removeLogoBorder === 'function') removeLogoBorder();

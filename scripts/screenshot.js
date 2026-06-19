@@ -513,12 +513,18 @@ function captureScreenshot(area) {
     if (layoutElem && layoutElem.parentNode) {
       layoutElem.parentNode.removeChild(layoutElem);
     }
+    // Remove the selection overlay — before capture it was only hidden
+    // (display:none), and previously it was removed only on the error path,
+    // so a successful capture left it orphaned in the DOM.
+    if (overlay && overlay.parentNode) {
+      overlay.parentNode.removeChild(overlay);
+    }
     // Remove any existing notification
     const notification = document.querySelector('.screenshot-notification');
     if (notification) {
       notification.remove();
     }
-    
+
     // Crop to the selected area
     const croppedCanvas = document.createElement('canvas');
     const ctx = croppedCanvas.getContext('2d');

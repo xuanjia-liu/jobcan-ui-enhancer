@@ -50,6 +50,7 @@ const COLORS = {
 const WORK_HOURS = {
   start: 6,   // 06:00
   end: 24,    // 24:00
+  targetMinutes: 8 * 60, // standard daily work target (lunch excluded), used by the worked-time progress text
   get totalMinutes() {
     return (this.end - this.start) * 60;
   }
@@ -538,10 +539,21 @@ function updateWorkProgressBar(container) {
       stateClass = 'progress-state-starting'; 
   }
 
-  let statusTextWithDuration = statusText;
+  // The fill / indicator / segments above visualize the 06:00–24:00 time-of-day
+  // timeline. The status TEXT, by contrast, reports WORKED time (lunch excluded,
+  // counted from punches) against the daily target, so 経過 / 残り / 本日勤務 all
+  // describe the same "worked" quantity rather than mixing wall-clock and worked.
+  let statusTextWithDuration = statusText; // wall-clock fallback until punch data loads
   if (Array.isArray(container._cachedPunchEntries)) {
     const workedMinutes = getWorkedMinutesToday(container._cachedPunchEntries);
-    statusTextWithDuration = `${statusText} • 本日勤務 ${formatWorkedDurationMinutes(workedMinutes)}`;
+    const target = WORK_HOURS.targetMinutes;
+    if (workedMinutes >= target) {
+      const over = workedMinutes - target;
+      statusTextWithDuration = `本日勤務 ${formatWorkedDurationMinutes(workedMinutes)} • 目標達成${over > 0 ? ` (+${formatWorkedDurationMinutes(over)})` : ''}`;
+    } else {
+      const pct = target > 0 ? Math.min(100, (workedMinutes / target) * 100) : 0;
+      statusTextWithDuration = `本日勤務 ${formatWorkedDurationMinutes(workedMinutes)} • ${pct.toFixed(0)}% • 残り ${formatWorkedDurationMinutes(target - workedMinutes)}`;
+    }
   }
   
   // Batch DOM updates to avoid multiple reflows
@@ -596,11 +608,6 @@ function renderProgressText(percentageElement, statusText) {
   percentageElement.appendChild(startLabel);
   percentageElement.appendChild(center);
   percentageElement.appendChild(endLabel);
-}
-
-function formatHourLabel(hour) {
-  if (hour === 24) return '24:00';
-  return `${String(hour).padStart(2, '0')}:00`;
 }
 
 function getTodayDateKeys() {
@@ -1036,119 +1043,6 @@ function updateClockSettings(settings = {}) {
   });
 }
 
-// Setup standard flip clock digits
-function setupFlipClockDigits(container, timeString) {
-  container.innerHTML = '';
-  
-  const normalizedTime = normalizeTimeFormat(timeString);
-  const timeChars = normalizedTime.split('');
-  
-  for (let i = 0; i < timeChars.length; i++) {
-    const char = timeChars[i];
-    
-    if (char === ':') {
-      const colonElement = document.createElement('div');
-      colonElement.className = 'colon';
-      colonElement.textContent = ':';
-      container.appendChild(colonElement);
-    } else {
-      const digitElement = createFlipDigit(char);
-      container.appendChild(digitElement);
-    }
-  }
-}
-
-// Create a basic time display without animation
-function createDefaultTimeDisplay(container, timeString) {
-  container.innerHTML = '';
-  
-  const timeDiv = document.createElement('div');
-  timeDiv.className = 'default-time-display';
-  timeDiv.textContent = timeString;
-  timeDiv.style.fontSize = '3rem';
-  timeDiv.style.fontWeight = 'bold';
-  timeDiv.style.color = 'var(--color-clock-text)';
-  timeDiv.style.textAlign = 'center';
-  timeDiv.style.padding = '15px';
-  timeDiv.style.background = COLORS.primary.gradient;
-  timeDiv.style.borderRadius = '8px';
-  timeDiv.style.boxShadow = 'var(--shadow-sm)';
-  
-  container.appendChild(timeDiv);
-}
-
-// Create a standard flip digit element
-function createFlipDigit(digit) {
-  const digitElement = document.createElement('div');
-  digitElement.className = 'flip-clock-digit';
-  digitElement.dataset.value = digit;
-  
-  // Create flip-card structure
-  const cardElement = document.createElement('div');
-  cardElement.className = 'flip-card';
-  
-  // Create front face
-  const frontElement = document.createElement('div');
-  frontElement.className = 'flip-card-front';
-  frontElement.textContent = digit;
-  
-  // Create back face
-  const backElement = document.createElement('div');
-  backElement.className = 'flip-card-back';
-  backElement.textContent = digit;
-  
-  // Style the digit element
-  digitElement.style.position = 'relative';
-  digitElement.style.width = '80px';
-  digitElement.style.height = '120px';
-  digitElement.style.margin = '0 4px';
-  digitElement.style.perspective = '800px';
-  
-  // Style the card
-  cardElement.style.position = 'relative';
-  cardElement.style.width = '100%';
-  cardElement.style.height = '100%';
-  cardElement.style.transformStyle = 'preserve-3d';
-  
-  // Style front face
-  frontElement.style.position = 'absolute';
-  frontElement.style.width = '100%';
-  frontElement.style.height = '100%';
-  frontElement.style.backfaceVisibility = 'hidden';
-  frontElement.style.display = 'flex';
-  frontElement.style.alignItems = 'center';
-  frontElement.style.justifyContent = 'center';
-  frontElement.style.background = COLORS.primary.gradient;
-  frontElement.style.color = 'var(--color-clock-text)';
-  frontElement.style.fontSize = '3.5rem';
-  frontElement.style.fontWeight = 'bold';
-  frontElement.style.borderRadius = '8px';
-  frontElement.style.boxShadow = 'var(--shadow-sm)';
-  
-  // Style back face
-  backElement.style.position = 'absolute';
-  backElement.style.width = '100%';
-  backElement.style.height = '100%';
-  backElement.style.backfaceVisibility = 'hidden';
-  backElement.style.display = 'flex';
-  backElement.style.alignItems = 'center';
-  backElement.style.justifyContent = 'center';
-  backElement.style.background = COLORS.primary.gradient;
-  backElement.style.color = 'var(--color-clock-text)';
-  backElement.style.fontSize = '3.5rem';
-  backElement.style.fontWeight = 'bold';
-  backElement.style.transform = 'rotateX(180deg)';
-  backElement.style.borderRadius = '8px';
-  backElement.style.boxShadow = 'var(--shadow-sm)';
-  
-  // Assemble the elements
-  cardElement.appendChild(frontElement);
-  cardElement.appendChild(backElement);
-  digitElement.appendChild(cardElement);
-  
-  return digitElement;
-}
-
 /**
  * Map #working_status label to flip-digit color class.
  * Keeps previous class when text is momentarily empty (DOM churn) so colors stay stable.
@@ -1391,16 +1285,29 @@ function addPushButtonParticleEffects() {
   });
 }
 
-// On initial load, refresh clock colors, and re-apply when the "adit-button-push" button is clicked
+// On initial load, refresh clock colors and wire push-button particle effects.
 document.addEventListener('DOMContentLoaded', () => {
   // Initial color sync
   document.querySelectorAll('.flip-clock-container').forEach(container => updateFlipClockColors(container));
-  
-  // Add particle effects to push buttons
-  addPushButtonParticleEffects();
-  
-  // Re-check for buttons periodically (in case they're added dynamically)
-  setInterval(() => {
-    addPushButtonParticleEffects();
-  }, 2000);
-}); 
+
+  // Trigger particle effects on push-button clicks via ONE delegated listener.
+  // This replaces the old approach (attach per-button listeners, then re-scan
+  // every 2s with setInterval to catch dynamically-added buttons): delegation
+  // covers current and future buttons with no polling. addPushButtonParticleEffects
+  // is kept for the popup's debug/test hook.
+  if (!window.__jbe_particleDelegationBound) {
+    window.__jbe_particleDelegationBound = true;
+    const PUSH_SELECTOR = '#adit-button-push, .adit-button-push, [id*="push"], [class*="push"], button[onclick*="push"], input[type="submit"][value*="出勤"], input[type="submit"][value*="退勤"]';
+    document.addEventListener('click', (e) => {
+      const btn = e.target && e.target.closest ? e.target.closest(PUSH_SELECTOR) : null;
+      if (!btn) return;
+      document.querySelectorAll('.flip-clock-container').forEach(container => {
+        updateFlipClockColors(container);
+        setTimeout(() => {
+          createParticleEffect(container);
+          setTimeout(() => createBurstParticleEffect(container), 300);
+        }, 100);
+      });
+    });
+  }
+});

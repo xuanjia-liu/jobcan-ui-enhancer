@@ -418,7 +418,6 @@ async function showWorkTimeOverlay() {
             const subvaluesContainer = document.createElement('div');
             subvaluesContainer.className = 'work-time-card-subvalues';
             
-            let expiryDateFound = false;
             paidLeaveDetails.forEach(detailText => {
               // Check if this detail is the expiry date
               if (detailText.includes('有効') || detailText.includes('期限')) {
@@ -427,7 +426,6 @@ async function showWorkTimeOverlay() {
                 expiryElem.textContent = detailText.trim();
                 // Insert expiry date right after the main value
                 valueElem.insertAdjacentElement('afterend', expiryElem);
-                expiryDateFound = true;
               } else {
                 // Handle other details as before
                 const detailParts = detailText.match(/(.*?)\s+(\d+(\.\d+)?)$/);
