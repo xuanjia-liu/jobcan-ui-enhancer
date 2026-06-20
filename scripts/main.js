@@ -187,7 +187,10 @@ applyEnhancements();
     '.screenshot-notification',
     '.time-suggestion-chip',
     '#jbe-manhour-report',
-    '#jbe-manhour-list-filters'
+    '#jbe-manhour-list-filters',
+    '#jbe-mh-summary',
+    '#jbe-mh-nav',
+    '.jbe-mh-navrow'
   ];
 
   function isIgnoredNode(node) {

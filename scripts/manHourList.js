@@ -152,6 +152,8 @@
     const agg = {
       projectTotals: {},
       taskByProject: {},
+      dayByProject: {},
+      dayList: [],
       grandMinutes: 0,
       entryCount: 0,
       totalWork: 0,
@@ -167,7 +169,7 @@
       if (day.workMinutes) agg.totalWork += day.workMinutes;
       if (dayIsMismatch(day)) agg.mismatchDays += 1;
       const dayEntryMinutes = day.entries.reduce((sum, e) => sum + e.minutes, 0);
-      if (dayEntryMinutes > 0) agg.activeDays += 1; else agg.noInputDays += 1;
+      if (dayEntryMinutes > 0) { agg.activeDays += 1; agg.dayList.push(day.dateText); } else agg.noInputDays += 1;
 
       day.entries.forEach((entry) => {
         const project = stripCode(entry.project) || '(プロジェクト未選択)';
@@ -175,6 +177,8 @@
         agg.projectTotals[project] = (agg.projectTotals[project] || 0) + entry.minutes;
         if (!agg.taskByProject[project]) agg.taskByProject[project] = {};
         agg.taskByProject[project][task] = (agg.taskByProject[project][task] || 0) + entry.minutes;
+        if (!agg.dayByProject[project]) agg.dayByProject[project] = {};
+        agg.dayByProject[project][day.dateText] = (agg.dayByProject[project][day.dateText] || 0) + entry.minutes;
         agg.grandMinutes += entry.minutes;
         agg.entryCount += 1;
         if (!entry.project || /未選択/.test(entry.project)) agg.unselectedProject += 1;
@@ -254,21 +258,27 @@
       row.appendChild(head);
       row.appendChild(track);
 
-      // Task breakdown (expandable).
+      // Expandable detail: per-day vertical bar graph for this project, plus the
+      // task breakdown beneath it.
+      const dayMap = agg.dayByProject[project] || {};
       const tasks = agg.taskByProject[project] || {};
       const taskNames = Object.keys(tasks).sort((a, b) => tasks[b] - tasks[a]);
-      if (taskNames.length) {
+      if (agg.dayList.length || taskNames.length) {
         const details = document.createElement('details');
         details.className = 'jbe-report-tasks';
         const summary = document.createElement('summary');
-        summary.textContent = `${taskNames.length} タスク`;
+        summary.textContent = taskNames.length ? `日別内訳 ・ ${taskNames.length} タスク` : '日別内訳';
         details.appendChild(summary);
+
+        if (agg.dayList.length) details.appendChild(buildDayColumns(dayMap, agg.dayList));
+
         taskNames.forEach((task) => {
           const t = document.createElement('div');
           t.className = 'jbe-report-task-row';
           t.innerHTML = `<span>${escapeHtml(task)}</span><span>${minutesToHHMM(tasks[task])}</span>`;
           details.appendChild(t);
         });
+
         row.appendChild(details);
       }
 
@@ -282,6 +292,55 @@
     const div = document.createElement('div');
     div.textContent = String(text == null ? '' : text);
     return div.innerHTML;
+  }
+
+  // Extract the day-of-month from a list date label ("06/02(火)", "2026/06/02"…)
+  // for the compact x-axis labels under each column; the last number is the day.
+  function dayNumber(dateText) {
+    const nums = String(dateText == null ? '' : dateText).match(/\d+/g);
+    return nums && nums.length ? String(parseInt(nums[nums.length - 1], 10)) : String(dateText || '');
+  }
+
+  // Vertical bar graph of one project's man-hours across the month's active days.
+  // Column heights are normalised to that project's own busiest day; days with no
+  // hours for the project keep a faint baseline stub so the timeline reads cleanly.
+  function buildDayColumns(dayMap, dayList) {
+    const chart = document.createElement('div');
+    chart.className = 'jbe-report-daybars';
+    const max = dayList.reduce((m, d) => Math.max(m, dayMap[d] || 0), 1);
+
+    dayList.forEach((dateText) => {
+      const minutes = dayMap[dateText] || 0;
+      const col = document.createElement('div');
+      col.className = 'jbe-report-daybar-col';
+      col.title = `${dateText}: ${minutesToHHMM(minutes)}`;
+
+      const bar = document.createElement('div');
+      bar.className = 'jbe-report-daybar-bar';
+      const fill = document.createElement('div');
+      fill.className = 'jbe-report-daybar-fill';
+      if (minutes > 0) {
+        // Cap at 82% so the value printed above the tallest bar still fits.
+        fill.style.height = `${Math.max(6, (minutes / max) * 82)}%`;
+        const value = document.createElement('span');
+        value.className = 'jbe-report-daybar-value';
+        value.textContent = minutesToHHMM(minutes);
+        fill.appendChild(value);
+      } else {
+        fill.classList.add('is-empty');
+      }
+      bar.appendChild(fill);
+
+      const label = document.createElement('div');
+      label.className = 'jbe-report-daybar-label';
+      label.textContent = dayNumber(dateText);
+
+      col.appendChild(bar);
+      col.appendChild(label);
+      chart.appendChild(col);
+    });
+
+    return chart;
   }
 
   function openReport() {

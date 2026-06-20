@@ -205,6 +205,181 @@
 }
 
 /* ----------------------------------------------------------------------- */
+/* Man-hour edit page: compact 工数情報 summary header + date/nav row        */
+/* ----------------------------------------------------------------------- */
+
+.jobcan-enhanced #jbe-mh-summary {
+  display: flex;
+  gap: var(--spacing-lg, 24px);
+  flex-wrap: wrap;
+  align-items: stretch;
+  margin: 16px 0 8px;
+  padding: var(--spacing-md, 16px);
+  background: var(--color-card, #fff);
+  border: 1px solid var(--color-border, #dee2e6);
+  border-radius: var(--border-radius-lg, 12px);
+  box-shadow: var(--shadow-sm, 0 1px 2px rgba(0, 0, 0, 0.05));
+}
+
+.jobcan-enhanced .jbe-mh-summary-main {
+  flex: 1 1 280px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+}
+
+.jobcan-enhanced .jbe-mh-summary-aside {
+  flex: 1 1 320px;
+  min-width: 0;
+  display: flex;
+}
+
+.jobcan-enhanced .jbe-mh-summary-aside textarea {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 64px;
+  resize: vertical;
+}
+
+.jobcan-enhanced .jbe-mh-figure {
+  display: flex;
+  align-items: baseline;
+  gap: var(--spacing-sm, 8px);
+  flex-wrap: wrap;
+}
+
+.jobcan-enhanced .jbe-mh-figure-value {
+  font-size: 40px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--color-text-primary, #212529);
+  font-variant-numeric: tabular-nums;
+}
+
+.jobcan-enhanced .jbe-mh-badge {
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+
+.jobcan-enhanced .jbe-mh-badge--over,
+.jobcan-enhanced .jbe-mh-badge--under {
+  background: var(--color-danger, #DC3545);
+}
+
+.jobcan-enhanced .jbe-mh-badge--match {
+  background: var(--color-success, #28A745);
+}
+
+.jobcan-enhanced .jbe-mh-subline {
+  font-size: 13px;
+  color: var(--color-text-secondary, #6c757d);
+  font-variant-numeric: tabular-nums;
+}
+
+.jobcan-enhanced .jbe-mh-updated {
+  font-size: 11px;
+  color: var(--color-text-secondary, #6c757d);
+}
+
+.jobcan-enhanced #jbe-mh-nav,
+.jobcan-enhanced .jbe-mh-navrow {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm, 8px);
+  flex-wrap: wrap;
+  margin: 0 0 12px;
+  padding: var(--spacing-sm, 8px) var(--spacing-md, 16px);
+  background: var(--color-surface, #f8f9fa);
+  border: 1px solid var(--color-border, #dee2e6);
+  border-radius: var(--border-radius-md, 8px);
+}
+
+/* Size the native toolbar's Bootstrap columns to their content inside the flex row. */
+.jobcan-enhanced .jbe-mh-navrow > [class*="col-"],
+.jobcan-enhanced .jbe-mh-navrow > .col {
+  flex: 0 0 auto;
+  width: auto;
+  max-width: none;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.jobcan-enhanced .jbe-mh-nav-date {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs, 4px);
+  flex-wrap: wrap;
+  margin-right: auto;
+}
+
+.jobcan-enhanced .jbe-mh-nav-btn,
+.jobcan-enhanced .jbe-mh-navrow #add_from_template,
+.jobcan-enhanced #jbe-mh-nav #add_from_template {
+  background: var(--color-card, #fff);
+  color: var(--color-primary, #0077ff);
+  border: 1px solid var(--color-primary, #0077ff);
+  border-radius: var(--border-radius-md, 8px);
+  padding: 6px 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.jobcan-enhanced .jbe-mh-nav-btn:hover,
+.jobcan-enhanced .jbe-mh-navrow #add_from_template:hover,
+.jobcan-enhanced #jbe-mh-nav #add_from_template:hover {
+  background: var(--color-primary, #0077ff);
+  color: #fff;
+}
+
+.jobcan-enhanced .jbe-mh-nav-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* テンプレートから追加 dropdown menu: Jobcan ships it with no border/shadow (it floats
+   invisibly over the page) and dark text that's unreadable on the dark-mode menu.
+   Give it a real surface and theme-aware item colors. */
+
+/* Jobcan leaves the menu display:block even when closed, so styling it produced an
+   empty box by default; only show it when Bootstrap marks it open (.show). */
+.jobcan-enhanced #template_list:not(.show) {
+  display: none !important;
+}
+
+.jobcan-enhanced #template_list {
+  background: var(--color-card, #fff) !important;
+  border: 1px solid var(--color-border, #dee2e6) !important;
+  border-radius: var(--border-radius-md, 8px) !important;
+  box-shadow: var(--shadow, 0 4px 12px rgba(0, 0, 0, 0.12)) !important;
+  padding: 4px 0 !important;
+  min-width: 180px !important;
+}
+
+.jobcan-enhanced #template_list .dropdown-item {
+  color: var(--color-text-primary, #212529) !important;
+  padding: 6px 16px !important;
+  cursor: pointer;
+}
+
+.jobcan-enhanced #template_list .dropdown-item:hover,
+.jobcan-enhanced #template_list .dropdown-item:focus {
+  background: color-mix(in srgb, var(--color-primary, #0077ff) 14%, transparent) !important;
+  color: var(--color-primary, #0077ff) !important;
+}
+
+@media (max-width: 768px) {
+  .jobcan-enhanced .jbe-mh-figure-value { font-size: 32px; }
+  .jobcan-enhanced .jbe-mh-nav-actions { margin-left: 0; width: 100%; }
+}
+
+/* ----------------------------------------------------------------------- */
 /* Man-hour edit table: display fixes                                       */
 /* ----------------------------------------------------------------------- */
 
@@ -269,6 +444,91 @@
   height: 100%;
   background: var(--color-primary, #0077ff);
   border-radius: 999px;
+}
+
+/* Per-project per-day breakdown: a compact vertical bar graph inside each
+   project's expandable detail — one column per active day of the month. */
+.jobcan-enhanced .jbe-report-daybars {
+  display: flex;
+  align-items: stretch;
+  gap: 3px;
+  height: 116px;
+  margin: 8px 0 10px;
+  padding: 6px 2px 0;
+  overflow-x: auto;
+}
+
+.jobcan-enhanced .jbe-report-daybar-col {
+  flex: 1 0 28px;
+  min-width: 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.jobcan-enhanced .jbe-report-daybar-bar {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.jobcan-enhanced .jbe-report-daybar-fill {
+  position: relative;
+  width: 72%;
+  max-width: 18px;
+  min-height: 2px;
+  background: var(--color-primary, #0077ff);
+  border-radius: 3px 3px 0 0;
+}
+
+.jobcan-enhanced .jbe-report-daybar-fill.is-empty {
+  height: 2px;
+  background: var(--color-gray-200, #eceef1);
+}
+
+/* Hours value printed just above each day's bar. */
+.jobcan-enhanced .jbe-report-daybar-value {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 3px;
+  font-size: 9px;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--color-text-secondary, #777);
+  font-variant-numeric: tabular-nums;
+}
+
+.jobcan-enhanced .jbe-report-daybar-label {
+  margin-top: 4px;
+  font-size: 9px;
+  line-height: 1.3;
+  color: var(--color-text-secondary, #999);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Animate 日別内訳 open/close. The modern ::details-content pseudo lets the
+   panel grow/shrink with a height transition (no wrapper element needed);
+   browsers without it just open and close instantly. */
+.jobcan-enhanced .jbe-report-tasks {
+  interpolate-size: allow-keywords;
+}
+
+.jobcan-enhanced .jbe-report-tasks::details-content {
+  height: 0;
+  overflow: hidden;
+  transition-property: height, content-visibility;
+  transition-duration: 0.28s;
+  transition-timing-function: ease;
+  transition-behavior: allow-discrete;
+}
+
+.jobcan-enhanced .jbe-report-tasks[open]::details-content {
+  height: auto;
 }
 
 .jobcan-enhanced .jbe-report-tasks {
@@ -498,6 +758,7 @@
 .jobcan-enhanced #dsbd {
   grid-template-columns: auto auto 0 !important;
   justify-content: center !important;
+  border-radius: var(--border-radius-lg, 12px);
 }
 
 /* Dark mode: Google Charts paints solid white (#fff) panel/plot backgrounds,
@@ -530,6 +791,104 @@
 .jobcan-enhanced body.dark-mode #dsbd svg rect[fill="#ebebeb"],
 .jobcan-enhanced body.dark-mode #dsbd svg rect[fill="#EBEBEB"] {
   fill: var(--color-gray-200, #44445a) !important;
+}
+
+/* ------------------------------------------------------------------ */
+/* Aggregate-view redesign: rounded bars, brand colours, tooltip, pie  */
+/* ------------------------------------------------------------------ */
+/* Make the native Google Charts fit the extension's look. CSS `rx` + `fill` /
+   `stroke` overrides ride on Google's presentation attributes, so they re-apply
+   on every redraw (axis change / re-render) — verified live. */
+
+/* Rounded bar caps — every data rect except the chart background / gridlines
+   (both themes). Also rounds the legend swatches and any task-series colour. */
+.jobcan-enhanced #dsbd .bar svg rect:not([fill="#ffffff"]):not([fill="#cccccc"]):not([fill="#ebebeb"]) {
+  rx: 4px;
+  ry: 4px;
+}
+
+/* Recolour the two standard task series to the brand palette (デザイン → primary
+   blue, その他 → amber, replacing Google's flat #3366cc and harsh #dc3912).
+   Applies in both themes. The fill ATTRIBUTE keeps its value, so the rounding
+   rule above and Google's redraws still match; a 3rd+ task series (rare) simply
+   keeps Google's colour. */
+.jobcan-enhanced #dsbd .bar svg rect[fill="#3366cc"] {
+  fill: var(--color-primary, #0077ff) !important;
+}
+.jobcan-enhanced #dsbd .bar svg rect[fill="#dc3912"] {
+  fill: var(--color-warning, #eb9800) !important;
+}
+
+/* Hide zero-value segments. Google renders a 0 stacked value as a 0.5px-wide
+   rect, which — especially at the end of a bar — shows as a stray sliver (e.g.
+   an "その他: 0" amber cap). Drop any 0 / 0.5px-wide data rect; this also kills
+   that segment's hover tooltip. (0.5px ≈ a few minutes at this scale, well below
+   real logging granularity, so only true zeros are affected.) Both themes. */
+.jobcan-enhanced #dsbd .bar svg rect[width="0"],
+.jobcan-enhanced #dsbd .bar svg rect[width="0.5"] {
+  display: none !important;
+}
+
+/* Hover tooltip: <g class="google-visualization-tooltip"> whose bubble is a
+   white `<path stroke="#cccccc">` (a path, so the rect→transparent rule above
+   misses it) — leaving light text on a white box. Re-skin the bubble dark.
+   Covers the pie-slice, bar and pie-legend tooltips; the bubble can be a <path>
+   OR a <rect>, so target both. */
+.jobcan-enhanced body.dark-mode #dsbd svg g.google-visualization-tooltip path,
+.jobcan-enhanced body.dark-mode #dsbd svg g.google-visualization-tooltip rect {
+  fill: var(--color-surface-elevated, #2f3042) !important;
+  stroke: var(--color-control-border, #4a4a64) !important;
+}
+
+/* Some Google Charts builds render the tooltip as an HTML <div> appended to the
+   page instead of inside the SVG — theme that variant too (the SVG <g> ignores
+   these box properties, so this rule is safe for both). */
+.jobcan-enhanced body.dark-mode .google-visualization-tooltip {
+  background-color: var(--color-surface-elevated, #2f3042) !important;
+  border-color: var(--color-control-border, #4a4a64) !important;
+  color: var(--color-text-primary, #e4e6eb) !important;
+}
+
+/* The pie LEGEND's hover tooltip (full label for truncated entries) is a SEPARATE
+   beast: a Google Closure tooltip `<div class="goog-tooltip">` appended to <body>
+   (NOT a google-visualization-tooltip, and NOT inside #dsbd). Its inner <div> is
+   white and inherits the page's light text → light-on-white, unreadable in dark
+   mode. Re-skin it dark. Verified live — this is the one the report flagged. */
+/* Single themed frame on the container + comfortable padding. */
+.jobcan-enhanced body.dark-mode .goog-tooltip {
+  background-color: var(--color-surface-elevated, #2f3042) !important;
+  color: var(--color-text-primary, #e4e6eb) !important;
+  border: 1px solid var(--color-control-border, #4a4a64) !important;
+  border-radius: var(--border-radius-md, 8px) !important;
+  padding: 4px 9px !important;
+  box-shadow: var(--shadow-dropdown, 0 4px 12px rgba(0, 0, 0, 0.4)) !important;
+}
+/* The inner <div> carries Closure's own default 1px solid-black frame, which
+   showed as a SECOND box inside the themed one. Strip its border/padding so only
+   the single container frame above remains. */
+.jobcan-enhanced body.dark-mode .goog-tooltip div {
+  background-color: var(--color-surface-elevated, #2f3042) !important;
+  color: var(--color-text-primary, #e4e6eb) !important;
+  border: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+/* Pie slice separators: Google strokes them white (#fff), harsh on dark. Match
+   the card background so slices read as cleanly separated segments. */
+.jobcan-enhanced body.dark-mode #dsbd .pie svg path[stroke="#ffffff"] {
+  stroke: var(--color-card, #272736) !important;
+  stroke-width: 2px !important;
+}
+
+/* Slightly smaller chart text so the legend / axis labels read less cramped
+   (both themes). CSS overrides Google's font-size presentation attribute. NOTE:
+   this only shrinks the glyphs — Google bakes the "…" truncation into the label
+   strings at render time and draws the charts at a fixed size, so full names are
+   read via the dark hover tooltip above, not by shrinking the text. */
+.jobcan-enhanced #dsbd .pie svg text,
+.jobcan-enhanced #dsbd .bar svg text {
+  font-size: 11px !important;
 }
 
 /* ------------------------------------------------------------------ */
