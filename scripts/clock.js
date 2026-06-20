@@ -1,50 +1,5 @@
 // scripts/clock.js
 
-// Constants for colors and styles
-const COLORS = {
-  primary: {
-    gradient: 'linear-gradient(135deg, var(--color-primary-darker) 0%, var(--color-primary) 100%)',
-    solid: 'var(--color-primary)',
-    shadow: 'var(--shadow-primary)'
-  },
-  working: {
-    gradient: 'linear-gradient(135deg, var(--color-primary-darker) 0%, var(--color-primary) 100%)',
-    colon: 'var(--color-primary)'
-  },
-  notWorking: {
-    gradient: 'linear-gradient(135deg, var(--color-gray-600) 0%, var(--color-gray-700) 100%)',
-    colon: 'var(--color-gray-600)'
-  },
-  progress: {
-    complete: {
-      color: 'var(--color-success)',
-      shadow: 'var(--shadow-success, 0 0 8px var(--color-success-border))'
-    },
-    good: {
-      color: 'var(--color-info)',
-      shadow: 'var(--shadow-info, 0 0 8px var(--color-info-border, rgba(23, 162, 184, 0.3)))'
-    },
-    halfway: {
-      color: 'var(--color-warning)',
-      shadow: 'var(--shadow-warning, 0 0 8px var(--color-warning-border))'
-    },
-    starting: {
-      color: 'var(--color-orange, var(--color-warning))',
-      shadow: 'var(--shadow-orange, 0 0 8px var(--color-warning-border))'
-    },
-    inactive: {
-      color: 'var(--color-black-70)',
-      shadow: 'none'
-    }
-  },
-  timeIndicator: {
-    color: 'var(--color-danger)',
-    shadow: {
-      normal: 'var(--shadow-danger-sm, 0 0 4px var(--color-danger-border))',
-      pulse: 'var(--shadow-danger, 0 0 8px var(--color-danger-border))'
-    }
-  }
-};
 
 // Work hours configuration
 const WORK_HOURS = {
@@ -500,7 +455,7 @@ function updateWorkProgressBar(container) {
     };
   }
   
-  const { track, fill, indicator, percentage } = progressContainer._cachedElements;
+  const { fill, indicator, percentage } = progressContainer._cachedElements;
   if (!fill || !percentage) return;
   
   const now = new Date(); 
@@ -1141,7 +1096,6 @@ function updateFlipClockColors(container) {
   });
 
   // Persist the applied color class
-  const isFirstInitialization = !previousColorClass;
   const hasColorChanged = previousColorClass && previousColorClass !== colorClass;
   container.dataset.clockColorClass = colorClass;
 

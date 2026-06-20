@@ -229,40 +229,9 @@ function ensureFloatingActionMenu() {
     if (e.key === 'Escape') closeFloatingActionMenu();
   });
 
-  const modalObserver = new MutationObserver(() => {
-    const modal = document.getElementById('man-hour-manage-modal');
-    if (!modal) return;
-    const isVisible = modal.classList.contains('show');
-    root.style.display = isVisible ? 'none' : 'flex';
-    if (isVisible) closeFloatingActionMenu();
-  });
-
-  if (typeof window.__jbe_registerManagedObserver === 'function') {
-    window.__jbe_registerManagedObserver('watch:screenshot-modal', modalObserver);
-  }
-
-  if (typeof window.__jbe_startManagedInterval === 'function') {
-    window.__jbe_startManagedInterval('watch:screenshot-modal-find', ({ stop }) => {
-      const modal = document.getElementById('man-hour-manage-modal');
-      if (!modal) return;
-      stop();
-      modalObserver.observe(modal, { attributes: true, attributeFilter: ['class'] });
-      root.style.display = modal.classList.contains('show') ? 'none' : 'flex';
-    }, 500, { maxRuns: 120 });
-  } else {
-    let attempts = 0;
-    const checkForModal = setInterval(() => {
-      attempts += 1;
-      const modal = document.getElementById('man-hour-manage-modal');
-      if (modal) {
-        clearInterval(checkForModal);
-        modalObserver.observe(modal, { attributes: true, attributeFilter: ['class'] });
-        root.style.display = modal.classList.contains('show') ? 'none' : 'flex';
-      } else if (attempts >= 120) {
-        clearInterval(checkForModal);
-      }
-    }, 500);
-  }
+  // (Removed the #man-hour-manage-modal visibility watcher that used to hide this
+  // floating menu while that modal was open — the modal no longer exists after the
+  // 2026 man-hour rebuild, so the watcher only polled fruitlessly for ~60s.)
 
   state.root = root;
   state.mainButton = mainButton;

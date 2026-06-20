@@ -188,10 +188,6 @@ applyEnhancements();
     '.work-progress-container',
     '.work-time-overlay',
     '.screenshot-notification',
-    '.select-sidepanel',
-    '#table-report-modal-overlay',
-    '#fixed-table-filter-buttons',
-    '#table-filter-buttons',
     '.time-suggestion-chip',
     '#jbe-manhour-report',
     '#jbe-manhour-list-filters'

@@ -466,56 +466,6 @@ function setupFormValidationObserver() {
   attachValidationToForms();
 }
 
-// Keyboard shortcuts within man-hour modal
-function setupManHourKeyboardShortcuts() {
-  if (window.__jbe_manHourShortcutsInited) return;
-  window.__jbe_manHourShortcutsInited = true;
-
-  document.addEventListener('keydown', function(e) {
-    const modal = document.getElementById('man-hour-manage-modal');
-    if (!modal || !modal.classList.contains('show')) return;
-    if (e.key === 'Enter' && e.shiftKey && !e.metaKey && !e.ctrlKey) {
-      e.preventDefault();
-      const addRecordBtn = document.querySelector('button[onclick*="addRecord"], a[onclick*="addRecord"]');
-      if (addRecordBtn) addRecordBtn.click();
-      else if (typeof addRecord === 'function') addRecord();
-    }
-    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-      e.preventDefault();
-      const saveBtn = document.querySelector('#save, button[type="submit"], input[type="submit"]');
-      if (saveBtn) saveBtn.click();
-      else if (typeof pushSave === 'function') pushSave();
-    }
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      const closeBtn = modal.querySelector('.close, [data-dismiss="modal"]');
-      if (closeBtn) closeBtn.click();
-      else {
-        modal.classList.remove('show');
-        const backdrop = document.querySelector('.modal-backdrop');
-        if (backdrop) backdrop.remove();
-        document.body.classList.remove('modal-open'); document.body.style.paddingRight = '';
-      }
-    }
-  });
-  if (window.addRecord && typeof window.addRecord === 'function') {
-    const originalAddRecord = window.addRecord;
-    window.addRecord = function() {
-      originalAddRecord.apply(this, arguments);
-      setTimeout(() => {
-        const rows = document.querySelectorAll('.man-hour-table-edit tr, .jbc-table tr');
-        if (rows.length > 0) {
-          const lastRow = rows[rows.length - 1];
-          const timeInput = lastRow.querySelector('input.man-hour-input[name="minutes[]"]');
-          if (timeInput) {
-            const event = new Event('change', { bubbles: true });
-            timeInput.dispatchEvent(event);
-          }
-        }
-      }, 100);
-    };
-  }
-}
 
 // Auto-collapse certain panels on man-hour page
 function autoCollapseExternalPanelMisc() {

@@ -25,9 +25,6 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   const loginPassword = document.getElementById('loginPassword');
   const rememberLogin = document.getElementById('rememberLogin');
-  const submitLogin = document.getElementById('submitLogin');
-  const cancelLogin = document.getElementById('cancelLogin');
-  const loginStatus = document.getElementById('loginStatus');
   const securityNote = document.getElementById('securityNote');
   
   // Dropdown elements
