@@ -403,6 +403,29 @@
 }
 
 /* ------------------------------------------------------------------ */
+/* Dark-mode fix: 備考 textarea border + edit-table header underline   */
+/* ------------------------------------------------------------------ */
+/* 備考 textarea (工数実績入力 page) carries Bootstrap's `.border` utility,
+   which is `border-color:#dee2e6 !important` and so out-!importants the
+   extension's themed `textarea` rule (css/styles.css ~L1126, no !important) —
+   the border stays near-white in dark mode. Re-tint it to the control border so
+   it matches the row inputs. Verified live. */
+.jobcan-enhanced body.dark-mode textarea.border {
+  border-color: var(--color-control-border, #4a4a64) !important;
+}
+
+/* Edit-table header underline: th gets background --color-gray-100 (#33333f)
+   but a border-bottom of --color-border (#3a3a4c) — the line ends up LIGHTER
+   than its own header background, so it reads as a bright white rule (verified
+   live). Drop it to --color-border-light (= the thead background) so the
+   header/body split stays subtle. Scoped to the edit table via :has(input.manhour)
+   so the attendance/list tables are untouched. */
+.jobcan-enhanced body.dark-mode table.jbc-table:has(input.manhour) thead th,
+.jobcan-enhanced body.dark-mode table.jbc-table:has(input.manhour) tr.jbc-table-header th {
+  border-bottom-color: var(--color-border-light, #33333f) !important;
+}
+
+/* ------------------------------------------------------------------ */
 /* "Outline danger" buttons (e.g. 削除 on the man-hour edit page)       */
 /* ------------------------------------------------------------------ */
 /* Jobcan marks its delete button `btn jbc-btn-outline-primary text-danger
@@ -461,6 +484,52 @@
 .jobcan-enhanced body.dark-mode .jbc-table thead,
 .jobcan-enhanced body.dark-mode .jbc-table thead tr {
   background-color: var(--color-gray-100, #33333f) !important;
+}
+
+/* ------------------------------------------------------------------ */
+/* Achievement-list aggregate view (#dsbd): native Google Charts        */
+/* ------------------------------------------------------------------ */
+/* The 工数実績一覧 page renders a project/task aggregate (pie + stacked bar)
+   with Google Charts inside #dsbd, laid out as a 3-column CSS grid whose 3rd
+   column is always empty (every child spans columns 1-2). That packs the whole
+   block against the left edge and leaves a dead ~124px gap on the right.
+   Collapse the empty column (auto-sized down to its 0 content) and center the
+   two chart columns so the left/right margins match. Applies in both themes. */
+.jobcan-enhanced #dsbd {
+  grid-template-columns: auto auto 0 !important;
+  justify-content: center !important;
+}
+
+/* Dark mode: Google Charts paints solid white (#fff) panel/plot backgrounds,
+   near-black text and light (#ccc / #ebebeb) gridlines straight into the SVG via
+   `fill` PRESENTATION ATTRIBUTES — none of which follow dark mode, so the charts
+   stay on white panels (verified live). A CSS `fill`/`border` always out-ranks a
+   presentation attribute, and the override survives Google Charts' redraws (an
+   axis change or full re-render only rewrites attributes, not our stylesheet) —
+   verified live across initial render, full reload and an 集計軸 change. */
+.jobcan-enhanced body.dark-mode #dsbd {
+  border-color: var(--color-border, #3a3a4c) !important;
+}
+
+/* Chart panel + plot backgrounds → transparent (show the dark card behind). */
+.jobcan-enhanced body.dark-mode #dsbd svg rect[fill="#ffffff"],
+.jobcan-enhanced body.dark-mode #dsbd svg rect[fill="#fff"],
+.jobcan-enhanced body.dark-mode #dsbd svg rect[fill="#FFFFFF"] {
+  fill: transparent !important;
+}
+
+/* Title, axis labels, legend and pie %-labels → light. (The data bars/slices
+   keep Google's category palette — it stays legible on the dark background.) */
+.jobcan-enhanced body.dark-mode #dsbd svg text {
+  fill: var(--color-text-primary, #e4e6eb) !important;
+}
+
+/* Axis + gridlines (thin #ccc / #ebebeb rects) → a faint dark line. */
+.jobcan-enhanced body.dark-mode #dsbd svg rect[fill="#cccccc"],
+.jobcan-enhanced body.dark-mode #dsbd svg rect[fill="#CCCCCC"],
+.jobcan-enhanced body.dark-mode #dsbd svg rect[fill="#ebebeb"],
+.jobcan-enhanced body.dark-mode #dsbd svg rect[fill="#EBEBEB"] {
+  fill: var(--color-gray-200, #44445a) !important;
 }
 
 /* ------------------------------------------------------------------ */
