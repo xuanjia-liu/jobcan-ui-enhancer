@@ -28,7 +28,6 @@
       "css": ["css/variables.css", "css/base.css", "css/styles.css", "css/responsive.css", "css/manHourRebuild.css"],
       "js": [
         "html2canvas.min.js",
-        "gif.js",
         "confetti.min.js",
         "scripts/utils.js",
         "scripts/manHourApi.js",
@@ -57,7 +56,7 @@
   
   "web_accessible_resources": [
     {
-      "resources": ["html2canvas.min.js", "gif.worker.js", "confetti.min.js"],
+      "resources": ["html2canvas.min.js", "confetti.min.js"],
       "matches": ["*://ssl.jobcan.jp/*", "*://id.jobcan.jp/*"]
     }
   ],

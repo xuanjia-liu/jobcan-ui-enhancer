@@ -119,7 +119,6 @@ function applyEnhancements() {
   // Flip clock and status
   if (isEmployeePage && typeof setupFlipClock === 'function') setupFlipClock();
   if (isEmployeePage && typeof setupScreenshotButton === 'function') setupScreenshotButton();
-  if (isEmployeePage && typeof addFormScreenshotButton === 'function') addFormScreenshotButton();
 
   // Other enhancements
   if (typeof fixSettingsIcon === 'function') fixSettingsIcon();
@@ -133,9 +132,6 @@ function applyEnhancements() {
   // scripts/manHourList.js). The legacy modal/select-based handlers and the old
   // scripts/tableFilter.js report were removed in the cleanup after the rebuild,
   // since they targeted DOM that no longer exists.
-  if (isManHourPage && typeof setupFormValidationObserver === 'function') {
-    setupFormValidationObserver();
-  }
   if (isManHourEditPage && typeof setupManHourEditPage === 'function') {
     setupManHourEditPage();
   }
@@ -168,9 +164,6 @@ function applyEnhancements() {
   if (isManHourPage && typeof extractAndStoreCollapseInfoData === 'function') {
     extractAndStoreCollapseInfoData();
   }
-  
-  // Chart enhancer
-  // if (typeof setupChartEnhancer === 'function') setupChartEnhancer();
 }
 
 // Run on initial load

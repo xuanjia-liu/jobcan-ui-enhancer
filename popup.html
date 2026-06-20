@@ -3,8 +3,6 @@
 <head>
   <title>Jobcan UI エンハンサー</title>
   <meta charset="UTF-8">
-  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
     :root {
       /* Color Palette - Based on Design Guide */
@@ -674,9 +672,24 @@
       color: var(--color-primary);
     }
     
-    .sub-menu-item i {
+    .sub-menu-item i,
+    .sub-menu-item .jbe-icon {
       margin-right: 8px;
       color: var(--color-primary);
+    }
+
+    /* Inline SVG icons — replaces the Material Icons web font (no CDN ping, no FOUT,
+       works offline). Sized/colored via currentColor like the old <i> glyphs. */
+    .jbe-icon {
+      width: 16px;
+      height: 16px;
+      flex-shrink: 0;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      vertical-align: middle;
     }
 
     /* Section labels grouping the launcher (勤怠 / 工数 / 申請 / 設定) */
@@ -899,7 +912,7 @@
     <div class="setting-section-header">
       <h2 class="setting-section-title">クイックアクセス</h2>
       <button type="button" class="login-settings-icon-btn" aria-label="ログイン設定" title="ログイン設定">
-        <i class="material-icons" id="loginSettingsIcon" style="font-size: 16px;">settings</i>
+        <svg class="jbe-icon" id="loginSettingsIcon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       </button>
     </div>
     
@@ -917,7 +930,7 @@
             <div class="login-field-password-wrap">
               <input type="password" id="loginPassword" placeholder="パスワードを入力" autocomplete="current-password" />
               <button type="button" class="password-toggle-btn" id="togglePasswordVisibility" aria-label="パスワードを表示" aria-pressed="false" title="パスワードを表示">
-                <i class="material-icons" aria-hidden="true">visibility</i>
+                <svg class="jbe-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
               </button>
             </div>
           </div>
@@ -948,42 +961,42 @@
         <div class="sub-menu quick-open-menu" id="quickOpen-menu" role="menu" aria-label="ページを開く">
           <div class="sub-menu-section-title" role="presentation">勤怠</div>
           <a href="https://ssl.jobcan.jp/employee/attendance" class="sub-menu-item" role="menuitem">
-            <i class="material-icons" style="font-size: 16px;">calendar_today</i>
+            <svg class="jbe-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
             出勤簿
           </a>
           <a href="https://ssl.jobcan.jp/employee/adit" class="sub-menu-item" role="menuitem">
-            <i class="material-icons" style="font-size: 16px;">edit</i>
+            <svg class="jbe-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M17 3a2.83 2.83 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5z"/></svg>
             打刻修正(1日1件単位)
           </a>
           <a href="https://ssl.jobcan.jp/employee/attendance/edit" class="sub-menu-item" role="menuitem">
-            <i class="material-icons" style="font-size: 16px;">date_range</i>
+            <svg class="jbe-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="16" y2="14"/></svg>
             出退勤編集(1か月単位)
           </a>
           <div class="sub-menu-section-title" role="presentation">工数</div>
           <a href="https://ssl.jobcan.jp/employee/man-hour-manage" class="sub-menu-item" role="menuitem">
-            <i class="material-icons" style="font-size: 16px;">work</i>
+            <svg class="jbe-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
             工数管理
           </a>
           <a href="https://ssl.jobcan.jp/employee/man-hour-manage/setting" class="sub-menu-item" role="menuitem">
-            <i class="material-icons" style="font-size: 16px;">list</i>
+            <svg class="jbe-icon" viewBox="0 0 24 24" aria-hidden="true"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
             工数かんたん入力設定
           </a>
           <div class="sub-menu-section-title" role="presentation">申請</div>
           <a href="https://ssl.jobcan.jp/employee/holiday" class="sub-menu-item" role="menuitem">
-            <i class="material-icons" style="font-size: 16px;">event_available</i>
+            <svg class="jbe-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
             休暇申請
           </a>
           <a href="https://ssl.jobcan.jp/employee/over-work" class="sub-menu-item" role="menuitem">
-            <i class="material-icons" style="font-size: 16px;">access_time</i>
+            <svg class="jbe-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
             残業申請
           </a>
           <a href="https://ssl.jobcan.jp/employee/holidayworking" class="sub-menu-item" role="menuitem">
-            <i class="material-icons" style="font-size: 16px;">today</i>
+            <svg class="jbe-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M12 18l2-3h-4z"/></svg>
             休日出勤申請
           </a>
           <div class="sub-menu-section-title" role="presentation">設定</div>
           <a href="https://ssl.jobcan.jp/employee/edit-info" class="sub-menu-item" role="menuitem">
-            <i class="material-icons" style="font-size: 16px;">settings</i>
+            <svg class="jbe-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
             スタッフ設定
           </a>
         </div>

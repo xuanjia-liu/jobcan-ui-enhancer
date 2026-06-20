@@ -173,6 +173,60 @@
   }
 
   // ---------------------------------------------------------------------------
+  // 4. Action bar: group 追加 + スクリーンショット + 保存 into one row
+  // ---------------------------------------------------------------------------
+
+  // The rebuilt editor scatters its actions (保存 top-right, 追加 below the table)
+  // and has no on-page screenshot button. Pull all three into one bottom action
+  // bar. The native #save / #add are MOVED (never cloned) so their own click
+  // handlers stay attached; the screenshot button reuses the shared capture tool.
+  function setupEditActionBar() {
+    const save = document.getElementById('save');
+    const add = document.getElementById('add');
+    if (!save || !add) return false;
+
+    let bar = document.getElementById('jbe-mh-actionbar');
+    if (bar) {
+      // Re-assert membership if the page ever re-renders the native buttons.
+      if (add.parentElement !== bar) bar.insertBefore(add, bar.firstChild);
+      if (save.parentElement !== bar) bar.appendChild(save);
+      return true;
+    }
+
+    const saveCol = save.parentElement;
+    const addAnchor = add.closest('.row') || add.parentElement;
+
+    bar = document.createElement('div');
+    bar.id = 'jbe-mh-actionbar';
+
+    const shot = document.createElement('button');
+    shot.type = 'button';
+    shot.id = 'jbe-mh-screenshot';
+    shot.className = 'btn jbc-btn-outline-primary';
+    shot.title = 'スクリーンショット';
+    shot.innerHTML =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg><span>スクリーンショット</span>';
+    shot.addEventListener('click', () => {
+      // Auto-generate the day's 工数レポート (copy + download preview). Fall back to
+      // the manual area-select capture only if the report builder isn't available.
+      if (typeof captureManHourDayReport === 'function') captureManHourDayReport();
+      else if (typeof initScreenshotCapture === 'function') initScreenshotCapture();
+    });
+
+    // Insert the bar where 追加 sat, then MOVE the native buttons into it.
+    addAnchor.parentElement.insertBefore(bar, addAnchor);
+    bar.appendChild(add);   // 追加 — pushed to the left by CSS (margin-right:auto)
+    bar.appendChild(shot);  // スクリーンショット
+    bar.appendChild(save);  // 保存 — primary, far right
+
+    // Hide the now-empty original wrappers so they don't leave gaps.
+    if (saveCol && !saveCol.querySelector('button, input, select, a')) saveCol.style.display = 'none';
+    if (addAnchor && addAnchor !== bar && !addAnchor.querySelector('button, input, select, a')) addAnchor.style.display = 'none';
+
+    return true;
+  }
+
+  // ---------------------------------------------------------------------------
   // Orchestration
   // ---------------------------------------------------------------------------
 
@@ -194,6 +248,7 @@
       if (!table) return false;
       enhanceExistingRows(document);
       refreshSuggestionChips();
+      setupEditActionBar();
       return true;
     };
 
@@ -222,7 +277,7 @@
             rowsChanged = true;
           }
         });
-        if (rowsChanged) refreshSuggestionChips();
+        if (rowsChanged) { refreshSuggestionChips(); setupEditActionBar(); }
       });
       observer.observe(tbody, { childList: true });
       if (typeof window.__jbe_registerManagedObserver === 'function') {

@@ -175,6 +175,83 @@
   word-break: break-word;
 }
 
+/* Man-hour edit page: unified action bar grouping 追加 + スクリーンショット + 保存. */
+.jobcan-enhanced #jbe-mh-actionbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 16px 0 4px;
+  padding: 12px 16px;
+  background: var(--color-surface, #f8f9fa);
+  border: 1px solid var(--color-border, #dee2e6);
+  border-radius: var(--border-radius-md, 8px);
+}
+
+/* Push 追加 to the left so the commit actions (screenshot + 保存) group on the right. */
+.jobcan-enhanced #jbe-mh-actionbar > #add {
+  margin-right: auto;
+}
+
+.jobcan-enhanced #jbe-mh-screenshot {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.jobcan-enhanced #jbe-mh-screenshot svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* ----------------------------------------------------------------------- */
+/* Man-hour edit table: display fixes                                       */
+/* ----------------------------------------------------------------------- */
+
+/* The 「テンプレートから追加」 dropdown menu sits at z-index:0, so the table (later
+   in the DOM) painted over it and hid the template list. Lift Bootstrap dropdown
+   menus above the table. */
+.jobcan-enhanced .dropdown-menu {
+  z-index: 1000 !important;
+}
+
+/* Tighten the wide gap between editable cells — Jobcan gives every cell pl-2/pr-2
+   (8px each side); halve it. Scoped with :has(input.manhour) so ONLY the edit
+   table is affected (attendance/list tables keep their original spacing). */
+.jobcan-enhanced table.jbc-table:has(input.manhour) td,
+.jobcan-enhanced table.jbc-table:has(input.manhour) th {
+  padding-left: 4px !important;
+  padding-right: 4px !important;
+}
+
+/* Keep the checkbox / 実績 / 差分 columns compact so the spare table width flows
+   into the text columns (project/task/note) instead of pooling as empty space on
+   the right (the "large gap" on wide screens). Edit table only, via :has(). */
+.jobcan-enhanced table.jbc-table:has(input.manhour) th:first-child,
+.jobcan-enhanced table.jbc-table:has(input.manhour) td:first-child {
+  width: 40px;
+}
+
+.jobcan-enhanced table.jbc-table:has(input.manhour) td.manhour {
+  width: 96px;
+}
+
+.jobcan-enhanced table.jbc-table:has(input.manhour) th:last-child,
+.jobcan-enhanced table.jbc-table:has(input.manhour) td:last-child {
+  width: 92px;
+}
+
+/* Jobcan leaves the 実績 input at ~50px, clipping "03:03". Make it fill its column
+   (Jobcan's column got the spare width but the input didn't) and center the time. */
+.jobcan-enhanced table.jbc-table input.manhour {
+  width: 100% !important;
+  box-sizing: border-box;
+  min-width: 0;
+  padding-left: 6px !important;
+  padding-right: 6px !important;
+  text-align: center;
+}
+
 .jobcan-enhanced .jbe-report-bar-time {
   flex-shrink: 0;
   color: var(--color-text-secondary, #555);

@@ -1,8 +1,5 @@
 // scripts/screenshot.js
 
-const JBE_GIF_FRAME_DELAYS = [70, 70, 80, 90, 110, 140, 520];
-let jbeGifWorkerBlobUrlPromise = null;
-
 function parseTimeTextToMinutes(raw) {
   const text = String(raw || '').trim();
   if (!text) return 0;
@@ -36,137 +33,6 @@ function formatMinutesToHHMM(minutes) {
   const hours = Math.floor(safe / 60);
   const mins = safe % 60;
   return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
-}
-
-function easeOutQuint(progress) {
-  const p = Math.min(Math.max(progress, 0), 1);
-  return 1 - Math.pow(1 - p, 5);
-}
-
-function waitForAnimationFrame(frameCount = 1) {
-  return new Promise((resolve) => {
-    const step = (remaining) => {
-      if (remaining <= 0) {
-        resolve();
-        return;
-      }
-      requestAnimationFrame(() => step(remaining - 1));
-    };
-    step(frameCount);
-  });
-}
-
-async function copyBlobToClipboard(blob, mimeType) {
-  if (
-    typeof ClipboardItem === 'undefined' ||
-    !navigator.clipboard ||
-    typeof navigator.clipboard.write !== 'function'
-  ) {
-    return { ok: false, reason: 'clipboard-api-unavailable' };
-  }
-
-  try {
-    const clipboardItem = new ClipboardItem({ [mimeType]: blob });
-    await navigator.clipboard.write([clipboardItem]);
-    return { ok: true };
-  } catch (error) {
-    console.error(`Clipboard write failed for ${mimeType}:`, error);
-    return { ok: false, reason: 'clipboard-write-failed', error };
-  }
-}
-
-function canvasToBlob(canvas, type = 'image/png', quality) {
-  return new Promise((resolve, reject) => {
-    canvas.toBlob((blob) => {
-      if (blob) {
-        resolve(blob);
-      } else {
-        reject(new Error(`Failed to convert canvas to ${type}`));
-      }
-    }, type, quality);
-  });
-}
-
-async function copyGifToClipboard(gifBlob, fallbackCanvas) {
-  if (
-    typeof ClipboardItem === 'undefined' ||
-    !navigator.clipboard ||
-    typeof navigator.clipboard.write !== 'function'
-  ) {
-    return { ok: false, reason: 'clipboard-api-unavailable' };
-  }
-
-  try {
-    const pngBlob = fallbackCanvas ? await canvasToBlob(fallbackCanvas, 'image/png') : null;
-
-    const attempts = [];
-
-    // Try native GIF first. Some macOS targets can consume this even when browser support docs are unclear.
-    attempts.push({
-      mode: 'image-gif',
-      payload: pngBlob ? { 'image/gif': gifBlob, 'image/png': pngBlob } : { 'image/gif': gifBlob }
-    });
-
-    // Then try Chromium custom format plus PNG fallback.
-    attempts.push({
-      mode: 'web-image-gif',
-      payload: pngBlob ? { 'web image/gif': gifBlob, 'image/png': pngBlob } : { 'web image/gif': gifBlob }
-    });
-
-    // Last resort: PNG only, so paste still works somewhere.
-    if (pngBlob) {
-      attempts.push({
-        mode: 'image-png',
-        payload: { 'image/png': pngBlob }
-      });
-    }
-
-    let lastError = null;
-    for (const attempt of attempts) {
-      try {
-        const clipboardItem = new ClipboardItem(attempt.payload);
-        await navigator.clipboard.write([clipboardItem]);
-        return {
-          ok: true,
-          mode: attempt.mode,
-          includesGif: attempt.mode !== 'image-png',
-          includesPngFallback: !!attempt.payload['image/png']
-        };
-      } catch (error) {
-        lastError = error;
-        console.error(`Clipboard write failed for ${attempt.mode}:`, error);
-      }
-    }
-
-    return { ok: false, reason: 'clipboard-write-failed', error: lastError };
-  } catch (error) {
-    console.error('Clipboard write failed for GIF payload:', error);
-    return { ok: false, reason: 'clipboard-write-failed', error };
-  }
-}
-
-async function ensureGifWorkerBlobUrl() {
-  if (jbeGifWorkerBlobUrlPromise) {
-    return jbeGifWorkerBlobUrlPromise;
-  }
-
-  jbeGifWorkerBlobUrlPromise = (async () => {
-    const workerUrl = chrome.runtime.getURL('gif.worker.js');
-    const response = await fetch(workerUrl);
-    if (!response.ok) {
-      throw new Error(`Failed to load gif.worker.js (${response.status})`);
-    }
-
-    const workerSource = await response.text();
-    return URL.createObjectURL(
-      new Blob([workerSource], { type: 'application/javascript' })
-    );
-  })().catch((error) => {
-    jbeGifWorkerBlobUrlPromise = null;
-    throw error;
-  });
-
-  return jbeGifWorkerBlobUrlPromise;
 }
 
 function getFabState() {
@@ -711,214 +577,6 @@ function showScreenshotPreview(imageData, options = {}) {
   }
 }
 
-function setButtonBusy(button, isBusy, busyLabel) {
-  if (!button) return;
-
-  if (isBusy) {
-    if (!button.dataset.originalHtml) {
-      button.dataset.originalHtml = button.innerHTML;
-    }
-    button.disabled = true;
-    button.innerHTML = busyLabel;
-    return;
-  }
-
-  button.disabled = false;
-  if (button.dataset.originalHtml) {
-    button.innerHTML = button.dataset.originalHtml;
-  }
-}
-
-function resolveFormElementFromFooter(footer) {
-  const modal = footer.closest('.modal, .modal-content, .jbc-modal');
-  let formElement;
-
-  if (modal) {
-    formElement = modal.querySelector('form');
-  }
-  if (!formElement) {
-    formElement = document.getElementById('save-form');
-  }
-  if (!formElement) {
-    const forms = document.querySelectorAll('form');
-    for (const form of forms) {
-      if (form.querySelector('[type="submit"], #save')) {
-        formElement = form;
-        break;
-      }
-    }
-  }
-
-  return formElement || null;
-}
-
-function updateAnimatedScreenshotValues(layoutElem, progress) {
-  if (!layoutElem) return;
-
-  const eased = easeOutQuint(progress);
-  layoutElem.querySelectorAll('[data-jbe-countup-target]').forEach((node) => {
-    const target = parseInt(node.dataset.jbeCountupTarget || '0', 10) || 0;
-    node.textContent = formatMinutesToHHMM(Math.round(target * eased));
-  });
-}
-
-async function renderElementCanvasForExport(layoutElem, screenshotTheme) {
-  return html2canvas(layoutElem, {
-    allowTaint: true,
-    useCORS: true,
-    backgroundColor: screenshotTheme.canvasBackground,
-    scale: 2,
-    logging: false,
-    ignoreElements: (node) => {
-      return node.classList && (
-        node.classList.contains('form-screenshot-button') ||
-        node.classList.contains('btn-close') ||
-        node.classList.contains('close')
-      );
-    }
-  });
-}
-
-async function captureElementAnimatedGif(element, triggerButton) {
-  if (!element) return;
-
-  if (typeof html2canvas !== 'function') {
-    showNotification('html2canvasが読み込まれていません。キャプチャできません。');
-    return;
-  }
-
-  if (typeof GIF !== 'function') {
-    showNotification('GIFライブラリが読み込まれていません。');
-    return;
-  }
-
-  setButtonBusy(triggerButton, true, 'GIF作成中...');
-  if (typeof window.showNotification === 'function') {
-    window.showNotification('GIFを生成中です...', 0);
-  }
-
-  const cloned = element.cloneNode(true);
-  cleanupAndEnhanceContent(cloned);
-  const layoutElem = buildScreenshotLayout(cloned, { animateValues: true });
-  layoutElem.style.position = 'fixed';
-  layoutElem.style.top = '0';
-  layoutElem.style.left = '0';
-  layoutElem.style.zIndex = '9999';
-  document.body.appendChild(layoutElem);
-
-  const screenshotTheme = getScreenshotTheme();
-
-  try {
-    const workerScriptUrl = await ensureGifWorkerBlobUrl();
-    const frameCanvases = [];
-    const frameCount = JBE_GIF_FRAME_DELAYS.length;
-
-    for (let index = 0; index < frameCount; index += 1) {
-      const progress = frameCount === 1 ? 1 : index / (frameCount - 1);
-      updateAnimatedScreenshotValues(layoutElem, progress);
-      await waitForAnimationFrame(2);
-      const frameCanvas = await renderElementCanvasForExport(layoutElem, screenshotTheme);
-      frameCanvases.push(frameCanvas);
-    }
-
-    const firstFrame = frameCanvases[0];
-    const gif = new GIF({
-      workers: 2,
-      quality: 10,
-      workerScript: workerScriptUrl,
-      width: firstFrame.width,
-      height: firstFrame.height,
-      repeat: 0,
-      background: screenshotTheme.canvasBackground
-    });
-
-    frameCanvases.forEach((frameCanvas, index) => {
-      gif.addFrame(frameCanvas, {
-        copy: true,
-        delay: JBE_GIF_FRAME_DELAYS[index] || 100
-      });
-    });
-
-    const gifBlob = await new Promise((resolve, reject) => {
-      gif.on('finished', resolve);
-      gif.on('abort', () => reject(new Error('GIF encoding aborted')));
-      gif.on('progress', () => {});
-      gif.render();
-    });
-
-    const notification = document.querySelector('.screenshot-notification');
-    if (notification) {
-      notification.remove();
-    }
-
-    const clipboardResult = await copyGifToClipboard(gifBlob, firstFrame);
-    const gifUrl = URL.createObjectURL(gifBlob);
-    showScreenshotPreview(gifUrl, {
-      alt: 'Animated report preview',
-      downloadBaseName: 'animated-report',
-      extension: 'gif',
-      downloadNotification: 'GIF downloaded',
-      autoDownload: true
-    });
-    if (clipboardResult.ok) {
-      if (clipboardResult.mode === 'image-gif') {
-        showNotification('工数レポートのGIFをクリップボードにコピーしました。');
-      } else if (clipboardResult.mode === 'web-image-gif') {
-        showNotification('工数レポートのGIFを書き出しました。対応先ではGIF、その他ではPNGとして貼り付けられます。');
-      } else {
-        showNotification('工数レポートのGIFを書き出しました。クリップボードにはPNGとしてコピーしています。');
-      }
-    } else {
-      showNotification('工数レポートのGIFを作成しました。クリップボードにはPNG/GIF形式でコピーできませんでした。');
-    }
-  } catch (error) {
-    console.error('Error creating animated gif:', error);
-    showNotification('GIFの作成に失敗しました。');
-  } finally {
-    if (layoutElem && layoutElem.parentNode) {
-      layoutElem.parentNode.removeChild(layoutElem);
-    }
-    setButtonBusy(triggerButton, false);
-  }
-}
-
-function createFooterCaptureButtons(footer, saveButton) {
-  if (!saveButton || footer.querySelector('.form-screenshot-btn, .form-screenshot-gif-btn')) return;
-
-  const gifBtn = document.createElement('button');
-  gifBtn.type = 'button';
-  gifBtn.className = 'btn jbc-btn-secondary form-screenshot-gif-btn';
-  gifBtn.title = 'GIFを作成';
-  gifBtn.setAttribute('aria-label', 'GIFを作成');
-  gifBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24"><path fill="currentColor" d="M1.5 6.75A3.75 3.75 0 0 1 5.25 3h13.5a3.75 3.75 0 0 1 3.75 3.75v10.5A3.75 3.75 0 0 1 18.75 21H5.25a3.75 3.75 0 0 1-3.75-3.75V6.75Zm6.078 3.309c.721-.075 1.28.054 1.479.155a.749.749 0 1 0 .67-1.341c-.526-.264-1.392-.401-2.305-.305-1.44.15-2.922 1.401-2.922 3.446 0 2.077 1.581 3.45 3.45 3.45.87 0 1.65-.41 2.096-.83.393-.372.454-.867.454-1.175v-1.445a.75.75 0 0 0-.75-.75H8.54a.75.75 0 1 0 0 1.5H9v.694a.6.6 0 0 1-.009.108c-.292.245-.66.385-1.041.396-1.096 0-1.95-.756-1.95-1.95 0-1.226.85-1.877 1.578-1.953Zm5.922-.744a.75.75 0 1 0-1.5 0v5.4a.75.75 0 1 0 1.5 0v-5.4Zm2.25-.75a.75.75 0 0 0-.75.75v5.4a.75.75 0 1 0 1.5 0v-1.957l1.505-.01a.75.75 0 0 0-.01-1.5l-1.495.011v-1.196h2.25a.75.75 0 1 0 0-1.5l-3 .002Z"/></svg>';
-  gifBtn.addEventListener('click', async (e) => {
-    e.preventDefault();
-    const formElement = resolveFormElementFromFooter(footer);
-    if (formElement) {
-      await captureElementAnimatedGif(formElement, gifBtn);
-    } else {
-      showNotification('フォームの要素が見つかりません');
-    }
-  });
-
-  const screenshotBtn = document.createElement('button');
-  screenshotBtn.type = 'button';
-  screenshotBtn.className = 'btn jbc-btn-secondary form-screenshot-btn';
-  screenshotBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg> キャプチャ';
-  screenshotBtn.addEventListener('click', (e) => {
-    e.preventDefault();
-    const formElement = resolveFormElementFromFooter(footer);
-    if (formElement) {
-      captureElementScreenshot(formElement);
-    } else {
-      showNotification('フォームの要素が見つかりません');
-    }
-  });
-
-  saveButton.parentNode.insertBefore(gifBtn, saveButton);
-  saveButton.parentNode.insertBefore(screenshotBtn, saveButton);
-}
-
 // Show full-size screenshot in a modal overlay
 function showFullSizeImage(imageData) {
   // Remove existing modal if any
@@ -1025,289 +683,6 @@ function showNotification(message, duration = 3000) {
   return notification;
 }
 
-// Add screenshot button to forms
-function addFormScreenshotButton() {
-  // Prevent on login page (by URL or DOM)
-  const isLoginPage =
-    window.location.pathname.includes('/login') ||
-    window.location.pathname.includes('/auth') ||
-    document.getElementById('new_user') ||
-    document.querySelector('.login-page-container');
-  if (isLoginPage) return;
-
-  // Look for form containers
-  const formContainers = document.querySelectorAll('.jbc-form, .edit-form, form.form');
-  
-  formContainers.forEach(form => {
-    // Skip if already enhanced
-    if (form.dataset.screenshotEnhanced === 'true') return;
-    form.dataset.screenshotEnhanced = 'true';
-    
-    // Create button container
-    const buttonContainer = document.createElement('div');
-    buttonContainer.className = 'form-screenshot-button';
-    
-    // Create button
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'btn btn-sm btn-outline-secondary form-capture-btn';
-    button.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>';
-    button.title = 'Capture form screenshot';
-    
-    // Add click handler
-    button.addEventListener('click', () => {
-      captureElementScreenshot(form);
-    });
-    
-    // Add button to container and container to form
-    buttonContainer.appendChild(button);
-    
-    // Position the form relatively if not already
-    const position = window.getComputedStyle(form).position;
-    if (position === 'static') {
-      form.style.position = 'relative';
-    }
-    
-    form.appendChild(buttonContainer);
-  });
-  
-  // Watch for dynamically-added modal footers. Guard so exactly ONE observer
-  // exists for the page lifetime: addFormScreenshotButton() runs on every
-  // applyEnhancements(), so an unguarded observer leaks one body observer per re-apply.
-  if (!window.__jbe_formScreenshotFooterObserver) {
-    const observer = new MutationObserver(() => {
-      const modalFooters = document.querySelectorAll('.modal-footer, .jbc-modal-footer');
-      modalFooters.forEach(footer => {
-        // Skip if screenshot button already added to this footer
-        if (footer.dataset.screenshotEnhanced === 'true') return;
-        footer.dataset.screenshotEnhanced = 'true';
-        let saveButton = footer.querySelector('#save, button[type="submit"], input[type="submit"]');
-        if (!saveButton) {
-          // Fallback to first button in footer
-          saveButton = footer.querySelector('button');
-        }
-        if (!saveButton) return;
-        createFooterCaptureButtons(footer, saveButton);
-      });
-    });
-    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
-    window.__jbe_formScreenshotFooterObserver = observer;
-  }
-
-  // Initial run for existing modal footers
-  document.querySelectorAll('.modal-footer, .jbc-modal-footer').forEach(footer => {
-    // Skip if screenshot button already added to this footer
-    if (footer.dataset.screenshotEnhanced === 'true') return;
-    footer.dataset.screenshotEnhanced = 'true';
-    // Find save button or fallback to first button
-    let saveButton = footer.querySelector('#save, button[type="submit"], input[type="submit"]');
-    if (!saveButton) {
-      saveButton = footer.querySelector('button');
-    }
-    if (!saveButton) return;
-    createFooterCaptureButtons(footer, saveButton);
-  });
-}
-
-// Capture screenshot of a specific element
-function captureElementScreenshot(element) {
-  if (!element) return;
-  
-  // Show loading notification
-  if (typeof window.showNotification === 'function') {
-    window.showNotification('Capturing form...', 0);
-  }
-  
-  // Build and render custom layout for screenshot
-  const cloned = element.cloneNode(true);
-  cleanupAndEnhanceContent(cloned);
-  const layoutElem = buildScreenshotLayout(cloned);
-  layoutElem.style.position = 'fixed';
-  layoutElem.style.top = '0';
-  layoutElem.style.left = '0';
-  layoutElem.style.zIndex = '9999';
-  document.body.appendChild(layoutElem);
-
-  // --- FIX: More consistent check for html2canvas ---
-  if (typeof html2canvas !== 'function') {
-    showNotification('html2canvasが読み込まれていません。キャプチャできません。');
-    if (layoutElem && layoutElem.parentNode) layoutElem.parentNode.removeChild(layoutElem);
-    return;
-  }
-
-  // Capture screenshot of the custom layout
-  const screenshotTheme = getScreenshotTheme();
-  html2canvas(layoutElem, {
-    allowTaint: true,
-    useCORS: true,
-    backgroundColor: screenshotTheme.canvasBackground,
-    scale: 2,
-    logging: false,
-    ignoreElements: (node) => {
-      // Ignore screenshot buttons and unnecessary elements
-      return node.classList && (
-        node.classList.contains('form-screenshot-button') ||
-        node.classList.contains('btn-close') ||
-        node.classList.contains('close')
-      );
-    }
-  }).then(canvas => {
-    // Remove the custom layout element from the DOM
-    if (layoutElem && layoutElem.parentNode) {
-      layoutElem.parentNode.removeChild(layoutElem);
-    }
-    // Remove any existing notification
-    const notification = document.querySelector('.screenshot-notification');
-    if (notification) {
-      notification.remove();
-    }
-    
-    // Convert canvas to image
-    const imageData = canvas.toDataURL('image/png');
-    
-    // --- FIX: ClipboardItem feature detection for form screenshot ---
-    if (typeof ClipboardItem !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.write === 'function') {
-      canvas.toBlob(function(blob) {
-        try {
-          const item = new ClipboardItem({ 'image/png': blob });
-          navigator.clipboard.write([item]).then(
-            () => {
-              showNotification('フォームのスクリーンショットがコピーされました。');
-            },
-            (err) => {
-              console.error('Could not copy form screenshot to clipboard: ', err);
-              showNotification('フォームの画像をクリップボードにコピーできません。');
-            }
-          );
-        } catch (err) {
-          console.error('ClipboardItem not supported or other clipboard error: ', err);
-          showNotification('Copy to clipboard not supported in this browser.');
-        }
-      });
-    } else {
-      showNotification('このブラウザは画像のクリップボードコピーに対応していません。');
-    }
-    
-    // Show preview
-    showScreenshotPreview(imageData);
-  }).catch(error => {
-    console.error('Error capturing form screenshot:', error);
-    
-    // Show error notification
-    if (typeof window.showNotification === 'function') {
-      window.showNotification('Failed to capture form', 2000);
-    }
-  });
-}
-
-// Clean up and enhance content for screenshot
-function cleanupAndEnhanceContent(element) {
-  if (!element) return;
-  
-  // Hide buttons that shouldn't be visible in screenshot
-  const buttonsToHide = element.querySelectorAll(
-    '.btn-close, .close, .cancel-btn, .form-screenshot-button'
-  );
-  
-  buttonsToHide.forEach(button => {
-    if (button.style) {
-      button.style.display = 'none';
-    }
-  });
-  
-  // Convert interactive elements to static representations
-  convertInteractiveElements(element);
-  
-  return element;
-}
-
-// Convert interactive elements to static representations for screenshots
-function convertInteractiveElements(container) {
-  if (!container) return;
-  
-  // Convert select elements
-  const selects = container.querySelectorAll('select');
-  selects.forEach(select => {
-    const selectedOption = select.options[select.selectedIndex];
-    const text = selectedOption ? selectedOption.textContent : '';
-    
-    // Create a div to replace the select
-    const div = document.createElement('div');
-    div.className = select.className;
-    div.classList.add('select-replacement');
-    div.style.border = '1px solid var(--color-gray-300)';
-    div.style.borderRadius = '4px';
-    div.style.padding = '6px 12px';
-    div.style.backgroundColor = 'var(--color-gray-100)';
-    div.textContent = text;
-    
-    // Replace select with div
-    if (select.parentNode) {
-      select.parentNode.insertBefore(div, select);
-      select.style.display = 'none';
-    }
-  });
-  
-  // Convert checkboxes and radio buttons
-  const checkables = container.querySelectorAll('input[type="checkbox"], input[type="radio"]');
-  checkables.forEach(input => {
-    const isChecked = input.checked;
-    
-    // Create replacement span
-    const span = document.createElement('span');
-    span.className = 'checkable-replacement';
-    span.style.display = 'inline-block';
-    span.style.width = '18px';
-    span.style.height = '18px';
-    span.style.border = '1px solid var(--color-gray-300)';
-    span.style.borderRadius = input.type === 'radio' ? '50%' : '3px';
-    span.style.backgroundColor = 'var(--color-white)';
-    span.style.position = 'relative';
-    
-    // Add check mark if checked
-    if (isChecked) {
-      const inner = document.createElement('span');
-      inner.style.position = 'absolute';
-      inner.style.top = '50%';
-      inner.style.left = '50%';
-      inner.style.transform = 'translate(-50%, -50%)';
-      inner.style.width = '10px';
-      inner.style.height = '10px';
-      inner.style.backgroundColor = 'var(--color-primary)';
-      inner.style.borderRadius = input.type === 'radio' ? '50%' : '1px';
-      
-      span.appendChild(inner);
-    }
-    
-    // Replace input with span
-    if (input.parentNode) {
-      input.parentNode.insertBefore(span, input);
-      input.style.display = 'none';
-    }
-  });
-  
-  // Convert textareas
-  const textareas = container.querySelectorAll('textarea');
-  textareas.forEach(textarea => {
-    const div = document.createElement('div');
-    div.className = textarea.className;
-    div.classList.add('textarea-replacement');
-    div.style.border = '1px solid var(--color-gray-300)';
-    div.style.borderRadius = '4px';
-    div.style.padding = '8px 12px';
-    div.style.backgroundColor = 'var(--color-white)';
-    div.style.minHeight = '80px';
-    div.style.whiteSpace = 'pre-wrap';
-    div.textContent = textarea.value;
-    
-    // Replace textarea with div
-    if (textarea.parentNode) {
-      textarea.parentNode.insertBefore(div, textarea);
-      textarea.style.display = 'none';
-    }
-  });
-}
-
 function getScreenshotTheme() {
   const styles = getComputedStyle(document.body);
   const darkMode = document.body.classList.contains('dark-mode');
@@ -1336,10 +711,12 @@ function getScreenshotTheme() {
   };
 }
 
-// Build a custom layout showing only total, project list, tasks, and work hours.
-function buildScreenshotLayout(element, options = {}) {
-  const { animateValues = false } = options;
+// Build the 工数レポート card from extracted data ({ totalText, rows: [{project, task, work}] }).
+function buildScreenshotLayout(reportData = {}) {
   const theme = getScreenshotTheme();
+  const rowsData = (reportData && reportData.rows) || [];
+  const totalText = (reportData && reportData.totalText) || '';
+
   const container = document.createElement('div');
   container.style.padding = '32px';
   container.style.backgroundColor = theme.containerBackground;
@@ -1349,13 +726,7 @@ function buildScreenshotLayout(element, options = {}) {
   container.style.boxShadow = theme.containerShadow;
   container.style.maxWidth = '900px';
 
-  // Total sum
-  const sumElem = element.querySelector('.man-hour-sum');
-  const totalText = sumElem ? sumElem.textContent : '';
-  const totalMinutes = parseTimeTextToMinutes(totalText);
-  const totalDiv = document.createElement('div');
-  
-  // Create a nicer header with logo and total
+  // Header: title + total badge
   const headerDiv = document.createElement('div');
   headerDiv.style.display = 'flex';
   headerDiv.style.justifyContent = 'space-between';
@@ -1363,32 +734,26 @@ function buildScreenshotLayout(element, options = {}) {
   headerDiv.style.marginBottom = '24px';
   headerDiv.style.borderBottom = `1px solid ${theme.border}`;
   headerDiv.style.paddingBottom = '20px';
-  
-  // Add title
+
   const titleDiv = document.createElement('div');
   titleDiv.textContent = '工数レポート';
   titleDiv.style.fontSize = '20px';
   titleDiv.style.fontWeight = '600';
   titleDiv.style.color = theme.accent;
-  
-  // Style the total text
-  totalDiv.textContent = animateValues ? '00:00' : totalText;
+
+  const totalDiv = document.createElement('div');
+  totalDiv.textContent = totalText;
   totalDiv.style.fontSize = '26px';
   totalDiv.style.fontWeight = 'bold';
   totalDiv.style.color = theme.accent;
   totalDiv.style.padding = '6px 16px';
   totalDiv.style.backgroundColor = theme.accentSoft;
   totalDiv.style.borderRadius = '6px';
-  if (animateValues) {
-    totalDiv.dataset.jbeCountupTarget = String(totalMinutes);
-  }
-  
-  // Add to header
+
   headerDiv.appendChild(titleDiv);
   headerDiv.appendChild(totalDiv);
   container.appendChild(headerDiv);
 
-  // Create grid layout
   const grid = document.createElement('div');
   grid.style.display = 'grid';
   grid.style.gridTemplateColumns = '4fr 1fr 0.8fr';
@@ -1398,10 +763,9 @@ function buildScreenshotLayout(element, options = {}) {
   grid.style.border = `1px solid ${theme.border}`;
   grid.style.boxShadow = theme.gridShadow;
 
-  // Add headers
   const headerBgColors = theme.headerBackgrounds;
   let i = 0;
-  ['プロジェクト一覧', 'タスク', '工数'].forEach(headerText => {
+  ['プロジェクト一覧', 'タスク', '工数'].forEach((headerText) => {
     const headerCell = document.createElement('div');
     headerCell.textContent = headerText;
     headerCell.style.fontSize = '14px';
@@ -1414,48 +778,13 @@ function buildScreenshotLayout(element, options = {}) {
   });
 
   let rowIndex = 0;
-  // Add data rows by iterating each man-hour table row
-  const rows = element.querySelectorAll('table.man-hour-table-edit tbody tr, table.jbc-table tbody tr');
-  rows.forEach(row => {
-    // Skip rows without content
-    const hasInputs = row.querySelector('input, select');
-    if (!hasInputs) return;
-    
-    // Project name: prefer custom-select-wrapper, fallback to select-replacement or raw select
-    let projectText = '';
-    const customProj = row.querySelector('.custom-select-wrapper.project-select .select-display');
-    if (customProj) {
-      projectText = customProj.textContent.trim();
-    } else {
-      const repProj = row.querySelector('.select-replacement');
-      if (repProj) projectText = repProj.textContent.trim();
-      else {
-        const selProj = row.querySelector('select[name*="project"]');
-        projectText = selProj?.selectedOptions[0]?.textContent.trim() || '';
-      }
-    }
-    // Task name: similar fallback
-    let taskText = '';
-    const customTask = row.querySelector('.custom-select-wrapper.task-select .select-display');
-    if (customTask) {
-      taskText = customTask.textContent.trim();
-    } else {
-      const repTask = row.querySelectorAll('.select-replacement')[1];
-      if (repTask) taskText = repTask.textContent.trim();
-      else {
-        const selTask = row.querySelector('select[name*="task"]');
-        taskText = selTask?.selectedOptions[0]?.textContent.trim() || '';
-      }
-    }
-    // Work hours input
-    const workInput = row.querySelector('input.man-hour-input[name="minutes[]"]');
-    const workText = workInput?.value.trim() || '';
-    
+  rowsData.forEach((r) => {
+    const projectText = r.project || '';
+    const taskText = r.task || '';
+    const workText = r.work || '';
     if (!projectText && !taskText && !workText) return;
-    
     const rowBgColor = rowIndex % 2 === 0 ? theme.rowBackgroundEven : theme.rowBackgroundOdd;
     rowIndex++;
-    
     [projectText, taskText, workText].forEach((text, index) => {
       const cell = document.createElement('div');
       cell.textContent = text;
@@ -1464,36 +793,112 @@ function buildScreenshotLayout(element, options = {}) {
       cell.style.borderBottom = `1px solid ${theme.border}`;
       cell.style.backgroundColor = rowBgColor;
       cell.style.color = index === 2 ? theme.valueText : theme.containerText;
-      
       if (index === 0) {
         cell.style.fontWeight = '500';
-      } else if (index === 2) { // Work hours
+      } else if (index === 2) {
         cell.style.fontWeight = '600';
         cell.style.textAlign = 'center';
-        if (animateValues) {
-          cell.dataset.jbeCountupTarget = String(parseTimeTextToMinutes(text));
-          cell.textContent = '00:00';
-        }
       }
       grid.appendChild(cell);
     });
   });
 
-  // Add date at the bottom
   const footerDiv = document.createElement('div');
   footerDiv.style.marginTop = '16px';
   footerDiv.style.fontSize = '12px';
   footerDiv.style.color = theme.mutedText;
   footerDiv.style.textAlign = 'right';
   footerDiv.textContent = `作成日時: ${new Date().toLocaleString('ja-JP')}`;
-  
+
   container.appendChild(grid);
   container.appendChild(footerDiv);
   return container;
 }
 
+// One-click "工数レポート" for the rebuilt edit page: read the day's rows straight
+// from the live table (autocomplete inputs + input.manhour — no select markup),
+// render the report card, copy it to the clipboard, and show a download preview.
+// This restores the pre-rebuild behavior without the user selecting an area.
+function captureManHourDayReport() {
+  if (typeof html2canvas !== 'function') {
+    showNotification('html2canvasが読み込まれていません。キャプチャできません。');
+    return;
+  }
+
+  const rows = [];
+  let totalMinutes = 0;
+  document.querySelectorAll('table.jbc-table tbody tr').forEach((tr) => {
+    if (tr.id === 'template') return;
+    const units = tr.querySelectorAll('input.unit');
+    const project = units[0] ? units[0].value.trim() : '';
+    const task = units[1] ? units[1].value.trim() : '';
+    const hoursInput = tr.querySelector('input.manhour');
+    const workRaw = hoursInput ? hoursInput.value.trim() : '';
+    if (!project && !task && !workRaw) return;
+    const mins = parseTimeTextToMinutes(workRaw) || 0;
+    totalMinutes += mins;
+    rows.push({ project, task, work: workRaw ? formatMinutesToHHMM(mins) : '' });
+  });
+
+  if (!rows.length) {
+    showNotification('工数が入力されていません。', 2500);
+    return;
+  }
+
+  const totalText = `合計: ${Math.floor(totalMinutes / 60)}時間${totalMinutes % 60}分`;
+  const layoutElem = buildScreenshotLayout({ totalText, rows });
+  layoutElem.style.position = 'fixed';
+  layoutElem.style.top = '0';
+  layoutElem.style.left = '0';
+  layoutElem.style.zIndex = '9999';
+  document.body.appendChild(layoutElem);
+
+  showNotification('工数レポートを作成中…', 0);
+
+  const screenshotTheme = getScreenshotTheme();
+  html2canvas(layoutElem, {
+    allowTaint: true,
+    useCORS: true,
+    backgroundColor: screenshotTheme.canvasBackground,
+    scale: 2,
+    logging: false
+  }).then((canvas) => {
+    if (layoutElem.parentNode) layoutElem.parentNode.removeChild(layoutElem);
+    const notification = document.querySelector('.screenshot-notification');
+    if (notification) notification.remove();
+
+    const imageData = canvas.toDataURL('image/png');
+
+    if (typeof ClipboardItem !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.write === 'function') {
+      canvas.toBlob((blob) => {
+        try {
+          const item = new ClipboardItem({ 'image/png': blob });
+          navigator.clipboard.write([item]).then(
+            () => showNotification('工数レポートをクリップボードにコピーしました。'),
+            (err) => {
+              console.error('Could not copy man-hour report to clipboard: ', err);
+              showNotification('クリップボードにコピーできませんでした。プレビューから保存してください。');
+            }
+          );
+        } catch (err) {
+          console.error('ClipboardItem not supported: ', err);
+          showNotification('このブラウザはクリップボードコピーに対応していません。プレビューから保存してください。');
+        }
+      });
+    } else {
+      showNotification('このブラウザはクリップボードコピーに対応していません。プレビューから保存してください。');
+    }
+
+    showScreenshotPreview(imageData);
+  }).catch((error) => {
+    console.error('Error capturing man-hour report:', error);
+    if (layoutElem.parentNode) layoutElem.parentNode.removeChild(layoutElem);
+    showNotification('工数レポートの作成に失敗しました。', 2500);
+  });
+}
+
 // Expose the functions globally
+window.captureManHourDayReport = captureManHourDayReport;
 window.registerFloatingAction = registerFloatingAction;
 window.closeFloatingActionMenu = closeFloatingActionMenu;
 window.setupScreenshotButton = setupScreenshotButton;
-window.addFormScreenshotButton = addFormScreenshotButton; 
