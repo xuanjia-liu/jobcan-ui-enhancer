@@ -41,6 +41,8 @@
         "scripts/overlay.js",
         "scripts/manHourEdit.js",
         "scripts/manHourList.js",
+        "scripts/requestStatus.js",
+        "scripts/emptyState.js",
         "scripts/main.js",
         "scripts/loginInjector.js"
       ]

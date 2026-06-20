@@ -43,12 +43,14 @@
 
 /* Highlight days whose man-hour total (合計) differs from working time (総労働時間). */
 .jobcan-enhanced #list tr.jbe-mismatch-row > td {
-  background-color: var(--color-danger-bg, #fdecea) !important;
+  /* Calmer than a full red wash: a light tint, with a left accent bar on the date cell. */
+  background-color: var(--color-danger-bg-light, rgba(231, 76, 60, 0.08)) !important;
 }
 
 .jobcan-enhanced #list td.date.jbe-mismatch-date {
   font-weight: 600;
   color: var(--color-danger, #DC3545);
+  box-shadow: inset 3px 0 0 var(--color-danger, #DC3545);
 }
 
 /* Dark mode: brighten the mismatch-date red so it stays legible on the dark
@@ -164,9 +166,13 @@
 }
 
 .jobcan-enhanced .jbe-report-bar-name {
+  flex: 1;
+  min-width: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  word-break: break-word;
 }
 
 .jobcan-enhanced .jbe-report-bar-time {

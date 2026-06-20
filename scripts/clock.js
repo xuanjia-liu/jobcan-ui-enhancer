@@ -1035,7 +1035,10 @@ function ensureWorkingStatusObserver() {
     if (!el || el.dataset.jbeStatusObserved === 'true') return;
     el.dataset.jbeStatusObserved = 'true';
     const obs = new MutationObserver(() => {
-      document.querySelectorAll('.flip-clock-container').forEach(updateFlipClockColors);
+      document.querySelectorAll('.flip-clock-container').forEach((c) => {
+        updateFlipClockColors(c);
+        celebrateTransitionOnce(c);
+      });
     });
     obs.observe(el, {
       subtree: true,
@@ -1095,20 +1098,58 @@ function updateFlipClockColors(container) {
     colon.classList.add(colonClass || 'colon-default');
   });
 
-  // Persist the applied color class
-  const hasColorChanged = previousColorClass && previousColorClass !== colorClass;
+  // Persist the applied color class. Confetti is intentionally NOT triggered here:
+  // this runs on every #working_status mutation (Jobcan re-renders the status on its
+  // SPA), so firing on color change made the confetti loop for minutes. Celebration
+  // is gated through celebrateTransitionOnce() instead.
   container.dataset.clockColorClass = colorClass;
+}
 
-  // Trigger confetti effects only when the color actually changes (not on first init)
-  if (hasColorChanged) {
-    // Use a slight delay to ensure DOM class updates are painted before effects
-    setTimeout(() => {
-      createParticleEffect(container);
-      setTimeout(() => {
-        createBurstParticleEffect(container);
-      }, 200);
-    }, 50);
+/**
+ * Coarse work state derived from #working_status: 'working' | 'not-working' | 'unknown'.
+ * 'unknown' covers the transient empty/gradient states during Jobcan's DOM churn.
+ */
+function getCoarseWorkState() {
+  const el = document.getElementById('working_status');
+  const cls = resolveClockColorClassFromStatus(el, '');
+  if (cls === 'style-working') return 'working';
+  if (cls === 'style-not-working') return 'not-working';
+  return 'unknown';
+}
+
+/**
+ * Fire the celebration confetti at most once per genuine clock-in/out transition.
+ * Guards against the old runaway loop: ignores 'unknown' churn, only fires on a
+ * known -> known state change, and applies a cooldown so multiple observers/handlers
+ * firing for the same punch celebrate once. The baseline persists in sessionStorage
+ * so reloading the page while already 勤務中 does not re-celebrate.
+ */
+function celebrateTransitionOnce(container) {
+  if (!container) return;
+  const state = getCoarseWorkState();
+  if (state === 'unknown') return; // transient churn: never celebrate, never move baseline
+
+  let prev = window.__jbe_lastCelebratedWorkState;
+  if (prev === undefined) {
+    try { prev = sessionStorage.getItem('jbe_lastCelebratedWorkState') || undefined; } catch (_) { /* sessionStorage unavailable */ }
   }
+
+  // Advance the baseline to the latest known state.
+  window.__jbe_lastCelebratedWorkState = state;
+  try { sessionStorage.setItem('jbe_lastCelebratedWorkState', state); } catch (_) { /* ignore */ }
+
+  // No prior baseline (first known observation) or no change -> just initialize, no confetti.
+  if (!prev || prev === state) return;
+
+  // Genuine transition: cooldown de-dupes the observer + click backups for one punch.
+  const now = Date.now();
+  if (window.__jbe_lastCelebrateTs && now - window.__jbe_lastCelebrateTs < 4000) return;
+  window.__jbe_lastCelebrateTs = now;
+
+  setTimeout(() => {
+    createParticleEffect(container);
+    setTimeout(() => createBurstParticleEffect(container), 200);
+  }, 50);
 }
 
 // Helper function for random values
@@ -1203,17 +1244,12 @@ window.addPushButtonParticleEffects = addPushButtonParticleEffects;
 function addPushButtonParticleEffects() {
   const triggerParticleEffects = () => {
     document.querySelectorAll('.flip-clock-container').forEach(container => {
-      // Update clock colors
+      // Refresh colors now; the status text flips asynchronously after the punch XHR,
+      // so re-check the transition shortly after. celebrateTransitionOnce de-dupes via
+      // its cooldown, so these extra checks never double-fire.
       updateFlipClockColors(container);
-      
-      // Trigger particle effects with a small delay to ensure DOM is ready
-      setTimeout(() => {
-        createParticleEffect(container);
-        // Add a secondary burst effect for extra visual impact
-        setTimeout(() => {
-          createBurstParticleEffect(container);
-        }, 300);
-      }, 100);
+      setTimeout(() => celebrateTransitionOnce(container), 500);
+      setTimeout(() => { updateFlipClockColors(container); celebrateTransitionOnce(container); }, 1500);
     });
   };
 
@@ -1241,8 +1277,12 @@ function addPushButtonParticleEffects() {
 
 // On initial load, refresh clock colors and wire push-button particle effects.
 document.addEventListener('DOMContentLoaded', () => {
-  // Initial color sync
-  document.querySelectorAll('.flip-clock-container').forEach(container => updateFlipClockColors(container));
+  // Initial color sync. celebrateTransitionOnce here only sets the baseline state
+  // (no confetti on first observation), so a fresh load never celebrates on its own.
+  document.querySelectorAll('.flip-clock-container').forEach(container => {
+    updateFlipClockColors(container);
+    celebrateTransitionOnce(container);
+  });
 
   // Trigger particle effects on push-button clicks via ONE delegated listener.
   // This replaces the old approach (attach per-button listeners, then re-scan
@@ -1256,11 +1296,12 @@ document.addEventListener('DOMContentLoaded', () => {
       const btn = e.target && e.target.closest ? e.target.closest(PUSH_SELECTOR) : null;
       if (!btn) return;
       document.querySelectorAll('.flip-clock-container').forEach(container => {
+        // The #working_status MutationObserver is the primary celebration trigger;
+        // these are a defensive backup for the post-punch status flip. The cooldown
+        // in celebrateTransitionOnce prevents any double-fire.
         updateFlipClockColors(container);
-        setTimeout(() => {
-          createParticleEffect(container);
-          setTimeout(() => createBurstParticleEffect(container), 300);
-        }, 100);
+        setTimeout(() => celebrateTransitionOnce(container), 500);
+        setTimeout(() => { updateFlipClockColors(container); celebrateTransitionOnce(container); }, 1500);
       });
     });
   }

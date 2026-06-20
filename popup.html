@@ -8,7 +8,10 @@
   <style>
     :root {
       /* Color Palette - Based on Design Guide */
-      --color-primary: #0066DD;
+      /* Primary reconciled with the injected pages' --color-primary (#0077ff) so the
+         popup and the in-page UI share one blue. (Full token-name unification with
+         css/variables.css is a separate refactor — names differ: --space-* vs --spacing-*.) */
+      --color-primary: #0077ff;
       --color-primary-light: #4D94E9;
       --color-primary-dark: #0047AB;
       
@@ -164,26 +167,6 @@
       margin-top: var(--space-xs);
     }
     
-    /* Status indicator */
-    .status-indicator {
-      font-size: 0.7rem;
-      font-weight: 600;
-      padding: 2px 6px;
-      border-radius: var(--radius-full);
-      display: inline-block;
-      margin-left: var(--space-xs);
-    }
-    
-    .status-enabled {
-      background-color: var(--color-accent-light);
-      color: white;
-    }
-    
-    .status-disabled {
-      background-color: var(--color-secondary-light);
-      color: white;
-    }
-    
     /* Modern Toggle Switch */
     .toggle-switch {
       position: relative;
@@ -239,7 +222,7 @@
     #toast {
       visibility: hidden;
       min-width: 250px;
-      background-color: rgba(0, 102, 221, 0.2);
+      background-color: rgba(0, 119, 255, 0.2);
       color: var(--color-text-primary);
       text-align: center;
       border-radius: var(--radius-md);
@@ -278,19 +261,6 @@
       border-top: none;
       border-image: none;
       padding-top: 0;
-    }
-    
-    /* Coming soon badge */
-    .coming-soon {
-      display: inline-block;
-      background-color: var(--color-accent);
-      color: white;
-      font-size: 0.65rem;
-      padding: 2px 6px;
-      border-radius: var(--radius-full);
-      margin-left: var(--space-xs);
-      font-weight: 500;
-      box-shadow: 0 1px 2px rgba(0,0,0,0.1);
     }
     
     /* Dark Mode Styling */
@@ -708,6 +678,25 @@
       margin-right: 8px;
       color: var(--color-primary);
     }
+
+    /* Section labels grouping the launcher (勤怠 / 工数 / 申請 / 設定) */
+    .sub-menu-section-title {
+      font-size: 0.65rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--color-text-secondary);
+      padding: 8px 12px 2px;
+      margin: 0;
+    }
+
+    .sub-menu-section-title:first-child {
+      padding-top: 2px;
+    }
+
+    body.dark-mode .sub-menu-section-title {
+      color: #b0b3b8;
+    }
     
     .dropdown-container .quick-access-btn .material-icons {
       color: inherit;
@@ -749,7 +738,7 @@
     .login-field input:focus {
       border-color: var(--color-primary);
       outline: none;
-      box-shadow: 0 0 0 2px rgba(0, 102, 221, 0.2);
+      box-shadow: 0 0 0 2px rgba(0, 119, 255, 0.2);
     }
     
     .login-field-password-wrap {
@@ -863,7 +852,7 @@
     
     body.dark-mode .login-field input:focus {
       border-color: var(--color-primary);
-      box-shadow: 0 0 0 2px rgba(0, 102, 221, 0.3);
+      box-shadow: 0 0 0 2px rgba(0, 119, 255, 0.3);
     }
     
     body.dark-mode .password-toggle-btn {
@@ -950,46 +939,50 @@
       </button>
       
       <div class="dropdown-container">
-        <button type="button" class="quick-access-btn main-btn" id="quickOpenBtn">
+        <button type="button" class="quick-access-btn main-btn" id="quickOpenBtn" aria-haspopup="menu" aria-controls="quickOpen-menu" aria-expanded="false">
           <span>ページを開く</span>
           <svg class="btn-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
             <path d="M12 5v14M5 12h14" />
           </svg>
         </button>
-        <div class="sub-menu quick-open-menu" id="quickOpen-menu">
-          <a href="https://ssl.jobcan.jp/employee/attendance" class="sub-menu-item">
+        <div class="sub-menu quick-open-menu" id="quickOpen-menu" role="menu" aria-label="ページを開く">
+          <div class="sub-menu-section-title" role="presentation">勤怠</div>
+          <a href="https://ssl.jobcan.jp/employee/attendance" class="sub-menu-item" role="menuitem">
             <i class="material-icons" style="font-size: 16px;">calendar_today</i>
             出勤簿
           </a>
-          <a href="https://ssl.jobcan.jp/employee/adit" class="sub-menu-item">
+          <a href="https://ssl.jobcan.jp/employee/adit" class="sub-menu-item" role="menuitem">
             <i class="material-icons" style="font-size: 16px;">edit</i>
             打刻修正(1日1件単位)
           </a>
-          <a href="https://ssl.jobcan.jp/employee/attendance/edit" class="sub-menu-item">
+          <a href="https://ssl.jobcan.jp/employee/attendance/edit" class="sub-menu-item" role="menuitem">
             <i class="material-icons" style="font-size: 16px;">date_range</i>
             出退勤編集(1か月単位)
           </a>
-          <a href="https://ssl.jobcan.jp/employee/man-hour-manage" class="sub-menu-item">
+          <div class="sub-menu-section-title" role="presentation">工数</div>
+          <a href="https://ssl.jobcan.jp/employee/man-hour-manage" class="sub-menu-item" role="menuitem">
             <i class="material-icons" style="font-size: 16px;">work</i>
             工数管理
           </a>
-          <a href="https://ssl.jobcan.jp/employee/man-hour-template/list" class="sub-menu-item">
+          <a href="https://ssl.jobcan.jp/employee/man-hour-manage/setting" class="sub-menu-item" role="menuitem">
             <i class="material-icons" style="font-size: 16px;">list</i>
             工数かんたん入力設定
           </a>
-          <a href="https://ssl.jobcan.jp/employee/holiday" class="sub-menu-item">
+          <div class="sub-menu-section-title" role="presentation">申請</div>
+          <a href="https://ssl.jobcan.jp/employee/holiday" class="sub-menu-item" role="menuitem">
             <i class="material-icons" style="font-size: 16px;">event_available</i>
             休暇申請
           </a>
-          <a href="https://ssl.jobcan.jp/employee/over-work" class="sub-menu-item">
+          <a href="https://ssl.jobcan.jp/employee/over-work" class="sub-menu-item" role="menuitem">
             <i class="material-icons" style="font-size: 16px;">access_time</i>
             残業申請
           </a>
-          <a href="https://ssl.jobcan.jp/employee/holidayworking" class="sub-menu-item">
+          <a href="https://ssl.jobcan.jp/employee/holidayworking" class="sub-menu-item" role="menuitem">
             <i class="material-icons" style="font-size: 16px;">today</i>
             休日出勤申請
           </a>
-          <a href="https://ssl.jobcan.jp/employee/edit-info" class="sub-menu-item">
+          <div class="sub-menu-section-title" role="presentation">設定</div>
+          <a href="https://ssl.jobcan.jp/employee/edit-info" class="sub-menu-item" role="menuitem">
             <i class="material-icons" style="font-size: 16px;">settings</i>
             スタッフ設定
           </a>
@@ -1053,7 +1046,7 @@
   </div>
   
   <div class="footer">
-    バージョン 1.2.3
+    バージョン <span id="appVersion">1.3.0</span>
   </div>
 
   <div id="toast"></div>

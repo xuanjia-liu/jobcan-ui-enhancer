@@ -29,6 +29,10 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // Dropdown elements
   const dropdownContainers = document.querySelectorAll('.dropdown-container');
+
+  // Show the real extension version (single source of truth: the manifest).
+  const appVersionEl = document.getElementById('appVersion');
+  if (appVersionEl) appVersionEl.textContent = chrome.runtime.getManifest().version;
   
   // Load saved settings
   chrome.storage.sync.get(
@@ -177,29 +181,65 @@ document.addEventListener('DOMContentLoaded', function() {
     const menuElement = container.querySelector('.sub-menu');
 
     if (btn && menuElement) {
+      const menuItems = () => Array.from(menuElement.querySelectorAll('.sub-menu-item'));
+
+      const closeMenu = () => {
+        menuElement.style.display = 'none';
+        btn.setAttribute('aria-expanded', 'false');
+      };
+      const openMenu = () => {
+        document.querySelectorAll('.sub-menu').forEach(menu => { menu.style.display = 'none'; });
+        menuElement.style.display = 'block';
+        btn.setAttribute('aria-expanded', 'true');
+      };
+
       btn.addEventListener('click', function(e) {
         e.preventDefault();
         e.stopPropagation();
+        if (menuElement.style.display === 'block') closeMenu(); else openMenu();
+      });
 
-        const isOpen = menuElement.style.display === 'block';
+      // Keyboard: ArrowDown opens + focuses first item; Escape closes.
+      btn.addEventListener('keydown', function(e) {
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          openMenu();
+          const items = menuItems();
+          if (items.length) items[0].focus();
+        } else if (e.key === 'Escape') {
+          closeMenu();
+        }
+      });
 
-        document.querySelectorAll('.sub-menu').forEach(menu => {
-          menu.style.display = 'none';
-        });
-
-        if (!isOpen) {
-          menuElement.style.display = 'block';
+      // Roving focus inside the menu with arrows; Escape returns to the button.
+      menuElement.addEventListener('keydown', function(e) {
+        const items = menuItems();
+        if (!items.length) return;
+        const current = items.indexOf(document.activeElement);
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          items[(current + 1) % items.length].focus();
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          items[(current - 1 + items.length) % items.length].focus();
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          closeMenu();
+          btn.focus();
         }
       });
     }
   });
-  
+
   // Close dropdowns when clicking outside
   document.addEventListener('click', function(e) {
     // Only close if the click is not on a dropdown toggle or within a submenu
     if (!e.target.closest('.dropdown-container')) {
       document.querySelectorAll('.sub-menu').forEach(menu => {
         menu.style.display = 'none';
+      });
+      document.querySelectorAll('.quick-access-btn[aria-expanded="true"]').forEach(b => {
+        b.setAttribute('aria-expanded', 'false');
       });
     }
   });

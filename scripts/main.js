@@ -89,6 +89,7 @@ function applyEnhancements() {
   const isManHourPage = origin === 'https://ssl.jobcan.jp' && pathname.startsWith('/employee/man-hour-manage');
   const isManHourEditPage = isManHourPage && pathname.startsWith('/employee/man-hour-manage/edit-achievement');
   const isManHourListPage = isManHourPage && pathname.startsWith('/employee/man-hour-manage/achievement-list');
+  const isRequestListPage = origin === 'https://ssl.jobcan.jp' && /^\/employee\/(holiday|over-work|holidayworking)\b/.test(pathname);
 
   // Draggable tabs
   if (isEmployeePage && typeof setupTabsContainerDragObserver === 'function') {
@@ -152,7 +153,10 @@ function applyEnhancements() {
 
   // Data extraction
   if (isAttendancePage && typeof setupCollapseInfoObserver === 'function') setupCollapseInfoObserver();
-  if (isAttendancePage && typeof setupOvertimePageDisplay === 'function') setupOvertimePageDisplay();
+
+  // Request-list enhancements (休暇 / 残業 / 休日出勤): status badges + empty states
+  if (isRequestListPage && typeof setupRequestStatusBadges === 'function') setupRequestStatusBadges();
+  if (isRequestListPage && typeof setupRequestListEmptyState === 'function') setupRequestListEmptyState();
 
   // Clock settings
   if (typeof applyClockSettings === 'function') applyClockSettings();

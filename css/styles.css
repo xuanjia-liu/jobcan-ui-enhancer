@@ -164,6 +164,12 @@
     align-items: center;
     padding: 32px 16px;
   }
+
+  /* Dark mode: a subtle seam so the bright brand header meets the dark body cleanly. */
+  .jobcan-enhanced body.dark-mode #header,
+  .jobcan-enhanced body.dark-mode .headerArea {
+    border-bottom: 1px solid var(--color-border);
+  }
   
  
   
@@ -213,11 +219,11 @@
     left: 50%;
     transform: translateX(-50%);
     top: 0;
-    background-color: var(--color-white);
+    background-color: var(--color-card);
     border-radius: 0 0 16px 16px;
     box-shadow: var(--shadow-header);
     padding: 8px;
-    border: 1px solid var(--color-gray-200);
+    border: 1px solid var(--color-border);
     transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
   }
 
@@ -1034,6 +1040,68 @@
   .jobcan-enhanced .status-rejected {
     background-color: var(--color-danger-bg-light);
     color: var(--color-danger);
+  }
+
+  /* Status chips on request lists are Japanese — drop the Latin-only uppercase /
+     wide tracking and add a subtle outline so they read as chips in both themes. */
+  .jobcan-enhanced .status-active,
+  .jobcan-enhanced .status-approved,
+  .jobcan-enhanced .status-pending,
+  .jobcan-enhanced .status-rejected {
+    text-transform: none;
+    letter-spacing: normal;
+    border: 1px solid color-mix(in srgb, currentColor 30%, transparent);
+    white-space: nowrap;
+  }
+
+  /* 出勤簿 totals row (tfoot.jbc-table-footer): Jobcan paints the value cells
+     #E6E6E6, so the light-on-light totals are invisible in dark mode. Re-theme the
+     whole footer row so the numbers (126:36 etc.) are readable. */
+  .jobcan-enhanced body.dark-mode .jbc-table-footer td,
+  .jobcan-enhanced body.dark-mode .jbc-table-footer th {
+    background-color: var(--color-surface) !important;
+    color: var(--color-text-primary) !important;
+  }
+
+  /* Friendly empty state injected on request-list pages with no records. */
+  .jobcan-enhanced .jbe-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 40px 24px;
+    margin: 16px 0;
+    text-align: center;
+    color: var(--color-text-secondary);
+    background-color: var(--color-surface);
+    border: 1px dashed var(--color-border);
+    border-radius: var(--border-radius-lg);
+  }
+
+  .jobcan-enhanced .jbe-empty-state-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--color-text-primary);
+  }
+
+  .jobcan-enhanced .jbe-empty-state-sub {
+    font-size: 12.5px;
+  }
+
+  .jobcan-enhanced .jbe-empty-state-cta {
+    display: inline-block;
+    padding: 8px 16px;
+    border-radius: var(--border-radius-md);
+    background-color: var(--color-primary);
+    color: var(--color-white);
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: background-color var(--transition-speed) var(--transition-timing);
+  }
+
+  .jobcan-enhanced .jbe-empty-state-cta:hover {
+    background-color: var(--color-primary-dark);
   }
   
   /* Time display on the main punch screen */
@@ -2251,6 +2319,13 @@
 
   .jobcan-fab-action:hover::after,
   .jobcan-fab-action:focus-visible::after {
+    opacity: 1;
+    transform: translateY(-50%) translateX(0);
+  }
+
+  /* Persistent action labels while the speed-dial is open (the buttons are only
+     interactive then), so the three actions are discoverable without hovering. */
+  #jobcan-fab-menu.open .jobcan-fab-action::after {
     opacity: 1;
     transform: translateY(-50%) translateX(0);
   }
