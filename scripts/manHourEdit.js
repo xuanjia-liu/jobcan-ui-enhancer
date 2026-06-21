@@ -514,10 +514,20 @@
   // Orchestration
   // ---------------------------------------------------------------------------
 
+  // Mirror a field's value into its title so the full project/task/note shows on
+  // hover even when the (truncated) cell can't display all of it.
+  function syncFieldTitle(input) {
+    if (!input) return;
+    if (input.value) input.title = input.value; else input.removeAttribute('title');
+  }
+
   function enhanceExistingRows(root) {
     const scope = root && root.querySelectorAll ? root : document;
     scope.querySelectorAll('input.manhour').forEach((input) => {
       if (input.closest('table.jbc-table') && !input.closest('#template')) attachDecimalHoursNormalizer(input);
+    });
+    scope.querySelectorAll('table.jbc-table input.unit, table.jbc-table input.note').forEach((input) => {
+      if (!input.closest('#template')) syncFieldTitle(input);
     });
   }
 
@@ -571,8 +581,18 @@
     }
 
     document.addEventListener('change', (e) => {
-      if (e.target && e.target.classList && e.target.classList.contains('manhour')) {
-        refreshSuggestionChips();
+      const t = e.target;
+      if (!t || !t.classList) return;
+      if (t.classList.contains('manhour')) refreshSuggestionChips();
+      if (t.classList.contains('unit') || t.classList.contains('note')) syncFieldTitle(t);
+    });
+
+    // Keep the hover titles current as the user types or picks from the autocomplete.
+    document.addEventListener('input', (e) => {
+      const t = e.target;
+      if (t && t.classList && (t.classList.contains('unit') || t.classList.contains('note'))
+        && t.closest && t.closest('table.jbc-table')) {
+        syncFieldTitle(t);
       }
     });
   }

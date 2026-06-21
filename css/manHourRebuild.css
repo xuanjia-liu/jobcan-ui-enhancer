@@ -436,6 +436,25 @@
   width: 92px;
 }
 
+/* Rebalance the text columns: プロジェクト (long code + name) gets the most room,
+   while タスク and 備考 (short) are capped so the spare width flows into プロジェクト.
+   nth-child: 1=checkbox, 2=プロジェクト, 3=タスク, 4=備考, 5=実績, 6=差分. */
+.jobcan-enhanced table.jbc-table:has(input.manhour) th:nth-child(3),
+.jobcan-enhanced table.jbc-table:has(input.manhour) td:nth-child(3) {
+  width: 150px;
+}
+
+.jobcan-enhanced table.jbc-table:has(input.manhour) th:nth-child(4),
+.jobcan-enhanced table.jbc-table:has(input.manhour) td:nth-child(4) {
+  width: 200px;
+}
+
+.jobcan-enhanced table.jbc-table:has(input.manhour) th:nth-child(2),
+.jobcan-enhanced table.jbc-table:has(input.manhour) td:nth-child(2) {
+  width: auto;
+  min-width: 320px;
+}
+
 /* Jobcan leaves the 実績 input at ~50px, clipping "03:03". Make it fill its column
    (Jobcan's column got the spare width but the input didn't) and center the time. */
 .jobcan-enhanced table.jbc-table input.manhour {
@@ -960,11 +979,15 @@
   white-space: nowrap;
 }
 
-/* Widen the dropdown so more of the (long) project names are visible — jQuery-UI
-   sizes the menu to the (narrow) input width otherwise. Capped to the viewport. */
+/* Size the dropdown to fit its widest project name on one line (jQuery-UI otherwise
+   sizes the menu to the input width, clipping longer names). width:max-content makes
+   it grow to the content; min-width keeps it from looking cramped and max-width caps
+   it to the viewport — names longer than that wrap (white-space on .jbe-opt-name)
+   rather than clip. */
 .jobcan-enhanced ul.ui-autocomplete {
+  width: max-content !important;
   min-width: 480px !important;
-  max-width: 92vw !important;
+  max-width: 95vw !important;
 }
 
 .jobcan-enhanced .ui-autocomplete .jbe-opt-actions {
