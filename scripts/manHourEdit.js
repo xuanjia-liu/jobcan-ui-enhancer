@@ -369,6 +369,22 @@
     return btn;
   }
 
+  const NAV_CHEVRON = {
+    prev: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"></polyline></svg>',
+    next: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"></polyline></svg>'
+  };
+  function makeNavIconButton(dir, handler, extraClass) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = `btn jbe-mh-nav-btn jbe-mh-nav-icon${extraClass ? ` ${extraClass}` : ''}`;
+    btn.innerHTML = NAV_CHEVRON[dir];
+    const label = dir === 'prev' ? '前の日' : '次の日';
+    btn.title = label;
+    btn.setAttribute('aria-label', label);
+    btn.addEventListener('click', () => { if (!btn.disabled) handler(); });
+    return btn;
+  }
+
   // Disable 次の日 once the edit date reaches today (can't log future days) and
   // 今日 when already on today.
   function startOfDay(d) { return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
@@ -428,7 +444,7 @@
       const navDate = document.querySelector('.jbe-mh-nav-date');
       const form = document.getElementById('search');
       if (navDate && form && form.parentElement !== navDate) {
-        navDate.insertBefore(form, navDate.querySelector('.jbe-mh-nav-next'));
+        navDate.insertBefore(form, navDate.querySelector('.jbe-mh-nav-today'));
       }
       const def = document.getElementById('add_default_manhour');
       if (def) def.style.display = 'none';
@@ -444,11 +460,11 @@
     // Date controls: 前の日 | native date form | 次の日 | 今日.
     const navDate = document.createElement('div');
     navDate.className = 'jbe-mh-nav-date';
-    navDate.appendChild(makeNavButton('前の日', () => navigateToDay(-1)));
+    navDate.appendChild(makeNavIconButton('prev', () => navigateToDay(-1)));
     const form = document.getElementById('search');
     if (form) navDate.appendChild(form);
-    navDate.appendChild(makeNavButton('次の日', () => navigateToDay(1), 'jbe-mh-nav-next'));
     navDate.appendChild(makeNavButton('今日', () => navigateToDate(new Date()), 'jbe-mh-nav-today'));
+    navDate.appendChild(makeNavIconButton('next', () => navigateToDay(1), 'jbe-mh-nav-next'));
 
     // Reuse the native toolbar row (#template_buttons + 削除) as the nav row so the
     // template dropdown keeps Jobcan's native wiring; slot the date controls in at

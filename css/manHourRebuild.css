@@ -181,8 +181,8 @@
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-  margin: 16px 0 4px;
-  padding: 12px 16px;
+  margin: 0;
+  padding: 12px;
   background: var(--color-surface, #f8f9fa);
   border: 1px solid var(--color-border, #dee2e6);
   border-radius: var(--border-radius-md, 8px);
@@ -213,7 +213,7 @@
   gap: var(--spacing-lg, 24px);
   flex-wrap: wrap;
   align-items: stretch;
-  margin: 16px 0 8px;
+  margin: 0 0 8px;
   padding: var(--spacing-md, 16px);
   background: var(--color-card, #fff);
   border: 1px solid var(--color-border, #dee2e6);
@@ -294,7 +294,7 @@
   gap: var(--spacing-sm, 8px);
   flex-wrap: wrap;
   margin: 0 0 12px;
-  padding: var(--spacing-sm, 8px) var(--spacing-md, 16px);
+  padding: var(--spacing-sm, 8px) 12px;
   background: var(--color-surface, #f8f9fa);
   border: 1px solid var(--color-border, #dee2e6);
   border-radius: var(--border-radius-md, 8px);
@@ -341,6 +341,26 @@
 .jobcan-enhanced .jbe-mh-nav-btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+/* 前の日 / 次の日 as compact icon buttons, sized to match the text buttons (35px). */
+.jobcan-enhanced .jbe-mh-nav-icon {
+  padding: 7.5px 10px;
+}
+
+.jobcan-enhanced .jbe-mh-nav-icon svg {
+  display: block;
+  width: 18px;
+  height: 18px;
+}
+
+/* Match 削除's box to テンプレートから追加 so they're the same height. */
+.jobcan-enhanced .jbe-mh-navrow #remove {
+  padding: 6px 14px;
+  font-size: 14px;
+  line-height: 21px;
+  border-radius: var(--border-radius-md, 8px);
+  font-weight: 600;
 }
 
 /* テンプレートから追加 dropdown menu: Jobcan ships it with no border/shadow (it floats
@@ -921,19 +941,23 @@
 .jobcan-enhanced .ui-autocomplete .jbe-opt-name,
 .jobcan-enhanced .ui-autocomplete .jbe-opt-id {
   display: block !important;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
+/* Wrap long project names onto multiple lines instead of clipping them. */
 .jobcan-enhanced .ui-autocomplete .jbe-opt-name {
   font-size: 13px;
   line-height: 1.35;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
+/* The ID line is short — keep it on one line with an ellipsis. */
 .jobcan-enhanced .ui-autocomplete .jbe-opt-id {
   font-size: 10.5px;
   line-height: 1.2;
   opacity: 0.62;
   margin-top: 1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Widen the dropdown so more of the (long) project names are visible — jQuery-UI
