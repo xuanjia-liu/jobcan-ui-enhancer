@@ -181,7 +181,9 @@
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-  margin: 0;
+  /* 12px top gap mirrors the nav row's margin-bottom: with the table wrapper's
+     padding removed, this keeps the action bar off the table's bottom border. */
+  margin: 12px 0 0;
   padding: 12px;
   background: var(--color-surface, #f8f9fa);
   border: 1px solid var(--color-border, #dee2e6);
@@ -294,7 +296,7 @@
   gap: var(--spacing-sm, 8px);
   flex-wrap: wrap;
   margin: 0 0 12px;
-  padding: var(--spacing-sm, 8px) 12px;
+  padding: var(--spacing-sm, 8px) 12px !important;
   background: var(--color-surface, #f8f9fa);
   border: 1px solid var(--color-border, #dee2e6);
   border-radius: var(--border-radius-md, 8px);
@@ -464,6 +466,27 @@
   padding-left: 6px !important;
   padding-right: 6px !important;
   text-align: center;
+}
+
+/* The edit table sits in a Bootstrap `.row.p-3` wrapper that pads it 16px on every
+   side and (being a `.row`) pulls it out with -15px side margins. Drop both so the
+   table sits flush — no padding around it, aligned with the summary/nav blocks above.
+   Scoped to the edit table's own wrapper via `> table.jbc-table input.manhour`.
+
+   The outer frame goes HERE, on the wrapper — NOT on the <table>. The base
+   `.jbc-table` rule (css/styles.css) sets `border-collapse: collapse` + `overflow:
+   hidden`; that combo clips a border drawn on the table away and ignores its
+   border-radius (verified live). A border on this wrapping div paints cleanly and
+   rounds. `overflow: clip` rounds the table's corners without breaking the sticky
+   header — unlike `hidden`, it creates no scroll container. (`--color-border` /
+   `--border-radius-md` resolve per theme.) */
+.jobcan-enhanced .row:has(> table.jbc-table input.manhour) {
+  padding: 0 !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  border: 1px solid var(--color-border, #dee2e6);
+  border-radius: var(--border-radius-md, 8px);
+  overflow: clip;
 }
 
 .jobcan-enhanced .jbe-report-bar-time {
@@ -713,15 +736,14 @@
   border-color: var(--color-control-border, #4a4a64) !important;
 }
 
-/* Edit-table header underline: th gets background --color-gray-100 (#33333f)
-   but a border-bottom of --color-border (#3a3a4c) — the line ends up LIGHTER
-   than its own header background, so it reads as a bright white rule (verified
-   live). Drop it to --color-border-light (= the thead background) so the
-   header/body split stays subtle. Scoped to the edit table via :has(input.manhour)
-   so the attendance/list tables are untouched. */
-.jobcan-enhanced body.dark-mode table.jbc-table:has(input.manhour) thead th,
-.jobcan-enhanced body.dark-mode table.jbc-table:has(input.manhour) tr.jbc-table-header th {
-  border-bottom-color: var(--color-border-light, #33333f) !important;
+/* Header/body underline in dark mode: the data rows sit in a SECOND <tbody> (the
+   first is the hidden #template tbody), so Bootstrap's `.table tbody + tbody` rule
+   gives that tbody `border-top: 2px solid #dee2e6`. With border-collapse:collapse
+   this 2px light line WINS over the header th's own 1px border and renders as a
+   white rule right under the header — which is why re-tinting the th border-bottom
+   had no effect. Re-tint the real culprit (the tbody border) for dark mode. */
+.jobcan-enhanced body.dark-mode table.jbc-table tbody + tbody {
+  border-top-color: var(--color-border) !important;
 }
 
 /* ------------------------------------------------------------------ */
