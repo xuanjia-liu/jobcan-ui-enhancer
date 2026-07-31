@@ -3,7 +3,8 @@
 // Isolated-world enhancements for the rebuilt man-hour edit page
 // (/employee/man-hour-manage/edit-achievement):
 //   * decimal-hour normalization on input.manhour ("3" -> "3:00", "3.5" -> "3:30")
-//   * per-row "suggestion chips" proposing the value that balances the day
+//   * プロジェクト cells: hide the "(code)" prefix until hover, + copy buttons
+//   * compact summary header (実績 vs 実労働時間) and date navigation
 //   * keyboard shortcuts (Shift+Enter = add row, Cmd/Ctrl+Enter = save)
 //
 // NOTE: project/task selection is handled by Jobcan's own native autocomplete.
@@ -45,7 +46,9 @@
   }
 
   function normalizeTypedDecimalHours(raw) {
-    const text = String(raw == null ? '' : raw).trim();
+    // NFKC folds full-width digits / colon / period (１．５ ： ), which a JP IME
+    // produces easily, into their ASCII forms before parsing.
+    const text = String(raw == null ? '' : raw).normalize('NFKC').trim();
     if (!text) return text;
 
     const colon = text.match(/^(\d+)\s*:\s*(\d{1,2})$/);
@@ -56,6 +59,9 @@
       return formatMinutesAsHMM(h * 60 + mi);
     }
 
+    // A bare number is HOURS, not minutes: "1" -> 1:00, "1.5" -> 1:30, ".5" -> 0:30.
+    // Jobcan's own field only accepts hh:mm and silently clears anything else, so
+    // without this the natural "type 1 for one hour" is lost.
     if (/^(\d+(?:\.\d+)?|\.\d+)$/.test(text)) {
       const hours = parseFloat(text);
       if (Number.isFinite(hours) && hours >= 0) return formatMinutesAsHMM(hours * 60);
@@ -64,26 +70,283 @@
     return text;
   }
 
-  function attachDecimalHoursNormalizer(input) {
-    if (!input || input.dataset.jbeDecimalHoursNormalize === '1') return;
-    input.dataset.jbeDecimalHoursNormalize = '1';
+  // A single delegated normalizer on the document, in CAPTURE phase.
+  //
+  // Why not per-input listeners (the previous approach): they were attached from
+  // enhanceExistingRows(), which only sees rows present at init or reported by the
+  // tbody MutationObserver. Jobcan REPLACES the tbody when it re-renders the
+  // editor, orphaning that observer — so in practice no input ever got a listener
+  // (verified live: not one had the data-attribute). Delegating from the document
+  // is immune to re-renders and needs no per-row bookkeeping.
+  //
+  // Capture on the document also fixes the ordering problem: listeners bound to
+  // the input itself can run AFTER Jobcan's own blur handler, which rejects a bare
+  // "1" and wipes the cell. Document-capture runs before any target listener, so
+  // Jobcan only ever sees the already-valid "1:00".
+  function setupDecimalHoursNormalizer() {
+    if (window.__jbe_manHourDecimalNormalizer) return;
+    window.__jbe_manHourDecimalNormalizer = true;
 
-    const commit = () => {
+    const isManHourInput = (el) => !!(
+      el && el.classList && el.classList.contains('manhour')
+      && el.closest && el.closest('table.jbc-table') && !el.closest('#template')
+    );
+
+    let committing = false;
+    const commit = (input) => {
+      if (committing) return; // our own synthetic change re-enters this handler
       const next = normalizeTypedDecimalHours(input.value);
       if (next === input.value) return;
-      input.value = next;
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-      input.dispatchEvent(new Event('change', { bubbles: true }));
+      committing = true;
+      try {
+        input.value = next;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      } finally {
+        committing = false;
+      }
     };
 
-    // Capture phase so it runs before the page's own parsing.
-    input.addEventListener('blur', commit, true);
-    input.addEventListener('change', commit, true);
+    // blur/focusout cover leaving the field by Tab, click-away or programmatic
+    // blur; keydown covers committing with Enter (which may also trigger save).
+    ['blur', 'focusout', 'change'].forEach((type) => {
+      document.addEventListener(type, (e) => { if (isManHourInput(e.target)) commit(e.target); }, true);
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && isManHourInput(e.target)) commit(e.target);
+    }, true);
   }
 
   // ---------------------------------------------------------------------------
-  // 2. Suggestion chips: propose the man-hour value that balances the day
+  // 1b. プロジェクト cells: hide the "(code)" prefix, show it in the popover
   // ---------------------------------------------------------------------------
+  //
+  // A filled project field reads "(2607BfZz0601)アサイン/…/デザイン制作" — the code
+  // eats the front of a narrow cell and pushes the part you actually read out of
+  // view. We must NOT rewrite input.value: Jobcan validates and saves from that
+  // exact string (see the header note). So the code is hidden VISUALLY — an
+  // absolutely-positioned mask span covers the input and paints the name only.
+  //
+  // The mask stays up on hover; the code is surfaced in the hover popover instead,
+  // together with the copy buttons, so the cell text never reflows. Only focus
+  // drops the mask (CSS :focus-within), since editing needs the real value and a
+  // visible caret. The popover is position:fixed and parented to <body> because
+  // the man-hour table clips overflow.
+  //
+  // Scope: プロジェクト only, as asked. タスク uses the same "(4)デザイン" shape and
+  // the same class, so flipping MASK_TASK_UNITS to true covers it too.
+  const MASK_TASK_UNITS = false;
+
+  function splitUnitValue(value) {
+    const m = String(value == null ? '' : value).match(/^\(([^)]*)\)\s*([\s\S]*)$/);
+    if (!m) return null;
+    const code = m[1].trim();
+    const name = m[2].trim();
+    if (!code || !name) return null;
+    return { code, name };
+  }
+
+  // The project field is the first input.unit in the row, the task field the second.
+  function maskableUnitInputs(row) {
+    const units = Array.from(row.querySelectorAll('input.unit'));
+    return MASK_TASK_UNITS ? units : units.slice(0, 1);
+  }
+
+  function applyUnitMask(input) {
+    const cell = input && input.parentElement;
+    if (!cell) return;
+    const parts = splitUnitValue(input.value);
+    let mask = cell.querySelector('.jbe-unit-mask');
+
+    if (!parts) { // empty, or not the "(code)name" shape — leave the field alone
+      if (mask) mask.remove();
+      cell.classList.remove('jbe-unit-cell');
+      input.classList.remove('jbe-unit-masked');
+      return;
+    }
+
+    if (!mask) {
+      mask = document.createElement('span');
+      mask.className = 'jbe-unit-mask';
+      mask.setAttribute('aria-hidden', 'true'); // the input already carries the full value
+      cell.appendChild(mask);
+    }
+    if (mask.textContent !== parts.name) mask.textContent = parts.name;
+    mask.dataset.code = parts.code;
+    mask.dataset.name = parts.name;
+    cell.classList.add('jbe-unit-cell');
+    input.classList.add('jbe-unit-masked');
+
+    // Match the input's box and text metrics so the name sits exactly where the
+    // real text would. Done here (not in CSS) because the input's inset inside the
+    // cell varies with Jobcan's per-row markup.
+    const cs = window.getComputedStyle(input);
+    mask.style.left = `${input.offsetLeft}px`;
+    mask.style.top = `${input.offsetTop}px`;
+    mask.style.width = `${input.offsetWidth}px`;
+    mask.style.height = `${input.offsetHeight}px`;
+    mask.style.font = cs.font;
+    mask.style.letterSpacing = cs.letterSpacing;
+    mask.style.paddingLeft = cs.paddingLeft;
+    mask.style.paddingRight = cs.paddingRight;
+    mask.style.textAlign = cs.textAlign;
+    mask.style.borderRadius = cs.borderRadius;
+  }
+
+  function refreshUnitMasks(root) {
+    const scope = root && root.querySelectorAll ? root : document;
+    const rows = scope.querySelectorAll
+      ? scope.querySelectorAll('table.jbc-table tbody tr')
+      : [];
+    (rows.length ? rows : []).forEach((row) => {
+      if (row.id === 'template') return;
+      maskableUnitInputs(row).forEach(applyUnitMask);
+    });
+    // When `root` IS a row (observer callback), the query above finds nothing.
+    if (root && root.tagName === 'TR' && root.id !== 'template') {
+      maskableUnitInputs(root).forEach(applyUnitMask);
+    }
+  }
+
+  // --- hover popover: the code + copy buttons --------------------------------
+
+  function copyText(text, btn) {
+    const flash = (ok) => {
+      btn.classList.add(ok ? 'is-copied' : 'is-failed');
+      setTimeout(() => btn.classList.remove('is-copied', 'is-failed'), 1100);
+    };
+    const fallback = () => {
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.cssText = 'position:fixed;opacity:0;left:-9999px;';
+        document.body.appendChild(ta);
+        ta.select();
+        const ok = document.execCommand('copy');
+        ta.remove();
+        flash(ok);
+      } catch (_) { flash(false); }
+    };
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(() => flash(true)).catch(fallback);
+      } else fallback();
+    } catch (_) { fallback(); }
+  }
+
+  const COPY_ICON = '<svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M4 2a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-1v1a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h1V2zm1 1h5a2 2 0 0 1 2 2v6a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H6a1 1 0 0 0-1 1v1zM4 4a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1V5a1 1 0 0 0-1-1H4z"/></svg>';
+
+  let unitPop = null;
+  let unitPopHideTimer = null;
+
+  function ensureUnitPopover() {
+    if (unitPop && unitPop.isConnected) return unitPop;
+    unitPop = document.createElement('div');
+    unitPop.id = 'jbe-unit-idpop';
+    unitPop.innerHTML =
+      '<code class="jbe-unit-idpop-code"></code>'
+      + `<button type="button" class="jbe-unit-idpop-btn" data-jbe-copy="code">${COPY_ICON}<span>IDをコピー</span></button>`
+      + `<button type="button" class="jbe-unit-idpop-btn" data-jbe-copy="name">${COPY_ICON}<span>プロジェクト名をコピー</span></button>`;
+
+    unitPop.addEventListener('mousedown', (e) => e.preventDefault()); // keep focus put
+    unitPop.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-jbe-copy]');
+      if (!btn) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const which = btn.dataset.jbeCopy;
+      const value = which === 'code' ? unitPop.dataset.code : unitPop.dataset.name;
+      if (value) copyText(value, btn);
+    });
+    unitPop.addEventListener('mouseenter', () => clearTimeout(unitPopHideTimer));
+    unitPop.addEventListener('mouseleave', () => hideUnitPopover());
+    document.body.appendChild(unitPop);
+    return unitPop;
+  }
+
+  function hideUnitPopover() {
+    clearTimeout(unitPopHideTimer);
+    unitPopHideTimer = setTimeout(() => {
+      if (unitPop) unitPop.classList.remove('is-open');
+    }, 120); // grace period so the pointer can travel input -> popover
+  }
+
+  function showUnitPopover(input) {
+    const mask = input.parentElement && input.parentElement.querySelector('.jbe-unit-mask');
+    if (!mask) return;
+    const pop = ensureUnitPopover();
+    clearTimeout(unitPopHideTimer);
+    pop.dataset.code = mask.dataset.code || '';
+    pop.dataset.name = mask.dataset.name || '';
+    pop.querySelector('.jbe-unit-idpop-code').textContent = pop.dataset.code;
+
+    const r = input.getBoundingClientRect();
+    pop.classList.add('is-open'); // measure only once it has layout
+    const pw = pop.offsetWidth || 260;
+    const left = Math.max(8, Math.min(r.left, window.innerWidth - pw - 8));
+    pop.style.left = `${Math.round(left)}px`;
+    pop.style.top = `${Math.round(r.bottom + 6)}px`;
+  }
+
+  function setupUnitMaskInteractions() {
+    if (window.__jbe_manHourUnitMaskReady) return;
+    window.__jbe_manHourUnitMaskReady = true;
+
+    const maskedInput = (el) => {
+      const input = el && el.closest ? el.closest('input.unit') : null;
+      return input && input.classList.contains('jbe-unit-masked') ? input : null;
+    };
+
+    // Delegated (survives re-renders). mouseover/out rather than enter/leave so a
+    // single document-level pair covers every row.
+    document.addEventListener('mouseover', (e) => {
+      const cell = e.target.closest && e.target.closest('.jbe-unit-cell');
+      if (!cell) return;
+      const input = cell.querySelector('input.unit.jbe-unit-masked');
+      if (input) showUnitPopover(input);
+    });
+    document.addEventListener('mouseout', (e) => {
+      const cell = e.target.closest && e.target.closest('.jbe-unit-cell');
+      if (!cell) return;
+      const to = e.relatedTarget;
+      if (to && (cell.contains(to) || (unitPop && unitPop.contains(to)))) return;
+      hideUnitPopover();
+    });
+
+    // Re-mask whenever a value lands (native autocomplete selection fires change).
+    ['change', 'input'].forEach((type) => {
+      document.addEventListener(type, (e) => {
+        const input = maskedInput(e.target) || (e.target.classList
+          && e.target.classList.contains('unit') ? e.target : null);
+        if (input && input.closest('table.jbc-table') && !input.closest('#template')) applyUnitMask(input);
+      }, true);
+    });
+
+    // Jobcan re-renders rows (and swaps the tbody) — re-apply then. Keyed on the
+    // mask's presence, so it is idempotent; disconnect while we write so our own
+    // DOM changes don't re-trigger it.
+    const table = getEditTable();
+    if (!table) return;
+    const obs = new MutationObserver(() => {
+      obs.disconnect();
+      try { refreshUnitMasks(document); } catch (_) { /* keep observing */ }
+      obs.observe(table, { childList: true, subtree: true });
+    });
+    obs.observe(table, { childList: true, subtree: true });
+    if (typeof window.__jbe_registerManagedObserver === 'function') {
+      window.__jbe_registerManagedObserver('manHourEdit:unitMask', obs);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // 2. Day totals (feeds the summary header)
+  // ---------------------------------------------------------------------------
+  //
+  // The "提案: h:mm" hover chips that used to live here were removed: Jobcan's
+  // rebuilt editor ships a native 差分 column with a 調整 button that proposes and
+  // applies the same balancing value, so the chips only duplicated it (and had to
+  // be excluded from the DOM observer to avoid self-triggering). These two helpers
+  // stay because updateSummary() computes 実績 vs 実労働時間 from them.
 
   function getActualWorkSeconds() {
     const labelCell = Array.from(document.querySelectorAll('th, td'))
@@ -102,56 +365,6 @@
       if (secs != null) total += secs;
     });
     return total;
-  }
-
-  function refreshSuggestionChips() {
-    updateSummary();
-    const actual = getActualWorkSeconds();
-    if (actual == null) return;
-    const entered = getEnteredSeconds();
-    const diff = actual - entered; // remaining seconds to allocate
-
-    document.querySelectorAll('table.jbc-table tbody tr').forEach((row) => {
-      if (row.id === 'template') return;
-      const input = row.querySelector('input.manhour');
-      if (!input) return;
-      let chip = input.parentElement.querySelector('.time-suggestion-chip');
-      const thisSecs = parseHHMMToSeconds(input.value) || 0;
-      const suggestedSecs = Math.max(0, thisSecs + diff);
-      if (diff === 0) { if (chip) chip.remove(); return; }
-
-      if (!chip) {
-        chip = document.createElement('div');
-        chip.className = 'time-suggestion-chip';
-        chip.style.display = 'none';
-        input.parentElement.appendChild(chip);
-        // The chip is position:fixed (so it isn't clipped by the man-hour table's
-        // overflow:hidden); place it centered just below the input on each show.
-        // CSS applies translateX(-50%), so `left` is the input's horizontal center.
-        const positionChip = () => {
-          const r = input.getBoundingClientRect();
-          chip.style.left = `${Math.round(r.left + r.width / 2)}px`;
-          chip.style.top = `${Math.round(r.bottom + 6)}px`;
-        };
-        const show = () => { positionChip(); chip.style.display = 'block'; };
-        const hide = () => { if (document.activeElement !== input && !chip.matches(':hover')) chip.style.display = 'none'; };
-        input.addEventListener('mouseover', show);
-        input.addEventListener('focus', show);
-        input.addEventListener('mouseout', hide);
-        input.addEventListener('blur', () => setTimeout(hide, 50));
-        chip.addEventListener('mouseover', show);
-        chip.addEventListener('mouseout', hide);
-        chip.addEventListener('click', () => {
-          input.value = secondsToHHMM(Number(chip.dataset.seconds) || 0);
-          input.dispatchEvent(new Event('input', { bubbles: true }));
-          input.dispatchEvent(new Event('change', { bubbles: true }));
-          chip.style.display = 'none';
-          refreshSuggestionChips();
-        });
-      }
-      chip.dataset.seconds = String(suggestedSecs);
-      chip.textContent = `提案: ${secondsToHHMM(suggestedSecs)}`;
-    });
   }
 
   // ---------------------------------------------------------------------------
@@ -283,7 +496,7 @@
   }
 
   // Recompute the compact header from live values. No-op until the shell exists;
-  // wired into refreshSuggestionChips() so it tracks every edit / add / remove.
+  // called on every edit / add / remove so it tracks live values.
   function updateSummary() {
     const root = document.getElementById('jbe-mh-summary');
     if (!root) return;
@@ -350,6 +563,11 @@
     p.set('year', String(dateObj.getFullYear()));
     p.set('month', String(dateObj.getMonth() + 1));
     p.set('day', String(dateObj.getDate()));
+    // ?aid is the achievement-record id of the day we arrived from (the list page
+    // links in with it). It takes precedence over year/month/day for the row data,
+    // so carrying it forward renders the OLD day's 工数 rows next to the NEW day's
+    // 実労働時間 — with 保存 one click away. Drop it and let the date decide.
+    p.delete('aid');
     location.search = p.toString();
   }
 
@@ -523,12 +741,12 @@
 
   function enhanceExistingRows(root) {
     const scope = root && root.querySelectorAll ? root : document;
-    scope.querySelectorAll('input.manhour').forEach((input) => {
-      if (input.closest('table.jbc-table') && !input.closest('#template')) attachDecimalHoursNormalizer(input);
-    });
+    // Decimal-hour handling is delegated from the document now (see
+    // setupDecimalHoursNormalizer) — nothing to attach per row.
     scope.querySelectorAll('table.jbc-table input.unit, table.jbc-table input.note').forEach((input) => {
       if (!input.closest('#template')) syncFieldTitle(input);
     });
+    refreshUnitMasks(root);
   }
 
   function setupManHourEditPage() {
@@ -536,14 +754,17 @@
     window.__jbe_manHourEditPageInited = true;
 
     setupEditKeyboardShortcuts();
+    // Delegated from the document, so it does not need the table to exist yet.
+    setupDecimalHoursNormalizer();
 
     const init = () => {
       const table = getEditTable();
       if (!table) return false;
       enhanceExistingRows(document);
       setupSummaryHeader();
-      refreshSuggestionChips();
+      updateSummary();
       setupEditActionBar();
+      setupUnitMaskInteractions();
       return true;
     };
 
@@ -572,7 +793,7 @@
             rowsChanged = true;
           }
         });
-        if (rowsChanged) { refreshSuggestionChips(); setupSummaryHeader(); setupEditActionBar(); }
+        if (rowsChanged) { updateSummary(); setupSummaryHeader(); setupEditActionBar(); }
       });
       observer.observe(tbody, { childList: true });
       if (typeof window.__jbe_registerManagedObserver === 'function') {
@@ -583,7 +804,7 @@
     document.addEventListener('change', (e) => {
       const t = e.target;
       if (!t || !t.classList) return;
-      if (t.classList.contains('manhour')) refreshSuggestionChips();
+      if (t.classList.contains('manhour')) updateSummary();
       if (t.classList.contains('unit') || t.classList.contains('note')) syncFieldTitle(t);
     });
 

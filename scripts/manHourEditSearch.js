@@ -54,25 +54,121 @@
   }
 
   // --- full unit list per kind (all pages), cached ----------------------------
+  // The pre-warm below walks the whole cursor-paginated list on every page load.
+  // Measured on a real account: 775 units = 9 SEQUENTIAL requests, ~2.9s of
+  // round-trips (limit=100, each page needs the previous page's `next` cursor) —
+  // for only ~3ms of CPU to build the index. Day-to-day navigation with the
+  // 前の日/次の日 arrows re-paid that on every single load.
+  //
+  // So persist the raw {id: label} map in localStorage per kid+date and rebuild
+  // the norm index locally (cheap). Cached entries are served SYNCHRONOUSLY, so
+  // substring search is ready on the first keystroke instead of ~3s in. Entries
+  // past LIST_TTL_MS are still served immediately, then refreshed in the
+  // background (stale-while-revalidate) so a newly added project appears next
+  // load without ever putting the fetch back on the critical path.
+  const LIST_CACHE_PREFIX = 'jbe_mh_units_v1:';
+  const LIST_TTL_MS = 6 * 60 * 60 * 1000; // refresh at most this often
+  const LIST_MAX_ENTRIES = 6;             // LRU cap (~32KB each) to bound quota
+
+  const cacheKey = (kid, date) => `${LIST_CACHE_PREFIX}${kid}:${date}`;
+
+  // Keep only the newest LIST_MAX_ENTRIES of our own keys; also used to make room
+  // after a quota error.
+  function pruneListCache(keepNewest) {
+    try {
+      const mine = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith(LIST_CACHE_PREFIX)) {
+          let t = 0;
+          try { t = (JSON.parse(localStorage.getItem(k)) || {}).t || 0; } catch (_) { t = 0; }
+          mine.push({ k, t });
+        }
+      }
+      mine.sort((a, b) => b.t - a.t); // newest first
+      mine.slice(Math.max(0, keepNewest)).forEach((e) => { try { localStorage.removeItem(e.k); } catch (_) {} });
+    } catch (_) { /* storage unavailable */ }
+  }
+
+  // -> { items:[{id,label,norm}], stale:boolean } | null
+  function readListCache(kid, date) {
+    let raw;
+    try { raw = localStorage.getItem(cacheKey(kid, date)); } catch (_) { return null; }
+    if (!raw) return null;
+    let rec;
+    try { rec = JSON.parse(raw); } catch (_) { return null; }
+    if (!rec || !rec.d || typeof rec.d !== 'object') return null;
+    const items = Object.keys(rec.d).map((id) => {
+      const label = String(rec.d[id]);
+      return { id, label, norm: normKana(label) };
+    });
+    if (!items.length) return null;
+    return { items, stale: !(rec.t > 0 && Date.now() - rec.t < LIST_TTL_MS) };
+  }
+
+  function writeListCache(kid, date, map) {
+    const payload = JSON.stringify({ t: Date.now(), d: map });
+    try {
+      localStorage.setItem(cacheKey(kid, date), payload);
+    } catch (_) {
+      // Most likely QuotaExceededError — drop older entries and retry once.
+      pruneListCache(1);
+      try { localStorage.setItem(cacheKey(kid, date), payload); } catch (_) { return; }
+    }
+    pruneListCache(LIST_MAX_ENTRIES);
+  }
+
+  // Walk every page of the cursor-paginated endpoint. Resolves to the raw
+  // {id: label} map so it can be cached verbatim.
+  async function fetchFullList(kid, date) {
+    let next = null, map = {}, pages = 0;
+    do {
+      let url = `${API_BASE}/autocomplete-employee-units?kid=${encodeURIComponent(kid)}&date=${date}&tz_offset=${TZ}&term=&limit=100`;
+      if (next) url += `&next=${encodeURIComponent(next)}`;
+      const r = await fetch(url, { credentials: 'include' }).then((x) => x.json()).catch(() => ({}));
+      const data = (r && r.data && typeof r.data === 'object') ? r.data : {};
+      Object.keys(data).forEach((id) => { map[id] = String(data[id]); });
+      next = (r && r.next) ? r.next : null;
+      pages += 1;
+    } while (next && pages < 25);
+    return map;
+  }
+
+  const toItems = (map) => Object.keys(map).map((id) => {
+    const label = String(map[id]);
+    return { id, label, norm: normKana(label) };
+  });
+
   const listPromises = {}; // kid -> Promise
-  const lists = {};        // kid -> resolved [{id,label}] (sync access in source cb)
+  const lists = {};        // kid -> resolved [{id,label,norm}] (sync access in _search)
   function loadFullList(kid) {
     if (listPromises[kid]) return listPromises[kid];
-    listPromises[kid] = (async () => {
-      const date = editDate();
-      let next = null, all = [], pages = 0;
-      do {
-        let url = `${API_BASE}/autocomplete-employee-units?kid=${encodeURIComponent(kid)}&date=${date}&tz_offset=${TZ}&term=&limit=100`;
-        if (next) url += `&next=${encodeURIComponent(next)}`;
-        const r = await fetch(url, { credentials: 'include' }).then((x) => x.json()).catch(() => ({}));
-        const data = (r && r.data && typeof r.data === 'object') ? r.data : {};
-        Object.keys(data).forEach((id) => { const label = String(data[id]); all.push({ id, label, norm: normKana(label) }); });
-        next = (r && r.next) ? r.next : null;
-        pages += 1;
-      } while (next && pages < 25);
-      lists[kid] = all;
-      return all;
-    })();
+    const date = editDate();
+
+    const cached = readListCache(kid, date);
+    if (cached) {
+      lists[kid] = cached.items;                       // available synchronously
+      listPromises[kid] = Promise.resolve(cached.items);
+      if (cached.stale) {
+        // Background refresh; never blocks search, which is already answerable.
+        fetchFullList(kid, date).then((map) => {
+          const items = toItems(map);
+          if (items.length) { lists[kid] = items; writeListCache(kid, date, map); }
+        }).catch(() => {});
+      }
+      return listPromises[kid];
+    }
+
+    listPromises[kid] = fetchFullList(kid, date).then((map) => {
+      const items = toItems(map);
+      lists[kid] = items;
+      if (items.length) writeListCache(kid, date, map);
+      return items;
+    }).catch(() => {
+      // Don't poison the slot — a later focus can retry.
+      delete listPromises[kid];
+      return [];
+    });
     return listPromises[kid];
   }
 

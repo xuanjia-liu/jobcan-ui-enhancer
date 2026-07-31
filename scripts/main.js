@@ -185,12 +185,13 @@ applyEnhancements();
     '.work-progress-container',
     '.work-time-overlay',
     '.screenshot-notification',
-    '.time-suggestion-chip',
     '#jbe-manhour-report',
     '#jbe-manhour-list-filters',
     '#jbe-mh-summary',
     '#jbe-mh-nav',
-    '.jbe-mh-navrow'
+    '.jbe-mh-navrow',
+    '.jbe-unit-mask',
+    '#jbe-unit-idpop'
   ];
 
   function isIgnoredNode(node) {

@@ -669,6 +669,28 @@
 }
 
 /* ------------------------------------------------------------------ */
+/* Layout fix: 調整 popover bottom row vertical alignment              */
+/* ------------------------------------------------------------------ */
+/* #manhour_dialog's bottom row is [% input | "03:00 / 08:28 時間" | 入力], a
+   Bootstrap .row (flex) left at the default align-items:stretch. The three
+   columns therefore all start at the row's top edge, and since the text block is
+   only ~23px tall against a 39px input / 37px button it reads as floating high.
+   Jobcan tries to compensate with a `pt-1` on the text wrapper, but 3.25px is not
+   enough — measured on the live popover the text's centre sat 8.1px above the
+   input's and 7.1px above the button's.
+
+   Centre the flex items instead, and drop the now-redundant pt-1 nudge (leaving it
+   would push the text ~1.6px past centre). */
+
+.jobcan-enhanced #manhour_dialog .row {
+  align-items: center;
+}
+
+.jobcan-enhanced #manhour_dialog .row > div > .pt-1 {
+  padding-top: 0 !important;
+}
+
+/* ------------------------------------------------------------------ */
 /* Dark-mode skin for the 調整 (man-hour adjust) popup #manhour_dialog  */
 /* ------------------------------------------------------------------ */
 /* The 調整 button opens Jobcan's manual-adjust popover (#manhour_dialog): the
@@ -1076,4 +1098,125 @@
 }
 .jobcan-enhanced body.dark-mode ul.ui-autocomplete::-webkit-scrollbar-thumb:hover {
   background-color: var(--color-gray-400, #686887);
+}
+
+/* ------------------------------------------------------------------ */
+/* プロジェクト cell: hide the "(code)" prefix, show it in the popover  */
+/* ------------------------------------------------------------------ */
+/* A filled project field holds "(2607BfZz0601)アサイン/…/デザイン制作". The code
+   consumes the front of the cell and pushes the readable part out of view, but
+   input.value must stay byte-identical — Jobcan validates and saves from it. So
+   .jbe-unit-mask is layered over the input painting the name only, while the
+   input's own text is made transparent. Nothing repaints the input's background
+   or border, so per-row striping and the dark-mode control colours still show
+   through and no colour needs to be duplicated here.
+
+   The mask stays up on hover: the code is surfaced in the hover popover instead,
+   so the cell itself never reflows between name-only and code-prefixed text. Only
+   :focus-within drops the mask, because editing needs the real value and a visible
+   caret. Keeping hover out of it also means the mask no longer flickers when the
+   pointer travels from the input onto the popover.
+
+   The mask's box is positioned by JS from the input's own offsets (see
+   applyUnitMask) so it lines up whatever the cell does. */
+
+.jobcan-enhanced .jbc-table td.jbe-unit-cell {
+  position: relative;
+}
+
+.jobcan-enhanced .jbc-table .jbe-unit-mask {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  pointer-events: none; /* the input underneath stays clickable */
+  background: transparent;
+  color: var(--color-text-primary, #212529);
+}
+
+/* Hide the real "(code)name" text only while masked — restoring it on focus needs
+   no colour override, the rule simply stops matching. */
+.jobcan-enhanced .jbc-table td.jbe-unit-cell:not(:focus-within) input.unit.jbe-unit-masked {
+  color: transparent !important;
+}
+
+.jobcan-enhanced .jbc-table td.jbe-unit-cell:focus-within .jbe-unit-mask {
+  display: none;
+}
+
+/* --- hover popover: the code + copy buttons --- */
+
+#jbe-unit-idpop {
+  position: fixed;
+  z-index: 2147483000;
+  display: none;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--color-control-border, #DEE2E6);
+  border-radius: 8px;
+  background-color: var(--color-card, #FFFFFF);
+  box-shadow: var(--shadow-dropdown, 0 4px 12px rgba(0, 0, 0, 0.1));
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+#jbe-unit-idpop.is-open {
+  display: flex;
+}
+
+#jbe-unit-idpop .jbe-unit-idpop-code {
+  padding: 2px 6px;
+  border-radius: 4px;
+  background-color: var(--color-gray-150, #f1f3f4);
+  color: var(--color-text-primary, #212529);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  user-select: all; /* click-drag selects the whole code */
+}
+
+#jbe-unit-idpop .jbe-unit-idpop-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border: 1px solid var(--color-control-border, #DEE2E6);
+  border-radius: 6px;
+  background-color: transparent;
+  color: var(--color-primary, #0077ff);
+  font-size: 11px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+#jbe-unit-idpop .jbe-unit-idpop-btn:hover {
+  background-color: color-mix(in srgb, var(--color-primary, #0077ff) 10%, transparent);
+}
+
+#jbe-unit-idpop .jbe-unit-idpop-btn svg {
+  width: 12px;
+  height: 12px;
+  flex: 0 0 auto;
+}
+
+#jbe-unit-idpop .jbe-unit-idpop-btn.is-copied {
+  border-color: var(--color-success, #28a745);
+  color: var(--color-success, #28a745);
+}
+
+#jbe-unit-idpop .jbe-unit-idpop-btn.is-failed {
+  border-color: var(--color-danger, #dc3545);
+  color: var(--color-danger, #dc3545);
+}
+
+.jobcan-enhanced body.dark-mode #jbe-unit-idpop {
+  border-color: var(--color-control-border, #4a4a64);
+  background-color: var(--color-card, #272736);
+}
+
+.jobcan-enhanced body.dark-mode #jbe-unit-idpop .jbe-unit-idpop-code {
+  background-color: var(--color-control-bg, #2f3042);
+  color: var(--color-text-primary, #e4e6eb);
 }

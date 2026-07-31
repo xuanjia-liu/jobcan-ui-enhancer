@@ -2700,58 +2700,7 @@
   }
 
 
-  /* Time suggestion chip styling */
-  .jobcan-enhanced .time-suggestion-chip {
-    /* position:fixed escapes the rebuilt man-hour table's overflow:hidden, which
-       would otherwise clip the chip where it sits below a row. manHourEdit.js
-       sets top/left from the input's rect on show; translateX(-50%) centers the
-       chip under the (centered) input. top/left are kept out of the transition
-       so re-positioning never animates as a slide. */
-    position: fixed;
-    background-color: var(--color-primary);
-    color: var(--color-white);
-    font-size: 12px;
-    font-weight: 600;
-    padding: 4px 8px;
-    border-radius: var(--border-radius-sm);
-    transform: translateX(-50%);
-    cursor: pointer;
-    box-shadow: 0 2px 5px var(--color-black-10);
-    z-index: var(--z-index-sidemenu);
-    transition: background-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
-    white-space: nowrap;
-    display: none;
-  }
-
-  .jobcan-enhanced .time-suggestion-chip:hover {
-    background-color: var(--color-primary-dark);
-    color: var(--color-white);
-    transform: translateX(-50%) translateY(-1px);
-    box-shadow: 0 3px 8px var(--shadow-primary);
-  }
-
-  /* Up-pointing arrow, centered under the input (chip itself is centered via
-     translateX, so the arrow tracks the input's horizontal center). */
-  .jobcan-enhanced .time-suggestion-chip::before {
-    content: '';
-    position: absolute;
-    left: 50%;
-    margin-left: -5px;
-    top: -5px;
-    transform: translateY(0);
-    width: 0;
-    height: 0;
-    border-left: 5px solid transparent;
-    border-right: 5px solid transparent;
-    border-bottom: 5px solid var(--color-primary);
-    transition: border-bottom-color 0.2s ease;
-  }
-
-  .jobcan-enhanced .time-suggestion-chip:hover::before {
-    border-bottom-color: var(--color-primary-dark);
-  }
-
-  /* Ensure input positioning is relative for absolute chip positioning */
+  /* Keep the man-hour input a positioning context for absolute overlays. */
   .jobcan-enhanced input.man-hour-input {
     position: relative;
   }
