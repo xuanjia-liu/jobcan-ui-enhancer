@@ -1,4 +1,7 @@
 // scripts/draggable.js
+
+/* exported setupTabsContainerDragObserver */
+
 // Function to make .tabs-container elements horizontally draggable
 function makeTabsContainerDraggable(tabsContainer) {
   if (!tabsContainer || tabsContainer.dataset.draggable === 'true') return;
@@ -71,5 +74,12 @@ function setupTabsContainerDragObserver() {
     });
   });
   observer.observe(document.body, { childList: true, subtree: true });
+  // Page-scoped: torn down on SPA navigation, and the cleanup callback clears the
+  // init flag so applyEnhancements() can legitimately re-create it afterwards.
+  if (typeof window.__jbe_registerManagedObserver === 'function') {
+    window.__jbe_registerManagedObserver('watch:tabsDrag', observer, () => {
+      window.__jbe_tabsDragObserverInited = false;
+    });
+  }
   document.querySelectorAll('.tabs-container').forEach(makeTabsContainerDraggable);
 } 

@@ -12,6 +12,8 @@
 // the post-rebuild cleanup. The live replacements are in scripts/manHourEdit.js,
 // scripts/manHourList.js, scripts/manHourApi.js and scripts/manHourEditSearch.js.
 
+/* exported enhanceCollapseInfo */
+
 // Enhance the #collapseInfo summary section (attendance + man-hour pages).
 function enhanceCollapseInfo() {
   if (window.__jbe_enhanceCollapseInfoInited) return;
@@ -24,6 +26,13 @@ function enhanceCollapseInfo() {
     }
   });
   observer.observe(document.body, { childList: true, subtree: true });
+  // Page-scoped: torn down on SPA navigation, and the cleanup callback clears the
+  // init flag so applyEnhancements() can legitimately re-create it afterwards.
+  if (typeof window.__jbe_registerManagedObserver === 'function') {
+    window.__jbe_registerManagedObserver('watch:collapseInfoEnhance', observer, () => {
+      window.__jbe_enhanceCollapseInfoInited = false;
+    });
+  }
 
   // Also run immediately if collapseInfo already exists
   const collapseInfo = document.getElementById('collapseInfo');

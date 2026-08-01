@@ -91,12 +91,12 @@ async function showWorkTimeOverlay() {
         (!userInfoData || Object.keys(userInfoData).length === 0)) {
       try {
         if (typeof window.showNotification === 'function') window.showNotification('保存されたデータがありません。データを取得中...', 3000);
-        const iframeData = await window.loadAttendancePageInIframe();
-        workTimeData = iframeData.workTimeData;
-        userInfoData = iframeData.userInfoData;
-        // Only update currentMonthInfo if iframe provides month info, otherwise keep default current month
-        if (iframeData.monthInfo) {
-          currentMonthInfo = iframeData.monthInfo;
+        const fetched = await window.loadAttendanceData();
+        workTimeData = fetched.workTimeData;
+        userInfoData = fetched.userInfoData;
+        // Only update currentMonthInfo if the fetch provides month info, otherwise keep default current month
+        if (fetched.monthInfo) {
+          currentMonthInfo = fetched.monthInfo;
         }
       } catch (error) {
         console.error('Failed to load data from iframe:', error);
@@ -236,7 +236,7 @@ async function showWorkTimeOverlay() {
         }
 
         const monthUrl = `https://ssl.jobcan.jp/employee/attendance?list_type=normal&search_type=month&year=${encodeURIComponent(monthInfo.year)}&month=${encodeURIComponent(monthInfo.month)}`;
-        await window.loadAttendancePageInIframe(monthUrl);
+        await window.loadAttendanceData(monthUrl);
         overlayDiv.remove();
         setTimeout(() => showWorkTimeOverlay(), 80);
       } catch (error) {
@@ -1121,57 +1121,47 @@ async function showWorkTimeOverlay() {
   }
 }
 
-// Add the floating work time button and hook up click to overlay
+// Add the floating work time button and hook up click to overlay.
+//
+// registerFloatingAction comes from scripts/screenshot.js, which the manifest
+// always loads (and always before this file), so it is unconditionally available.
+// The `typeof === 'function'` branch that used to wrap this — and the standalone
+// #work-time-display-btn fallback button it fell back to — were unreachable.
 function setupFloatingWorkTimeButton() {
   if (window.__jbe_floatingWorkTimeButtonSetup) return;
   window.__jbe_floatingWorkTimeButtonSetup = true;
 
-  // Clean up legacy standalone button if it still exists.
-  const legacyButton = document.getElementById('work-time-display-btn');
-  if (legacyButton) legacyButton.remove();
+  window.registerFloatingAction({
+    id: 'work-time',
+    title: '労働データ',
+    order: 20,
+    icon: '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>',
+    onClick: showWorkTimeOverlay
+  });
 
-  if (typeof window.registerFloatingAction === 'function') {
-    window.registerFloatingAction({
-      id: 'work-time',
-      title: '労働データ',
-      order: 20,
-      icon: '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>',
-      onClick: showWorkTimeOverlay
-    });
-
-    window.registerFloatingAction({
-      id: 'man-hour-report',
-      title: '工数レポート',
-      order: 30,
-      icon: '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>',
-      onClick: async () => {
-        const onListPage = window.location.pathname.startsWith('/employee/man-hour-manage/achievement-list');
-        if (onListPage) {
-          // Already on the list page — open the rebuilt report directly.
-          const opener = await waitForManHourReportOpener();
-          if (typeof opener === 'function') {
-            opener();
-            return;
-          }
-          if (typeof window.showNotification === 'function') {
-            window.showNotification('工数レポートを開けませんでした。一覧の読み込み完了後に再度お試しください。', 3000);
-          }
+  window.registerFloatingAction({
+    id: 'man-hour-report',
+    title: '工数レポート',
+    order: 30,
+    icon: '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>',
+    onClick: async () => {
+      const onListPage = window.location.pathname.startsWith('/employee/man-hour-manage/achievement-list');
+      if (onListPage) {
+        // Already on the list page — open the rebuilt report directly.
+        const opener = await waitForManHourReportOpener();
+        if (typeof opener === 'function') {
+          opener();
           return;
         }
-        // Otherwise navigate to the list page and auto-open the report there.
-        window.location.href = buildManHourReportUrl();
+        if (typeof window.showNotification === 'function') {
+          window.showNotification('工数レポートを開けませんでした。一覧の読み込み完了後に再度お試しください。', 3000);
+        }
+        return;
       }
-    });
-    return;
-  }
-
-  // Fallback for environments where screenshot.js is unavailable.
-  const fallbackButton = document.createElement('button');
-  fallbackButton.id = 'work-time-display-btn';
-  fallbackButton.title = '労働データを表示';
-  fallbackButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>';
-  fallbackButton.addEventListener('click', showWorkTimeOverlay);
-  document.body.appendChild(fallbackButton);
+      // Otherwise navigate to the list page and auto-open the report there.
+      window.location.href = buildManHourReportUrl();
+    }
+  });
 }
 
 // Expose globally if needed

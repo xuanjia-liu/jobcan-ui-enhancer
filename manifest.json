@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Jobcan UI Enhancer",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "description": "Transform Jobcan into a modern, intuitive interface with improved navigation, visual design, and productivity features",
   "icons": {
     "16": "icons/icon16.png",
@@ -27,7 +27,6 @@
       ],
       "css": ["css/variables.css", "css/base.css", "css/styles.css", "css/responsive.css", "css/manHourRebuild.css"],
       "js": [
-        "html2canvas.min.js",
         "confetti.min.js",
         "scripts/utils.js",
         "scripts/manHourApi.js",

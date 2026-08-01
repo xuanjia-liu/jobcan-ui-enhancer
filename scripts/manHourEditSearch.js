@@ -42,14 +42,41 @@
   }
 
   // --- kind ids (project / task), discovered once -----------------------------
+  //
+  // get-achievements-kinds-in-period answers for a DEFINED man-hour period, not
+  // "any data in this range": querying a month that has no period yet returns an
+  // empty array (verified live — 2026-08 returned [], 2026-07 and 2026-06 returned
+  // the 2 kinds; a multi-month window also returns []). Because patchSearch bails
+  // when it can't resolve a kind id, that made the whole substring search silently
+  // dead on any date in such a month — e.g. the 1st of a new month, exactly when
+  // you start filling a fresh timesheet.
+  //
+  // So: try the edit month, then walk back a few months until one answers. Kind ids
+  // are stable dimension definitions, not per-month values — a previous month's
+  // project kind id returns the full unit list for a current-month date (verified:
+  // July's kid + an August date returned 100 units).
+  const KIND_LOOKBACK_MONTHS = 3;
+
+  function fetchKindsForMonth(year, monthIndex) {
+    const from = Math.floor(new Date(year, monthIndex, 1).getTime() / 1000);
+    const to = Math.floor(new Date(year, monthIndex + 1, 1).getTime() / 1000);
+    return fetch(`${API_BASE}/get-achievements-kinds-in-period?from=${from}&to=${to}&params=%5B%5D`, { credentials: 'include' })
+      .then((r) => r.json())
+      .then((j) => (Array.isArray(j.data) ? j.data : []))
+      .catch(() => []);
+  }
+
   let kindsPromise = null;
   function getKinds() {
     if (kindsPromise) return kindsPromise;
     const d = new Date(editDate());
-    const from = Math.floor(new Date(d.getFullYear(), d.getMonth(), 1).getTime() / 1000);
-    const to = Math.floor(new Date(d.getFullYear(), d.getMonth() + 1, 1).getTime() / 1000);
-    kindsPromise = fetch(`${API_BASE}/get-achievements-kinds-in-period?from=${from}&to=${to}&params=%5B%5D`, { credentials: 'include' })
-      .then((r) => r.json()).then((j) => (Array.isArray(j.data) ? j.data : [])).catch(() => []);
+    kindsPromise = (async () => {
+      for (let back = 0; back <= KIND_LOOKBACK_MONTHS; back += 1) {
+        const kinds = await fetchKindsForMonth(d.getFullYear(), d.getMonth() - back);
+        if (kinds.length) return kinds;
+      }
+      return [];
+    })();
     return kindsPromise;
   }
 
@@ -60,17 +87,39 @@
   // for only ~3ms of CPU to build the index. Day-to-day navigation with the
   // 前の日/次の日 arrows re-paid that on every single load.
   //
-  // So persist the raw {id: label} map in localStorage per kid+date and rebuild
-  // the norm index locally (cheap). Cached entries are served SYNCHRONOUSLY, so
+  // So persist the raw {id: label} map in localStorage per kind and rebuild the
+  // norm index locally (cheap). Cached entries are served SYNCHRONOUSLY, so
   // substring search is ready on the first keystroke instead of ~3s in. Entries
   // past LIST_TTL_MS are still served immediately, then refreshed in the
   // background (stale-while-revalidate) so a newly added project appears next
   // load without ever putting the fetch back on the critical path.
-  const LIST_CACHE_PREFIX = 'jbe_mh_units_v1:';
+  //
+  // The key is the KIND ONLY — deliberately not kind+date. It used to include the
+  // edit date, which made the cache almost useless in practice: the 前の日/次の日
+  // arrows this extension adds make day-hopping the normal workflow, and at 2 kinds
+  // per day an LRU of 6 held just THREE days. Walking back a week evicted
+  // everything and re-paid the 9-request/~3s sequential prewarm on each day. The
+  // unit list barely varies day to day, so the date is kept inside the record as a
+  // revalidation hint instead: a cached list built for another date is still served
+  // instantly, then refreshed in the background like any other stale entry.
+  const LIST_CACHE_PREFIX = 'jbe_mh_units_v2:';
+  const LEGACY_CACHE_PREFIX = 'jbe_mh_units_v1:'; // date-keyed; purged on load
   const LIST_TTL_MS = 6 * 60 * 60 * 1000; // refresh at most this often
-  const LIST_MAX_ENTRIES = 6;             // LRU cap (~32KB each) to bound quota
+  const LIST_MAX_ENTRIES = 4;             // one per kind (project/task), plus headroom
 
-  const cacheKey = (kid, date) => `${LIST_CACHE_PREFIX}${kid}:${date}`;
+  const cacheKey = (kid) => `${LIST_CACHE_PREFIX}${kid}`;
+
+  // One-time removal of the v1 date-keyed entries (~32KB each, up to 6 of them).
+  function purgeLegacyListCache() {
+    try {
+      const stale = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith(LEGACY_CACHE_PREFIX)) stale.push(k);
+      }
+      stale.forEach((k) => { try { localStorage.removeItem(k); } catch (_) {} });
+    } catch (_) { /* storage unavailable */ }
+  }
 
   // Keep only the newest LIST_MAX_ENTRIES of our own keys; also used to make room
   // after a quota error.
@@ -91,9 +140,11 @@
   }
 
   // -> { items:[{id,label,norm}], stale:boolean } | null
+  // Stale when the TTL has lapsed OR the entry was built for a different date;
+  // either way the caller serves it immediately and revalidates in the background.
   function readListCache(kid, date) {
     let raw;
-    try { raw = localStorage.getItem(cacheKey(kid, date)); } catch (_) { return null; }
+    try { raw = localStorage.getItem(cacheKey(kid)); } catch (_) { return null; }
     if (!raw) return null;
     let rec;
     try { rec = JSON.parse(raw); } catch (_) { return null; }
@@ -103,17 +154,18 @@
       return { id, label, norm: normKana(label) };
     });
     if (!items.length) return null;
-    return { items, stale: !(rec.t > 0 && Date.now() - rec.t < LIST_TTL_MS) };
+    const fresh = rec.t > 0 && Date.now() - rec.t < LIST_TTL_MS && rec.date === date;
+    return { items, stale: !fresh };
   }
 
   function writeListCache(kid, date, map) {
-    const payload = JSON.stringify({ t: Date.now(), d: map });
+    const payload = JSON.stringify({ t: Date.now(), date, d: map });
     try {
-      localStorage.setItem(cacheKey(kid, date), payload);
+      localStorage.setItem(cacheKey(kid), payload);
     } catch (_) {
       // Most likely QuotaExceededError — drop older entries and retry once.
       pruneListCache(1);
-      try { localStorage.setItem(cacheKey(kid, date), payload); } catch (_) { return; }
+      try { localStorage.setItem(cacheKey(kid), payload); } catch (_) { return; }
     }
     pruneListCache(LIST_MAX_ENTRIES);
   }
@@ -170,6 +222,111 @@
       return [];
     });
     return listPromises[kid];
+  }
+
+  // --- "recently used" ranking ------------------------------------------------
+  //
+  // The full project list is ~775 entries, but in practice a person cycles through
+  // a handful. get-achievements-list already returns every entry's {kind_id,
+  // unit_id} for a date range, so the last 30 days give a frequency ranking for
+  // free — no extra endpoint, and the same request the report already understands.
+  //
+  // Recent units sort to the top (below pins) and are badged 最近 in the dropdown,
+  // with a divider after the last one so they read as a section.
+  const RECENT_DAYS = 30;
+  const RECENT_CACHE_KEY = 'jbe_mh_recent_v1';
+  const RECENT_TTL_MS = 60 * 60 * 1000; // 1h — usage shifts slowly
+
+  // { [kindId]: Map(unitId -> { n, last }) }
+  let recentByKind = null;
+  let activeKid = null; // kind of the field currently being searched (for decoration)
+
+  const dayOffsetYmd = (days) => {
+    const d = new Date();
+    d.setDate(d.getDate() + days);
+    return ymd(d);
+  };
+
+  // localStorage can't hold Maps; persist as { kid: { unitId: [n, last] } }.
+  const recentToPlain = (byKind) => {
+    const out = {};
+    Object.keys(byKind).forEach((kid) => {
+      const o = {};
+      byKind[kid].forEach((v, unitId) => { o[unitId] = [v.n, v.last]; });
+      out[kid] = o;
+    });
+    return out;
+  };
+
+  const recentFromPlain = (plain) => {
+    const out = {};
+    Object.keys(plain || {}).forEach((kid) => {
+      const m = new Map();
+      Object.keys(plain[kid] || {}).forEach((unitId) => {
+        const pair = plain[kid][unitId] || [];
+        m.set(unitId, { n: Number(pair[0]) || 0, last: Number(pair[1]) || 0 });
+      });
+      out[kid] = m;
+    });
+    return out;
+  };
+
+  function readRecentCache() {
+    try {
+      const rec = JSON.parse(localStorage.getItem(RECENT_CACHE_KEY) || 'null');
+      if (!rec || !rec.d) return null;
+      return { data: recentFromPlain(rec.d), stale: !(rec.t > 0 && Date.now() - rec.t < RECENT_TTL_MS) };
+    } catch (_) { return null; }
+  }
+
+  function writeRecentCache(byKind) {
+    try {
+      localStorage.setItem(RECENT_CACHE_KEY, JSON.stringify({ t: Date.now(), d: recentToPlain(byKind) }));
+    } catch (_) { /* quota or storage unavailable */ }
+  }
+
+  async function fetchRecentUsage() {
+    const from = dayOffsetYmd(-RECENT_DAYS);
+    const to = dayOffsetYmd(1);
+    const j = await fetch(`${API_BASE}/get-achievements-list?limit=100&from=${from}&to=${to}`, { credentials: 'include' })
+      .then((r) => r.json()).catch(() => ({}));
+    const days = Array.isArray(j && j.data) ? j.data : [];
+    const out = {};
+    days.forEach((day) => {
+      const ts = Date.parse(day && day.date) || 0;
+      (day.manhours || []).forEach((mh) => {
+        (mh.items || []).forEach((it) => {
+          if (!it || !it.kind_id || !it.unit_id) return;
+          const m = out[it.kind_id] || (out[it.kind_id] = new Map());
+          const cur = m.get(it.unit_id) || { n: 0, last: 0 };
+          cur.n += 1;
+          if (ts > cur.last) cur.last = ts;
+          m.set(it.unit_id, cur);
+        });
+      });
+    });
+    return out;
+  }
+
+  // Served synchronously from cache when possible so the very first dropdown is
+  // already ranked; refreshed in the background like the unit lists.
+  function loadRecentUsage() {
+    const cached = readRecentCache();
+    if (cached) {
+      recentByKind = cached.data;
+      if (!cached.stale) return;
+    }
+    fetchRecentUsage().then((byKind) => {
+      if (Object.keys(byKind).length) {
+        recentByKind = byKind;
+        writeRecentCache(byKind);
+      }
+    }).catch(() => {});
+  }
+
+  function recentEntry(kid, unitId) {
+    const m = recentByKind && recentByKind[kid];
+    return (m && m.get(unitId)) || null;
   }
 
   function rowUnitInputs(input) {
@@ -231,6 +388,21 @@
       wrapper.appendChild(idEl);
     }
 
+    // Badge anything used in the last 30 days. The option's data carries the unit
+    // id (jQuery-UI stashes the source item on the <li>), which is what the recency
+    // index is keyed by — matching on the label would be fragile.
+    let item = null;
+    try { item = window.jQuery(li).data('ui-autocomplete-item'); } catch (_) { item = null; }
+    const recent = item && item.id ? recentEntry(activeKid, item.id) : null;
+    if (recent) {
+      li.classList.add('jbe-recent-row');
+      const tag = document.createElement('span');
+      tag.className = 'jbe-opt-recent';
+      tag.textContent = '最近';
+      tag.title = `直近${RECENT_DAYS}日で ${recent.n} 回使用`;
+      nameEl.appendChild(tag);
+    }
+
     const actions = document.createElement('span');
     actions.className = 'jbe-opt-actions';
     const pinBtn = document.createElement('button');
@@ -266,7 +438,17 @@
   }
 
   function decorateAll() {
-    document.querySelectorAll('ul.ui-autocomplete li.ui-menu-item').forEach(decorateLi);
+    const items = document.querySelectorAll('ul.ui-autocomplete li.ui-menu-item');
+    items.forEach(decorateLi);
+    // Draw a divider after the last consecutive 最近 row so the recents read as a
+    // section, without injecting a non-item <li> that would break keyboard nav.
+    let lastRecent = null;
+    for (let i = 0; i < items.length; i += 1) {
+      items[i].classList.remove('jbe-recent-last');
+      if (items[i].classList.contains('jbe-recent-row')) lastRecent = items[i];
+      else break;
+    }
+    if (lastRecent && lastRecent !== items[items.length - 1]) lastRecent.classList.add('jbe-recent-last');
   }
 
   // One persistent observer on the dropdown container re-decorates options after
@@ -275,8 +457,12 @@
   // the stable #autocomplete-base container instead. Disconnect while decorating
   // so our own DOM writes don't re-trigger the observer.
   function setupMenuDecorator() {
-    if (window.__jbeMenuDecorator) return;
-    const base = document.getElementById('autocomplete-base') || document.body;
+    if (window.__jbeMenuDecorator) return true;
+    // Bail (and retry on the next focus) rather than falling back to document.body:
+    // the fallback installed a body-wide subtree observer on a page whose table
+    // Jobcan re-renders constantly.
+    const base = document.getElementById('autocomplete-base');
+    if (!base) return false;
     const obs = new MutationObserver(() => {
       obs.disconnect();
       try { decorateAll(); } catch (_) {}
@@ -285,6 +471,7 @@
     obs.observe(base, { childList: true, subtree: true });
     window.__jbeMenuDecorator = obs;
     decorateAll();
+    return true;
   }
 
   // --- patch the widget's _search to answer from our cached full list ---------
@@ -312,10 +499,18 @@
       const nterm = normKana(term || '');
       if (Array.isArray(lists[kid])) {
         try { this.element.removeClass('ui-autocomplete-loading'); } catch (_) {}
+        activeKid = kid; // so decorateLi can badge the recent rows
         const matches = lists[kid].filter((o) => o.norm.includes(nterm));
         matches.sort((a, b) => {
           const pa = isPinned(a.label) ? 0 : 1, pb = isPinned(b.label) ? 0 : 1;
           if (pa !== pb) return pa - pb;                          // pinned first
+          // then anything used in the last 30 days, most-used first
+          const ra = recentEntry(kid, a.id), rb = recentEntry(kid, b.id);
+          if (!!ra !== !!rb) return ra ? -1 : 1;
+          if (ra && rb) {
+            if (rb.n !== ra.n) return rb.n - ra.n;
+            if (rb.last !== ra.last) return rb.last - ra.last;
+          }
           return a.norm.indexOf(nterm) - b.norm.indexOf(nterm);  // earlier (prefix) match first
         });
         this.__response(matches.slice(0, 100).map((o) => ({ id: o.id, label: o.label, value: o.label })));
@@ -340,14 +535,11 @@
     if (inst) patchSearch(input, inst);
   }
 
-  function scan() {
-    setupMenuDecorator();
-    document.querySelectorAll('table.jbc-table tbody tr:not(#template) input.unit').forEach(ensurePatched);
-  }
-
   // Pre-warm: resolve the kinds (cached for re-patching) and load the full unit
   // lists as early as possible (on page load, before the user focuses a field) so
   // substring search is ready by the time they type — ~600 items / several pages.
+  purgeLegacyListCache();
+  loadRecentUsage();
   getKinds().then((kinds) => {
     kindsCache = kinds;
     kinds.forEach((k) => { if (k && k.id) loadFullList(k.id); });
@@ -361,6 +553,9 @@
   const repatchFromEvent = (e) => {
     const t = e.target;
     if (t && t.classList && t.classList.contains('unit') && t.closest && t.closest('table.jbc-table')) {
+      // The dropdown container exists by the time a field is focused, so this is
+      // also where the (one-shot) menu decorator gets installed.
+      setupMenuDecorator();
       ensurePatched(t);
       setTimeout(() => ensurePatched(t), 60);
       setTimeout(() => ensurePatched(t), 200);
@@ -369,14 +564,13 @@
   document.addEventListener('focusin', repatchFromEvent, true);
   document.addEventListener('input', repatchFromEvent, true);
 
-  // The form + rows render asynchronously; retry for a while and watch for new rows.
-  const startedAt = Date.now();
-  const timer = setInterval(() => {
-    scan();
-    if (Date.now() - startedAt > 15000) clearInterval(timer);
-  }, 500);
-
-  const observer = new MutationObserver(() => scan());
-  if (document.body) observer.observe(document.body, { childList: true, subtree: true });
-  scan();
+  // No polling loop and no body-wide observer here on purpose. Jobcan creates the
+  // jQuery-UI autocomplete widget LAZILY on first focus, so `autocomplete('instance')`
+  // is null for every input until then — verified live: all 8 unit inputs on a
+  // populated page report null. The 500ms/15s setInterval and the un-debounced
+  // `MutationObserver(() => scan())` on document.body that used to live here could
+  // therefore never patch anything; they only ran full-document querySelectorAll
+  // sweeps on a page whose table re-renders constantly. The focusin/input capture
+  // listeners above do the real work, and they cover rows added later for free.
+  setupMenuDecorator();
 })();

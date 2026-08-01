@@ -152,9 +152,20 @@
     return MASK_TASK_UNITS ? units : units.slice(0, 1);
   }
 
-  function applyUnitMask(input) {
+  // The mask is positioned in three explicit phases, because refreshUnitMasks()
+  // runs from the table's MutationObserver — i.e. on every re-render — and the
+  // old single-pass version interleaved a layout read (offsetLeft/offsetWidth)
+  // with a style write per input, forcing a synchronous relayout per row.
+  //
+  //   prepare -> writes, but only on the first pass for a given input
+  //   measure -> reads only, so the whole batch shares one layout flush
+  //   paint   -> writes only, with no read in between
+
+  // Phase 1. Create/remove the mask span and sync its text. Returns null when the
+  // field has no "(code)name" value to mask.
+  function prepareUnitMask(input) {
     const cell = input && input.parentElement;
-    if (!cell) return;
+    if (!cell) return null;
     const parts = splitUnitValue(input.value);
     let mask = cell.querySelector('.jbe-unit-mask');
 
@@ -162,7 +173,7 @@
       if (mask) mask.remove();
       cell.classList.remove('jbe-unit-cell');
       input.classList.remove('jbe-unit-masked');
-      return;
+      return null;
     }
 
     if (!mask) {
@@ -176,36 +187,86 @@
     mask.dataset.name = parts.name;
     cell.classList.add('jbe-unit-cell');
     input.classList.add('jbe-unit-masked');
+    return { input, mask };
+  }
 
-    // Match the input's box and text metrics so the name sits exactly where the
-    // real text would. Done here (not in CSS) because the input's inset inside the
-    // cell varies with Jobcan's per-row markup.
+  // Phase 2. Reads only. The getComputedStyle-derived text metrics are the
+  // expensive half and only change when the input's box does, so they are cached
+  // on the element and keyed on its measured size.
+  function measureUnitMask(input) {
+    const box = {
+      left: input.offsetLeft,
+      top: input.offsetTop,
+      width: input.offsetWidth,
+      height: input.offsetHeight
+    };
+
+    const cached = input.__jbeMaskText;
+    if (cached && cached.width === box.width && cached.height === box.height) {
+      return { box, text: cached };
+    }
+
     const cs = window.getComputedStyle(input);
-    mask.style.left = `${input.offsetLeft}px`;
-    mask.style.top = `${input.offsetTop}px`;
-    mask.style.width = `${input.offsetWidth}px`;
-    mask.style.height = `${input.offsetHeight}px`;
-    mask.style.font = cs.font;
-    mask.style.letterSpacing = cs.letterSpacing;
-    mask.style.paddingLeft = cs.paddingLeft;
-    mask.style.paddingRight = cs.paddingRight;
-    mask.style.textAlign = cs.textAlign;
-    mask.style.borderRadius = cs.borderRadius;
+    const text = {
+      width: box.width,
+      height: box.height,
+      font: cs.font,
+      letterSpacing: cs.letterSpacing,
+      paddingLeft: cs.paddingLeft,
+      paddingRight: cs.paddingRight,
+      textAlign: cs.textAlign,
+      borderRadius: cs.borderRadius
+    };
+    input.__jbeMaskText = text;
+    return { box, text };
+  }
+
+  // Phase 3. Writes only. Match the input's box and text metrics so the name sits
+  // exactly where the real text would. Done here (not in CSS) because the input's
+  // inset inside the cell varies with Jobcan's per-row markup.
+  function paintUnitMask(mask, metrics) {
+    const { box, text } = metrics;
+    mask.style.left = `${box.left}px`;
+    mask.style.top = `${box.top}px`;
+    mask.style.width = `${box.width}px`;
+    mask.style.height = `${box.height}px`;
+    mask.style.font = text.font;
+    mask.style.letterSpacing = text.letterSpacing;
+    mask.style.paddingLeft = text.paddingLeft;
+    mask.style.paddingRight = text.paddingRight;
+    mask.style.textAlign = text.textAlign;
+    mask.style.borderRadius = text.borderRadius;
+  }
+
+  // Single-input path, used by the delegated change/input handlers.
+  function applyUnitMask(input) {
+    const prepared = prepareUnitMask(input);
+    if (!prepared) return;
+    paintUnitMask(prepared.mask, measureUnitMask(prepared.input));
+  }
+
+  function collectMaskableInputs(root) {
+    // When `root` IS a row (observer callback), a descendant query finds nothing.
+    if (root && root.tagName === 'TR') {
+      return root.id === 'template' ? [] : maskableUnitInputs(root);
+    }
+    const scope = root && root.querySelectorAll ? root : document;
+    const inputs = [];
+    scope.querySelectorAll('table.jbc-table tbody tr').forEach((row) => {
+      if (row.id === 'template') return;
+      maskableUnitInputs(row).forEach((input) => inputs.push(input));
+    });
+    return inputs;
   }
 
   function refreshUnitMasks(root) {
-    const scope = root && root.querySelectorAll ? root : document;
-    const rows = scope.querySelectorAll
-      ? scope.querySelectorAll('table.jbc-table tbody tr')
-      : [];
-    (rows.length ? rows : []).forEach((row) => {
-      if (row.id === 'template') return;
-      maskableUnitInputs(row).forEach(applyUnitMask);
-    });
-    // When `root` IS a row (observer callback), the query above finds nothing.
-    if (root && root.tagName === 'TR' && root.id !== 'template') {
-      maskableUnitInputs(root).forEach(applyUnitMask);
-    }
+    const prepared = collectMaskableInputs(root)
+      .map(prepareUnitMask)
+      .filter(Boolean);
+    if (!prepared.length) return;
+
+    prepared.forEach((item) => { item.metrics = measureUnitMask(item.input); });
+    prepared.forEach((item) => paintUnitMask(item.mask, item.metrics));
   }
 
   // --- hover popover: the code + copy buttons --------------------------------
@@ -280,12 +341,21 @@
     pop.dataset.name = mask.dataset.name || '';
     pop.querySelector('.jbe-unit-idpop-code').textContent = pop.dataset.code;
 
+    const GAP = 6;
     const r = input.getBoundingClientRect();
     pop.classList.add('is-open'); // measure only once it has layout
     const pw = pop.offsetWidth || 260;
+    const ph = pop.offsetHeight || 32;
     const left = Math.max(8, Math.min(r.left, window.innerWidth - pw - 8));
+
+    // Sit ABOVE the field. Below meant the popover covered the next row's project
+    // cell, which is the thing you are usually comparing against. Flip back below
+    // only when there isn't room above (first row, or a scrolled-to-top table).
+    const above = r.top - ph - GAP;
+    const top = above >= 8 ? above : r.bottom + GAP;
+
     pop.style.left = `${Math.round(left)}px`;
-    pop.style.top = `${Math.round(r.bottom + 6)}px`;
+    pop.style.top = `${Math.round(top)}px`;
   }
 
   function setupUnitMaskInteractions() {

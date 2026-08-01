@@ -1,5 +1,33 @@
 // scripts/screenshot.js
 
+// html2canvas (~220KB) is no longer loaded as a content script on every Jobcan
+// page — the background worker injects it into this same isolated world the first
+// time a capture is actually requested. Resolves true once `html2canvas` is
+// callable. A failed load is not cached, so a later attempt can retry.
+let html2canvasLoader = null;
+function ensureHtml2Canvas() {
+  if (typeof html2canvas === 'function') return Promise.resolve(true);
+  if (html2canvasLoader) return html2canvasLoader;
+
+  html2canvasLoader = new Promise((resolve) => {
+    try {
+      chrome.runtime.sendMessage({ action: 'ensureHtml2Canvas' }, (response) => {
+        const ok = !chrome.runtime.lastError
+          && response && response.success
+          && typeof html2canvas === 'function';
+        if (!ok) html2canvasLoader = null;
+        resolve(ok);
+      });
+    } catch (error) {
+      console.error('Failed to request html2canvas injection:', error);
+      html2canvasLoader = null;
+      resolve(false);
+    }
+  });
+
+  return html2canvasLoader;
+}
+
 function parseTimeTextToMinutes(raw) {
   const text = String(raw || '').trim();
   if (!text) return 0;
@@ -153,6 +181,10 @@ function setupScreenshotButton() {
 
 // Initialize screenshot capture selection overlay and handlers
 function initScreenshotCapture() {
+  // Warm the loader while the user is still dragging out a selection, so the
+  // injection round-trip is hidden behind their own interaction.
+  ensureHtml2Canvas();
+
   // Store scroll position when starting the capture
   const startScrollX = window.pageXOffset || document.documentElement.scrollLeft;
   const startScrollY = window.pageYOffset || document.documentElement.scrollTop;
@@ -256,11 +288,21 @@ function initScreenshotCapture() {
 }
 
 // Capture screenshot of the selected area and handle preview and clipboard
-function captureScreenshot(area) {
+async function captureScreenshot(area) {
   // Remove the selection overlay before capturing
   const overlay = document.getElementById('screenshot-selection-overlay');
   if (overlay) {
     overlay.style.display = 'none';
+  }
+
+  const removeOverlay = () => {
+    if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
+  };
+
+  if (!(await ensureHtml2Canvas())) {
+    showNotification('スクリーンショット機能を読み込めませんでした。');
+    removeOverlay();
+    return;
   }
 
   // Fix flip clock transformations
@@ -279,48 +321,6 @@ function captureScreenshot(area) {
       back.style.opacity = '0';
     }
   });
-
-  // --- FIX: More robust check for html2canvas ---
-  if (typeof html2canvas !== 'function') {
-    console.error('html2canvas is not defined');
-    
-    // Try to load html2canvas dynamically if not available
-    const loadHtml2Canvas = () => {
-      return new Promise((resolve, reject) => {
-        const script = document.createElement('script');
-        // Try to use chrome.runtime if available, otherwise use a direct path
-        if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.getURL) {
-          script.src = chrome.runtime.getURL('html2canvas.min.js');
-        } else {
-          // Fallback to direct path (might work in some contexts)
-          script.src = '/html2canvas.min.js';
-        }
-        script.onload = () => resolve();
-        script.onerror = (e) => reject(e);
-        document.head.appendChild(script);
-      });
-    };
-    
-    // Try to load and then retry
-    loadHtml2Canvas()
-      .then(() => {
-        showNotification('Loading html2canvas, please try again...');
-        if (overlay) {
-          document.body.removeChild(overlay);
-        }
-      })
-      .catch(() => {
-        showNotification('Cannot load html2canvas. Screenshot is not available.');
-        if (overlay) {
-          document.body.removeChild(overlay);
-        }
-      });
-    
-    return;
-  }
-
-  // Create an empty layoutElem variable to prevent reference errors
-  let layoutElem = null;
 
   // Use html2canvas without window prefix
   html2canvas(document.body, {
@@ -344,16 +344,10 @@ function captureScreenshot(area) {
       });
     }
   }).then(canvas => {
-    // Remove the custom layout element from the DOM
-    if (layoutElem && layoutElem.parentNode) {
-      layoutElem.parentNode.removeChild(layoutElem);
-    }
     // Remove the selection overlay — before capture it was only hidden
     // (display:none), and previously it was removed only on the error path,
     // so a successful capture left it orphaned in the DOM.
-    if (overlay && overlay.parentNode) {
-      overlay.parentNode.removeChild(overlay);
-    }
+    removeOverlay();
     // Remove any existing notification
     const notification = document.querySelector('.screenshot-notification');
     if (notification) {
@@ -429,9 +423,7 @@ function captureScreenshot(area) {
   .catch(error => {
     console.error('Screenshot capture failed:', error);
     showNotification('キャプチャに失敗しました');
-    if (overlay && overlay.parentNode) {
-      overlay.parentNode.removeChild(overlay);
-    }
+    removeOverlay();
   });
 }
 
@@ -650,38 +642,10 @@ function showFullSizeImage(imageData) {
   }, 10);
 }
 
-// Utility to show toast notifications
-function showNotification(message, duration = 3000) {
-  // Check if there's already a notification and remove it
-  const existingNotification = document.querySelector('.screenshot-notification');
-  if (existingNotification) {
-    existingNotification.remove();
-  }
-  
-  // Create notification element
-  const notification = document.createElement('div');
-  notification.className = 'screenshot-notification';
-  notification.textContent = message;
-  
-  // Add to document
-  document.body.appendChild(notification);
-  
-  // Auto-hide after delay (if duration > 0)
-  if (duration > 0) {
-    setTimeout(() => {
-      if (document.body.contains(notification)) {
-        notification.classList.add('hiding');
-        setTimeout(() => {
-          if (document.body.contains(notification)) {
-            notification.remove();
-          }
-        }, 500);
-      }
-    }, duration);
-  }
-  
-  return notification;
-}
+// showNotification lives in scripts/utils.js (loaded first by the manifest). This
+// file used to carry a byte-identical second copy of it; two `function` declarations
+// of the same name in the shared content-script scope meant manifest load order
+// silently decided which one every caller got.
 
 function getScreenshotTheme() {
   const styles = getComputedStyle(document.body);
@@ -819,9 +783,9 @@ function buildScreenshotLayout(reportData = {}) {
 // from the live table (autocomplete inputs + input.manhour — no select markup),
 // render the report card, copy it to the clipboard, and show a download preview.
 // This restores the pre-rebuild behavior without the user selecting an area.
-function captureManHourDayReport() {
-  if (typeof html2canvas !== 'function') {
-    showNotification('html2canvasが読み込まれていません。キャプチャできません。');
+async function captureManHourDayReport() {
+  if (!(await ensureHtml2Canvas())) {
+    showNotification('スクリーンショット機能を読み込めませんでした。');
     return;
   }
 

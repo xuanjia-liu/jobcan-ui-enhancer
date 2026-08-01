@@ -102,7 +102,7 @@ function normalizePunchDate(rawDate, monthInfo) {
   if (!rawDate) return '';
   const trimmed = rawDate.trim();
 
-  const ymdMatch = trimmed.match(/(\d{4})[\/.-](\d{1,2})[\/.-](\d{1,2})/);
+  const ymdMatch = trimmed.match(/(\d{4})[/.-](\d{1,2})[/.-](\d{1,2})/);
   if (ymdMatch) {
     const y = ymdMatch[1];
     const m = ymdMatch[2].padStart(2, '0');
@@ -110,7 +110,7 @@ function normalizePunchDate(rawDate, monthInfo) {
     return `${y}-${m}-${d}`;
   }
 
-  const mdMatch = trimmed.match(/(\d{1,2})[\/.-](\d{1,2})/);
+  const mdMatch = trimmed.match(/(\d{1,2})[/.-](\d{1,2})/);
   if (mdMatch && monthInfo && monthInfo.year) {
     const y = String(monthInfo.year);
     const m = mdMatch[1].padStart(2, '0');
@@ -169,8 +169,8 @@ function extractPunchListFromDocument(doc, monthInfo) {
     if (times.length === 0) return;
 
     const dateMatch =
-      rowText.match(/(\d{4}[\/.-]\d{1,2}[\/.-]\d{1,2})/) ||
-      rowText.match(/(\d{1,2}[\/.-]\d{1,2})/);
+      rowText.match(/(\d{4}[/.-]\d{1,2}[/.-]\d{1,2})/) ||
+      rowText.match(/(\d{1,2}[/.-]\d{1,2})/);
     const normalizedDate = normalizePunchDate(dateMatch ? dateMatch[1] : selectedDate, monthInfo);
 
     let type = '';
@@ -209,71 +209,59 @@ function buildPunchListCandidateUrls(monthInfo) {
   ];
 }
 
-async function loadPunchListInIframe(monthInfo = null) {
+// Fetch a Jobcan page and hand back a detached, parsed Document.
+//
+// This replaces the hidden <iframe> both loaders below used to use. An iframe
+// meant a *full page load* — every stylesheet, script and image, plus Jobcan's
+// own JS executing — followed by a fixed 1.5–2s sleep to "wait for dynamic
+// content", with a 25–30s timeout on top; the punch loader multiplied that by
+// five candidate URLs, so the worst case was ~2 minutes of invisible navigation
+// on every dashboard load.
+//
+// Measured on a real account: everything these functions read is server-rendered
+// into the initial HTML, so a plain fetch + DOMParser gets it with no rendering
+// at all — ~770ms for the attendance page (27 rows across 4 tables) and ~230ms
+// for 打刻一覧. DOMParser also cannot run scripts, so the parsed document is
+// inert by construction.
+const PAGE_FETCH_TIMEOUT_MS = 15000;
+
+async function fetchJobcanDocument(url) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), PAGE_FETCH_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, { credentials: 'include', signal: controller.signal });
+    if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
+    const html = await res.text();
+    return new DOMParser().parseFromString(html, 'text/html');
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function loadPunchListData(monthInfo = null) {
   const urls = buildPunchListCandidateUrls(monthInfo);
   let lastError = null;
 
+  // Candidates are tried in order. The first (/employee/adit/modify/) is the one
+  // that actually answers today; the rest are cheap fallbacks now that a miss
+  // costs one fetch rather than one iframe load.
   for (const url of urls) {
     try {
-      const result = await new Promise((resolve, reject) => {
-        const iframe = document.createElement('iframe');
-        iframe.style.position = 'absolute';
-        iframe.style.width = '0';
-        iframe.style.height = '0';
-        iframe.style.border = 'none';
-        iframe.style.opacity = '0';
-        iframe.style.pointerEvents = 'none';
-        iframe.src = url;
+      const doc = await fetchJobcanDocument(url);
+      const resolvedMonthInfo = monthInfo || extractMonthInfo(url, doc);
+      const entries = extractPunchListFromDocument(doc, resolvedMonthInfo);
+      if (!entries.length) throw new Error(`No punch entries found: ${url}`);
 
-        const timeout = setTimeout(() => {
-          if (document.body.contains(iframe)) document.body.removeChild(iframe);
-          reject(new Error(`Punch iframe loading timed out: ${url}`));
-        }, 25000);
-
-        iframe.onload = async () => {
-          try {
-            await new Promise((r) => setTimeout(r, 1500));
-            const doc = iframe.contentDocument || iframe.contentWindow.document;
-            if (!doc) throw new Error('Cannot access punch iframe document');
-
-            const resolvedMonthInfo = monthInfo || extractMonthInfo(url, doc);
-            const entries = extractPunchListFromDocument(doc, resolvedMonthInfo);
-            if (!entries.length) {
-              throw new Error(`No punch entries found: ${url}`);
-            }
-
-            await chrome.storage.local.set({
-              jobcanPunchListData: {
-                monthInfo: resolvedMonthInfo || null,
-                entries,
-                sourceUrl: url,
-                fetchedAt: Date.now()
-              }
-            });
-
-            resolve({
-              entries,
-              monthInfo: resolvedMonthInfo || null,
-              sourceUrl: url
-            });
-          } catch (error) {
-            reject(error);
-          } finally {
-            clearTimeout(timeout);
-            if (document.body.contains(iframe)) document.body.removeChild(iframe);
-          }
-        };
-
-        iframe.onerror = () => {
-          clearTimeout(timeout);
-          if (document.body.contains(iframe)) document.body.removeChild(iframe);
-          reject(new Error(`Punch iframe failed to load: ${url}`));
-        };
-
-        document.body.appendChild(iframe);
+      await chrome.storage.local.set({
+        jobcanPunchListData: {
+          monthInfo: resolvedMonthInfo || null,
+          entries,
+          sourceUrl: url,
+          fetchedAt: Date.now()
+        }
       });
 
-      return result;
+      return { entries, monthInfo: resolvedMonthInfo || null, sourceUrl: url };
     } catch (error) {
       lastError = error;
       console.debug('Punch list fetch attempt failed:', error.message || error);
@@ -282,6 +270,13 @@ async function loadPunchListInIframe(monthInfo = null) {
 
   throw lastError || new Error('Unable to fetch punch list data');
 }
+
+// Serialized snapshot of the last values actually written to storage. main.js
+// calls extractAndStoreCollapseInfoData() on every applyEnhancements() pass —
+// which the debounced body observer re-triggers roughly once a second during DOM
+// churn — so without this the same unchanged payload was re-written to
+// chrome.storage.local over and over.
+let lastPersistedCollapseSnapshot = '';
 
 // Extract and store collapseInfo data
 async function extractAndStoreCollapseInfoData() {
@@ -308,6 +303,10 @@ async function extractAndStoreCollapseInfoData() {
   
   // Only save if we have data
   if (hasWorkTimeData || hasUserInfoData) {
+    const snapshot = JSON.stringify({ workTimeData, userInfoData });
+    if (snapshot === lastPersistedCollapseSnapshot) return; // nothing changed since the last write
+    lastPersistedCollapseSnapshot = snapshot;
+
     try {
       // Store using chrome.storage.local
       if (hasWorkTimeData) {
@@ -358,146 +357,77 @@ async function pruneOldWorkTimeData(keepMonths = 13) {
   }
 }
 
-// Load attendance page in invisible iframe to extract data
-async function loadAttendancePageInIframe(url = 'https://ssl.jobcan.jp/employee/attendance') {
-  return new Promise((resolve, reject) => {
-    // Create invisible iframe
-    const iframe = document.createElement('iframe');
-    iframe.style.position = 'absolute';
-    iframe.style.width = '0';
-    iframe.style.height = '0';
-    iframe.style.border = 'none';
-    iframe.style.opacity = '0';
-    iframe.style.pointerEvents = 'none';
-    iframe.src = url;
-    
-    // Add loading status to notify user - Use global notification
-    let loadingNotification = null;
-    if (typeof window.showNotification === 'function') {
-        loadingNotification = window.showNotification('データを取得中...', 0); // 0 means no auto-hide
+// Fetch the attendance page and extract the work-time / user-info summary.
+// Same return shape as before: { workTimeData, userInfoData, monthInfo, punchListData }.
+async function loadAttendanceData(url = 'https://ssl.jobcan.jp/employee/attendance') {
+  let loadingNotification = null;
+  if (typeof window.showNotification === 'function') {
+    loadingNotification = window.showNotification('データを取得中...', 0); // 0 = no auto-hide
+  }
+
+  try {
+    const doc = await fetchJobcanDocument(url);
+
+    const collapseInfo = doc.getElementById('collapseInfo');
+    if (!collapseInfo) throw new Error('No #collapseInfo in the fetched attendance page');
+
+    const {
+      workTimeData,
+      userInfoData,
+      hasWorkTimeData,
+      hasUserInfoData,
+      tableCount
+    } = extractAttendanceDataFromCollapseInfo(collapseInfo);
+
+    if (!tableCount) throw new Error('No info tables in the fetched attendance page');
+    if (!hasWorkTimeData && !hasUserInfoData) throw new Error('No data found in the fetched attendance page');
+
+    const monthInfo = extractMonthInfo(url, doc);
+
+    if (hasWorkTimeData) {
+      if (monthInfo) workTimeData._monthInfo = monthInfo;
+      const storageKey = monthInfo
+        ? `jobcanWorkTimeData_${monthInfo.year}_${monthInfo.month}`
+        : 'jobcanWorkTimeData';
+      await chrome.storage.local.set({ [storageKey]: workTimeData });
+      // Also save to the default key for immediate display.
+      await chrome.storage.local.set({ jobcanWorkTimeData: workTimeData });
+      // Evict stale month snapshots so storage doesn't grow without bound.
+      pruneOldWorkTimeData();
     }
-    
-    // Set timeout to prevent hanging
-    const timeout = setTimeout(() => {
-      if (document.body.contains(iframe)) document.body.removeChild(iframe);
-      if (loadingNotification) loadingNotification.remove();
-      if (typeof window.showNotification === 'function') window.showNotification('データ取得がタイムアウトしました');
-      reject(new Error('Iframe loading timed out'));
-    }, 30000); // 30 seconds timeout
-    
-    // Wait for iframe to load
-    iframe.onload = async () => {
-      try {
-        console.log('Attendance page iframe loaded:', url);
-        
-        // Wait a bit for dynamic content to load
-        await new Promise(r => setTimeout(r, 2000));
-        
-        // Try to find and extract data from the iframe
-        const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
-        if (!iframeDoc) {
-          throw new Error('Cannot access iframe document');
-        }
-        
-        const collapseInfo = iframeDoc.getElementById('collapseInfo');
-        if (!collapseInfo) {
-          throw new Error('No #collapseInfo found in iframe');
-        }
-        
-        const tables = collapseInfo.querySelectorAll('table.table.jbc-table.jbc-table-fixed.info-contents');
-        if (!tables.length) {
-          throw new Error('No tables found in iframe #collapseInfo');
-        }
-        
-        const {
-          workTimeData,
-          userInfoData,
-          hasWorkTimeData,
-          hasUserInfoData,
-          tableCount
-        } = extractAttendanceDataFromCollapseInfo(collapseInfo, { logPrefix: '[iframe] ' });
 
-        console.log(`Found ${tableCount} tables in iframe`);
-        
-        // Get month info from the URL or page
-        const monthInfo = extractMonthInfo(url, iframeDoc);
-        
-        // Save extracted data
-        if (hasWorkTimeData || hasUserInfoData) {
-          try {
-            const storageKey = monthInfo ? 
-              `jobcanWorkTimeData_${monthInfo.year}_${monthInfo.month}` : 
-              'jobcanWorkTimeData';
-            
-            if (hasWorkTimeData) {
-              // If we have month info, add it to the data
-              if (monthInfo) {
-                workTimeData._monthInfo = monthInfo;
-              }
-              
-              await chrome.storage.local.set({ [storageKey]: workTimeData });
-              console.log(`Work time data saved from iframe for ${monthInfo ? monthInfo.year + '/' + monthInfo.month : 'current month'}:`, workTimeData);
-              
-              // Also save to the default key for immediate display
-              await chrome.storage.local.set({ 'jobcanWorkTimeData': workTimeData });
+    if (hasUserInfoData) {
+      await chrome.storage.local.set({ jobcanUserInfoData: userInfoData });
+    }
 
-              // Evict stale month snapshots so storage doesn't grow without bound.
-              pruneOldWorkTimeData();
-            }
-            
-            if (hasUserInfoData) {
-              await chrome.storage.local.set({ 'jobcanUserInfoData': userInfoData });
-              console.log('User info data saved from iframe:', userInfoData);
-            }
+    // Also refresh the punch list (打刻一覧) for the work-progress markers.
+    // Non-fatal: the summary above is still worth returning without it.
+    try {
+      await loadPunchListData(monthInfo);
+    } catch (error) {
+      console.debug('Punch list fetch skipped:', error.message || error);
+    }
 
-            // Also refresh punch list (打刻一覧) for work-progress markers.
-            try {
-              await loadPunchListInIframe(monthInfo);
-            } catch (error) {
-              console.debug('Punch list fetch skipped:', error.message || error);
-            }
-            
-            if (loadingNotification) loadingNotification.remove();
-            if (typeof window.showNotification === 'function') window.showNotification('勤怠データが取得されました');
-            const punchResult = await chrome.storage.local.get(['jobcanPunchListData']);
-            resolve({
-              workTimeData,
-              userInfoData,
-              monthInfo,
-              punchListData: punchResult.jobcanPunchListData || null
-            });
-          } catch (error) {
-            console.error('Error saving data from iframe:', error);
-            reject(error);
-          }
-        } else {
-          throw new Error('No data found in iframe');
-        }
-      } catch (error) {
-        console.error('Error extracting data from iframe:', error);
-        reject(error);
-      } finally {
-        // Clean up
-        clearTimeout(timeout);
-        if (document.body.contains(iframe)) {
-          document.body.removeChild(iframe);
-        }
-        if (loadingNotification) loadingNotification.remove();
-      }
+    if (loadingNotification) loadingNotification.remove();
+    if (typeof window.showNotification === 'function') window.showNotification('勤怠データが取得されました');
+
+    const punchResult = await chrome.storage.local.get(['jobcanPunchListData']);
+    return {
+      workTimeData,
+      userInfoData,
+      monthInfo,
+      punchListData: punchResult.jobcanPunchListData || null
     };
-    
-    // Handle iframe loading errors
-    iframe.onerror = () => {
-      clearTimeout(timeout);
-      if (document.body.contains(iframe)) document.body.removeChild(iframe);
-      if (loadingNotification) loadingNotification.remove();
-      if (typeof window.showNotification === 'function') window.showNotification('データ取得に失敗しました');
-      reject(new Error('Iframe loading failed'));
-    };
-    
-    // Add iframe to page
-    document.body.appendChild(iframe);
-  });
+  } catch (error) {
+    if (loadingNotification) loadingNotification.remove();
+    if (typeof window.showNotification === 'function') {
+      window.showNotification(error.name === 'AbortError'
+        ? 'データ取得がタイムアウトしました'
+        : 'データ取得に失敗しました');
+    }
+    console.error('Error fetching attendance data:', error);
+    throw error;
+  }
 }
 
 // Setup observer to watch for #collapseInfo visibility and extract data
@@ -536,7 +466,15 @@ function setupCollapseInfoObserver() {
     childList: true,
     subtree: true
   });
-  
+  // Page-scoped: torn down on SPA navigation. The cleanup callback clears both
+  // guards so applyEnhancements() can re-create it on the next attendance page.
+  if (typeof window.__jbe_registerManagedObserver === 'function') {
+    window.__jbe_registerManagedObserver('watch:collapseInfoData', observer, () => {
+      window.__jbe_collapseInfoObserverInited = false;
+      if (document.body) delete document.body.dataset.collapseObserverSetup;
+    });
+  }
+
   // Also extract data if collapseInfo already exists
   const collapseInfo = document.getElementById('collapseInfo');
   if (collapseInfo && collapseInfo.offsetParent !== null) {
@@ -550,31 +488,24 @@ function setupCollapseInfoObserver() {
     }
   }
   
-  // If on attendance page, check periodically for the collapse info section
-  let attendancePageInterval = null;
-  
-  if (isAttendancePage) {
-    let checkCount = 0;
-    const maxChecks = 10; // Limit checks to avoid excessive processing
-    
-    attendancePageInterval = setInterval(() => {
-      checkCount++;
-      const collapseInfo = document.getElementById('collapseInfo');
-      
-      if (collapseInfo && collapseInfo.offsetParent !== null) {
+  // If on attendance page, check periodically for the collapse info section.
+  // Runs through the managed-interval registry (`watch:` prefix) so an SPA
+  // navigation stops it; previously this was a bare setInterval that only ever
+  // cleared itself on success or after its 10th tick.
+  if (isAttendancePage && typeof window.__jbe_startManagedInterval === 'function') {
+    window.__jbe_startManagedInterval('watch:collapseInfoPoll', (ctx) => {
+      const el = document.getElementById('collapseInfo');
+      if (el && el.offsetParent !== null) {
         extractAndStoreCollapseInfoData();
-        clearInterval(attendancePageInterval);
+        ctx.stop();
       }
-      
-      if (checkCount >= maxChecks) {
-        clearInterval(attendancePageInterval);
-      }
-    }, 2000); // Check every 2 seconds, up to 20 seconds total
+    }, 2000, { maxRuns: 10 }); // Check every 2 seconds, up to 20 seconds total
   }
 }
 
-// Expose globally
+// Expose globally. (These were named *InIframe until the loaders were switched to
+// fetch + DOMParser; the names would now be lies.)
 window.extractAndStoreCollapseInfoData = extractAndStoreCollapseInfoData;
-window.loadAttendancePageInIframe = loadAttendancePageInIframe;
-window.loadPunchListInIframe = loadPunchListInIframe;
+window.loadAttendanceData = loadAttendanceData;
+window.loadPunchListData = loadPunchListData;
 window.setupCollapseInfoObserver = setupCollapseInfoObserver;

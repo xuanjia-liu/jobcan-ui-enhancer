@@ -1,5 +1,6 @@
 // scripts/clock.js
 
+/* exported cleanupClockContainer */
 
 // Work hours configuration
 const WORK_HOURS = {
@@ -25,8 +26,44 @@ const ANIMATION = {
   progressBar: 800 // New animation duration for progress bar
 };
 
+// In-memory cache of the three clock settings. applyClockSettings() is called
+// from every applyEnhancements() pass — which the debounced body observer
+// re-triggers roughly once a second during DOM churn — and each call used to be
+// its own chrome.storage.sync.get round-trip. The cache is invalidated by the
+// storage.onChanged listener below, so the popup's writes still land immediately.
+const CLOCK_SETTING_KEYS = ['clockSize', 'showSeconds', 'showProgressBar'];
+let cachedClockSettings = null;
+let clockSettingsPromise = null;
+
+function getClockSettings() {
+  ensureClockSettingsInvalidation();
+  if (cachedClockSettings) return Promise.resolve(cachedClockSettings);
+  if (clockSettingsPromise) return clockSettingsPromise;
+
+  clockSettingsPromise = new Promise((resolve) => {
+    chrome.storage.sync.get(CLOCK_SETTING_KEYS, (result) => {
+      cachedClockSettings = result || {};
+      clockSettingsPromise = null;
+      resolve(cachedClockSettings);
+    });
+  });
+
+  return clockSettingsPromise;
+}
+
+function ensureClockSettingsInvalidation() {
+  if (window.__jbe_clockSettingsListenerInited) return;
+  if (!chrome?.storage?.onChanged) return;
+  window.__jbe_clockSettingsListenerInited = true;
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName !== 'sync') return;
+    if (CLOCK_SETTING_KEYS.some((key) => key in changes)) cachedClockSettings = null;
+  });
+}
+
 // Initialize flip clock and progress bar
 function setupFlipClock() {
+  ensureClockSettingsInvalidation();
   // Find clock elements
   const clockElements = document.querySelectorAll('#clock, #display-time, .display-2 > div:not(.flip-clock-container)');
   clockElements.forEach(clockElement => {
@@ -223,8 +260,8 @@ function createSelfAnimatingClock(clockElement) {
     scheduleResizeObserver.observe(progressTrack);
     flipClockContainer._scheduleResizeObserver = scheduleResizeObserver;
   }
-  chrome.storage.sync.get(['showProgressBar'], function(result) {
-    const showProgressBar = result.showProgressBar !== false;
+  getClockSettings().then((settings) => {
+    const showProgressBar = settings.showProgressBar !== false;
     progressContainer.classList.toggle('hidden', !showProgressBar);
   });
   flipClockContainer.appendChild(progressContainer);
@@ -911,8 +948,8 @@ function triggerPunchListRefresh() {
   if (window.__jbe_punchListRefreshRequested) return;
   window.__jbe_punchListRefreshRequested = true;
 
-  if (typeof window.loadPunchListInIframe === 'function') {
-    window.loadPunchListInIframe().catch((error) => {
+  if (typeof window.loadPunchListData === 'function') {
+    window.loadPunchListData().catch((error) => {
       console.debug('Punch list refresh skipped:', error?.message || error);
     });
   }
@@ -976,21 +1013,31 @@ function applyClockSettingsToContainer(container, settings) {
 
 // Apply saved clock settings (size, seconds toggle, progress bar visibility)
 function applyClockSettings(specificContainer = null) {
-  chrome.storage.sync.get(['clockSize', 'showSeconds', 'showProgressBar'], function(result) {
-    const containers = specificContainer ? [specificContainer] : document.querySelectorAll('.flip-clock-container');
+  // Bail before touching storage when there is no clock on the page — this runs
+  // on every applyEnhancements() pass, including on pages that have no clock.
+  const containers = specificContainer
+    ? [specificContainer]
+    : Array.from(document.querySelectorAll('.flip-clock-container'));
+  if (!containers.length) return;
+
+  getClockSettings().then((settings) => {
     containers.forEach((container) => {
-      applyClockSettingsToContainer(container, result);
+      applyClockSettingsToContainer(container, settings);
     });
   });
 }
 
 function updateClockSettings(settings = {}) {
-  chrome.storage.sync.get(['clockSize', 'showSeconds', 'showProgressBar'], function(stored) {
+  getClockSettings().then((stored) => {
     const merged = {
       clockSize: settings.clockSize ?? stored.clockSize ?? 'medium',
       showSeconds: settings.showSeconds ?? stored.showSeconds,
       showProgressBar: settings.showProgressBar ?? stored.showProgressBar
     };
+
+    // The popup writes to storage.sync and messages us in parallel, so seed the
+    // cache with what it just told us rather than racing the onChanged event.
+    cachedClockSettings = { ...stored, ...merged };
 
     document.querySelectorAll('.flip-clock-container').forEach((container) => {
       applyClockSettingsToContainer(container, merged);
@@ -1232,48 +1279,15 @@ function createBurstParticleEffect(clockContainer) {
   }
 }
 
-// Expose public API
+// Expose public API. createParticleEffect / createBurstParticleEffect used to be
+// exposed here too, but their only external consumer was ui.js's unreachable
+// `testParticleEffects` debug handler; clock.js calls them directly as file-scope
+// globals. addPushButtonParticleEffects went with them — it was documented as
+// "kept for the popup's debug/test hook", and that hook never existed. The
+// delegated click listener below is what actually wires push-button celebrations.
 window.setupFlipClock = setupFlipClock;
 window.applyClockSettings = applyClockSettings;
 window.updateClockSettings = updateClockSettings;
-window.createParticleEffect = createParticleEffect;
-window.createBurstParticleEffect = createBurstParticleEffect;
-window.addPushButtonParticleEffects = addPushButtonParticleEffects;
-
-// Function to add particle effects to push button clicks
-function addPushButtonParticleEffects() {
-  const triggerParticleEffects = () => {
-    document.querySelectorAll('.flip-clock-container').forEach(container => {
-      // Refresh colors now; the status text flips asynchronously after the punch XHR,
-      // so re-check the transition shortly after. celebrateTransitionOnce de-dupes via
-      // its cooldown, so these extra checks never double-fire.
-      updateFlipClockColors(container);
-      setTimeout(() => celebrateTransitionOnce(container), 500);
-      setTimeout(() => { updateFlipClockColors(container); celebrateTransitionOnce(container); }, 1500);
-    });
-  };
-
-  // Try multiple selectors for push buttons
-  const buttonSelectors = [
-    '#adit-button-push',
-    '.adit-button-push',
-    '[id*="push"]',
-    '[class*="push"]',
-    'button[onclick*="push"]',
-    'input[type="submit"][value*="出勤"]',
-    'input[type="submit"][value*="退勤"]'
-  ];
-
-  buttonSelectors.forEach(selector => {
-    const buttons = document.querySelectorAll(selector);
-    buttons.forEach(button => {
-      if (!button.dataset.particleEffectAdded) {
-        button.dataset.particleEffectAdded = 'true';
-        button.addEventListener('click', triggerParticleEffects);
-      }
-    });
-  });
-}
 
 // On initial load, refresh clock colors and wire push-button particle effects.
 document.addEventListener('DOMContentLoaded', () => {
@@ -1287,8 +1301,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Trigger particle effects on push-button clicks via ONE delegated listener.
   // This replaces the old approach (attach per-button listeners, then re-scan
   // every 2s with setInterval to catch dynamically-added buttons): delegation
-  // covers current and future buttons with no polling. addPushButtonParticleEffects
-  // is kept for the popup's debug/test hook.
+  // covers current and future buttons with no polling.
   if (!window.__jbe_particleDelegationBound) {
     window.__jbe_particleDelegationBound = true;
     const PUSH_SELECTOR = '#adit-button-push, .adit-button-push, [id*="push"], [class*="push"], button[onclick*="push"], input[type="submit"][value*="出勤"], input[type="submit"][value*="退勤"]';

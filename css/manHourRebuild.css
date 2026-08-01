@@ -60,6 +60,129 @@
 }
 
 /* ------------------------------------------------------------------ */
+/* Achievement-list page: month completion header                      */
+/* ------------------------------------------------------------------ */
+
+.jobcan-enhanced #jbe-mh-monthstat {
+  margin: 12px 0 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: 10px;
+  background: var(--color-card, #fff);
+}
+
+.jobcan-enhanced .jbe-mh-monthstat-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.jobcan-enhanced .jbe-mh-monthstat-count {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--color-text-primary, #333);
+}
+
+.jobcan-enhanced .jbe-mh-monthstat-state {
+  font-size: 12.5px;
+  color: var(--color-text-secondary, #666);
+}
+
+.jobcan-enhanced .jbe-mh-monthstat-state.is-done { color: var(--color-success, #28A745); }
+.jobcan-enhanced .jbe-mh-monthstat-state.is-todo { color: var(--color-danger, #DC3545); }
+
+.jobcan-enhanced .jbe-mh-monthstat-track {
+  height: 6px;
+  margin-top: 9px;
+  border-radius: 999px;
+  background: var(--color-surface, #eef0f3);
+  overflow: hidden;
+}
+
+.jobcan-enhanced .jbe-mh-monthstat-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--color-primary, #0077ff);
+  transition: width 0.35s ease;
+}
+
+.jobcan-enhanced .jbe-mh-monthstat-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.jobcan-enhanced .jbe-mh-daychip {
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: filter 0.15s ease;
+}
+
+.jobcan-enhanced .jbe-mh-daychip:hover { filter: brightness(0.94); }
+
+.jobcan-enhanced .jbe-mh-daychip--missing {
+  background: var(--color-danger-bg-light, rgba(231, 76, 60, 0.10));
+  border-color: var(--color-danger, #DC3545);
+  color: var(--color-danger, #DC3545);
+}
+
+.jobcan-enhanced .jbe-mh-daychip--mismatch {
+  background: var(--color-warning-bg-light, rgba(255, 193, 7, 0.14));
+  border-color: var(--color-warning, #FFC107);
+  color: var(--color-warning-text, #8a6100);
+}
+
+/* Flash the target row after a chip click so the jump lands somewhere visible. */
+@keyframes jbeDayFlash {
+  0%, 100% { background-color: transparent; }
+  30%      { background-color: var(--color-primary-hover-bg, rgba(0, 119, 255, 0.16)); }
+}
+
+.jobcan-enhanced #list tr.jbe-day-flash > td {
+  animation: jbeDayFlash 1.6s ease;
+}
+
+/* ------------------------------------------------------------------ */
+/* Achievement-list page: per-day edit link + delta badge              */
+/* ------------------------------------------------------------------ */
+
+.jobcan-enhanced #list td.date .jbe-day-link {
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 1px dotted currentColor;
+}
+
+.jobcan-enhanced #list td.date .jbe-day-link:hover {
+  color: var(--color-primary, #0077ff);
+}
+
+.jobcan-enhanced #list td.date .jbe-day-delta {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+.jobcan-enhanced #list td.date .jbe-day-delta--under { color: var(--color-danger, #DC3545); }
+.jobcan-enhanced #list td.date .jbe-day-delta--over  { color: var(--color-warning-text, #8a6100); }
+
+.jobcan-enhanced body.dark-mode #list td.date .jbe-day-delta--over {
+  color: var(--color-warning, #FFC107);
+}
+
+.jobcan-enhanced body.dark-mode .jbe-mh-daychip--mismatch {
+  color: var(--color-warning, #FFC107);
+}
+
+/* ------------------------------------------------------------------ */
 /* Achievement-list page: report modal                                 */
 /* ------------------------------------------------------------------ */
 
@@ -1012,6 +1135,27 @@
   white-space: normal;
   overflow-wrap: anywhere;
 }
+/* "最近" badge on options used within the last 30 days (see manHourEditSearch.js).
+   Inline inside the name line so it doesn't add a third row to the option. */
+.jobcan-enhanced .ui-autocomplete .jbe-opt-recent {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: 999px;
+  font-size: 10px;
+  line-height: 1.5;
+  vertical-align: 1px;
+  white-space: nowrap;
+  background: var(--color-primary-hover-bg, rgba(0, 119, 255, 0.14));
+  color: var(--color-primary, #0077ff);
+}
+
+/* Separator under the last consecutive 最近 row, so the recents read as a section
+   without inserting a non-item <li> (which would break jQuery-UI keyboard nav). */
+.jobcan-enhanced .ui-autocomplete .ui-menu-item.jbe-recent-last {
+  border-bottom: 1px solid var(--color-border, #e5e7eb);
+}
+
 /* The ID line is short — keep it on one line with an ellipsis. */
 .jobcan-enhanced .ui-autocomplete .jbe-opt-id {
   font-size: 10.5px;
@@ -1027,11 +1171,19 @@
    sizes the menu to the input width, clipping longer names). width:max-content makes
    it grow to the content; min-width keeps it from looking cramped and max-width caps
    it to the viewport — names longer than that wrap (white-space on .jbe-opt-name)
-   rather than clip. */
+   rather than clip.
+
+   height:auto is the vertical counterpart. Jobcan writes an INLINE pixel height on
+   the menu computed from single-line options (measured: height:28.89px for one
+   result), but our options are two rows — name 18px + "ID:…" 13px + padding = 41px
+   — so with a single match the ID line was cut off and the menu scrolled by 14px.
+   Overriding height lets the menu grow to its content; the inline max-height
+   (~430px) is left alone, so long result lists still cap and scroll as before. */
 .jobcan-enhanced ul.ui-autocomplete {
   width: max-content !important;
   min-width: 480px !important;
   max-width: 95vw !important;
+  height: auto !important;
 }
 
 .jobcan-enhanced .ui-autocomplete .jbe-opt-actions {

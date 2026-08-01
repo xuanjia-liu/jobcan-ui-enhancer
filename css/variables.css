@@ -515,24 +515,10 @@
 
  
     
-    /* Modal */
-    #man-hour-manage-modal .modal-content,
-    #man-hour-manage-modal .modal-header,
-    #man-hour-manage-modal .modal-footer {
-      background-color: var(--color-card) !important;
-      border-color: var(--color-border) !important;
-    }
-    
-    #man-hour-manage-modal .close,
-    #man-hour-manage-modal button.close {
-      color: var(--color-text-secondary) !important;
-    }
-    
-    #man-hour-manage-modal .close:hover,
-    #man-hour-manage-modal button.close:hover {
-      background-color: var(--color-gray-150);
-    }
-    
+    /* (The #man-hour-manage-modal dark-mode rules that used to sit here were
+       removed: Jobcan deleted that modal in the ~2026-06 man-hour rebuild — the
+       edit screen is a standalone page now — so the selectors matched nothing.) */
+
     /* Calendar */
     [id^="cal"] {
        background-color: var(--color-card) !important;

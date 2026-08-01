@@ -43,17 +43,23 @@ function setupManagedResourceRegistry() {
     intervals.delete(key);
   };
 
-  window.__jbe_registerManagedObserver = function(key, observer) {
+  // `onCleanup` lets a page-scoped observer reset the module-level init flag that
+  // guards its own setup. Without it, tearing an observer down on SPA navigation
+  // would be permanent — the guard would refuse to re-create it.
+  window.__jbe_registerManagedObserver = function(key, observer, onCleanup) {
     if (!key || !observer) return;
     if (observers.has(key)) {
       try {
-        observers.get(key).disconnect();
+        observers.get(key).observer.disconnect();
       } catch (error) {
         console.warn('Failed to disconnect existing observer:', key, error);
       }
       observers.delete(key);
     }
-    observers.set(key, observer);
+    observers.set(key, {
+      observer,
+      onCleanup: typeof onCleanup === 'function' ? onCleanup : null
+    });
   };
 
   window.__jbe_cleanupManagedResources = function(prefix = '') {
@@ -63,14 +69,21 @@ function setupManagedResourceRegistry() {
       intervals.delete(key);
     });
 
-    observers.forEach((observer, key) => {
+    observers.forEach((entry, key) => {
       if (prefix && !key.startsWith(prefix)) return;
       try {
-        observer.disconnect();
+        entry.observer.disconnect();
       } catch (error) {
         console.warn('Failed to disconnect observer:', key, error);
       }
       observers.delete(key);
+      if (entry.onCleanup) {
+        try {
+          entry.onCleanup();
+        } catch (error) {
+          console.warn('Observer cleanup callback failed:', key, error);
+        }
+      }
     });
   };
 }
@@ -230,6 +243,11 @@ applyEnhancements();
   });
   domObserver.observe(document.body, { childList: true, subtree: true, attributes: false });
   window.__jbe_domObserverRef = domObserver;
+  // `core:` rather than `watch:` — this observer is the engine that re-applies
+  // everything else, so it must survive SPA navigation.
+  if (typeof window.__jbe_registerManagedObserver === 'function') {
+    window.__jbe_registerManagedObserver('core:dom', domObserver);
+  }
 })();
 
 // Re-apply on URL change using History API hooks

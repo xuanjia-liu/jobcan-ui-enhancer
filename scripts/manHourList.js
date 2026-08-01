@@ -43,6 +43,10 @@
 
   // --- parse the rendered list into day groups + entries ---------------------
 
+  // Jobcan tags each date cell with a weekday class (sun … sat); weekends are
+  // never "missing input", they are simply days that were not worked.
+  const WEEKEND_CLASSES = ['sat', 'sun'];
+
   function parseListDays() {
     const list = getList();
     if (!list) return [];
@@ -54,6 +58,8 @@
       if (dateCell) {
         current = {
           dateText: dateCell.textContent.trim(),
+          dateCell,
+          isWeekend: WEEKEND_CLASSES.some((c) => dateCell.classList.contains(c)),
           sumMinutes: parseHHMMToMinutes((tr.querySelector('td.sum') || {}).textContent),
           workMinutes: parseHHMMToMinutes((tr.querySelector('td.work') || {}).textContent),
           lastUpdate: ((tr.querySelector('td.last_update') || {}).textContent || '').trim(),
@@ -84,6 +90,29 @@
     return sum !== work;
   }
 
+  // Signed shortfall in minutes: >0 means 工数 is short of 総労働時間.
+  function dayDeltaMinutes(day) {
+    return (day.workMinutes || 0) - (day.sumMinutes || 0);
+  }
+
+  // A day you still owe input for: it was actually worked (総労働時間 > 0) but no
+  // man-hours were entered. Weekends with no work never qualify.
+  function dayIsMissing(day) {
+    return (day.workMinutes || 0) > 0 && (day.sumMinutes || 0) === 0;
+  }
+
+  // "07/01" + the year from the search form -> the edit page for that day.
+  function dayEditUrl(day) {
+    const nums = String(day.dateText || '').match(/\d+/g);
+    if (!nums || nums.length < 2) return null;
+    const form = document.getElementById('search');
+    const year = (form && (form.querySelector('[name="year"]') || {}).value) || String(new Date().getFullYear());
+    const month = parseInt(nums[nums.length - 2], 10);
+    const dayNum = parseInt(nums[nums.length - 1], 10);
+    if (!month || !dayNum) return null;
+    return `/employee/man-hour-manage/edit-achievement?year=${year}&month=${month}&day=${dayNum}`;
+  }
+
   // --- filtering + highlighting ----------------------------------------------
 
   const FILTERS = [
@@ -104,9 +133,154 @@
     parseListDays().forEach((day) => {
       const mismatch = dayIsMismatch(day);
       day.rows.forEach((row) => row.classList.toggle('jbe-mismatch-row', mismatch));
-      const dateCell = day.rows[0] ? day.rows[0].querySelector('td.date') : null;
+      const dateCell = day.dateCell;
       if (dateCell) dateCell.classList.toggle('jbe-mismatch-date', mismatch);
+      decorateDateCell(day, mismatch);
     });
+  }
+
+  // --- per-day delta + jump-to-editor (feature 4) -----------------------------
+  //
+  // Jobcan renders the date as bare text, so the only way from "this day is off by
+  // 1:30" to fixing it was to read the date, open the editor yourself and re-find
+  // the day. Turn the cell into a link to that day's editor and print the signed
+  // delta under it. Jobcan's own per-row 調整 button applies the balance once there.
+  function decorateDateCell(day, mismatch) {
+    const cell = day.dateCell;
+    if (!cell) return;
+
+    // Wrap the date text in a link exactly once; keyed on our own class so it is
+    // idempotent across the worker's re-renders.
+    let link = cell.querySelector('.jbe-day-link');
+    if (!link) {
+      const url = dayEditUrl(day);
+      if (!url) return;
+      const text = cell.textContent.trim();
+      link = document.createElement('a');
+      link.className = 'jbe-day-link';
+      link.href = url;
+      link.textContent = text;
+      link.title = `${text} の工数を編集`;
+      cell.textContent = '';
+      cell.appendChild(link);
+    }
+
+    let badge = cell.querySelector('.jbe-day-delta');
+    if (!mismatch) {
+      if (badge) badge.remove();
+      return;
+    }
+
+    const delta = dayDeltaMinutes(day);
+    if (!badge) {
+      badge = document.createElement('span');
+      badge.className = 'jbe-day-delta';
+      cell.appendChild(badge);
+    }
+    // >0 => 工数 short of actual work (不足); <0 => over-entered (超過).
+    badge.classList.toggle('jbe-day-delta--under', delta > 0);
+    badge.classList.toggle('jbe-day-delta--over', delta < 0);
+    const label = `${delta > 0 ? '−' : '+'}${minutesToHHMM(Math.abs(delta))}`;
+    if (badge.textContent !== label) badge.textContent = label;
+    badge.title = delta > 0
+      ? `工数が ${minutesToHHMM(delta)} 不足しています`
+      : `工数が ${minutesToHHMM(-delta)} 超過しています`;
+  }
+
+  // --- month completion header (feature 3) ------------------------------------
+  //
+  // The list is 31 rows; "which days do I still owe?" was a manual scan. Summarise
+  // it once at the top, with a chip per outstanding day that scrolls to its row.
+  function buildMonthHeader() {
+    const days = parseListDays();
+    if (!days.length) return;
+
+    const bar = document.getElementById('jbe-manhour-list-filters');
+    if (!bar) return;
+
+    let host = document.getElementById('jbe-mh-monthstat');
+    if (!host) {
+      host = document.createElement('div');
+      host.id = 'jbe-mh-monthstat';
+      bar.parentNode.insertBefore(host, bar);
+    }
+
+    const worked = days.filter((d) => (d.workMinutes || 0) > 0);
+    const missing = days.filter(dayIsMissing);
+    const mismatched = days.filter((d) => dayIsMismatch(d) && !dayIsMissing(d));
+    const filled = worked.length - missing.length;
+
+    host.textContent = '';
+
+    const summary = document.createElement('div');
+    summary.className = 'jbe-mh-monthstat-summary';
+
+    const count = document.createElement('span');
+    count.className = 'jbe-mh-monthstat-count';
+    count.textContent = `工数入力 ${filled}/${worked.length} 日`;
+    summary.appendChild(count);
+
+    const state = document.createElement('span');
+    state.className = 'jbe-mh-monthstat-state';
+    if (!worked.length) {
+      state.textContent = '対象の稼働日がありません';
+    } else if (!missing.length && !mismatched.length) {
+      state.classList.add('is-done');
+      state.textContent = 'すべて入力済み';
+    } else {
+      const parts = [];
+      if (missing.length) parts.push(`${missing.length} 日未入力`);
+      if (mismatched.length) parts.push(`${mismatched.length} 日不一致`);
+      state.classList.add('is-todo');
+      state.textContent = parts.join(' ・ ');
+    }
+    summary.appendChild(state);
+
+    const track = document.createElement('div');
+    track.className = 'jbe-mh-monthstat-track';
+    const fill = document.createElement('div');
+    fill.className = 'jbe-mh-monthstat-fill';
+    fill.style.width = `${worked.length ? Math.round((filled / worked.length) * 100) : 0}%`;
+    track.appendChild(fill);
+
+    host.appendChild(summary);
+    host.appendChild(track);
+
+    const chipRow = document.createElement('div');
+    chipRow.className = 'jbe-mh-monthstat-chips';
+    const addChips = (list, cls, titleFor) => {
+      list.forEach((day) => {
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = `jbe-mh-daychip ${cls}`;
+        chip.textContent = day.dateText;
+        chip.title = titleFor(day);
+        chip.addEventListener('click', () => jumpToDay(day.dateText));
+        chipRow.appendChild(chip);
+      });
+    };
+    addChips(missing, 'jbe-mh-daychip--missing', (d) => `${d.dateText}: 工数未入力（総労働時間 ${minutesToHHMM(d.workMinutes || 0)}）`);
+    addChips(mismatched, 'jbe-mh-daychip--mismatch', (d) => {
+      const delta = dayDeltaMinutes(d);
+      return `${d.dateText}: ${minutesToHHMM(Math.abs(delta))} ${delta > 0 ? '不足' : '超過'}`;
+    });
+    if (chipRow.children.length) host.appendChild(chipRow);
+  }
+
+  // Scroll a day's row into view and flash it, so a chip click lands somewhere
+  // obvious in a 31-row table.
+  function jumpToDay(dateText) {
+    const day = parseListDays().find((d) => d.dateText === dateText);
+    const row = day && day.rows[0];
+    if (!row) return;
+    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    day.rows.forEach((r) => {
+      r.classList.remove('jbe-day-flash');
+      // Force a reflow so re-adding the class restarts the animation.
+      void r.offsetWidth;
+      r.classList.add('jbe-day-flash');
+    });
+    setTimeout(() => day.rows.forEach((r) => r.classList.remove('jbe-day-flash')), 1800);
   }
 
   function buildFilterBar() {
@@ -412,6 +586,7 @@
   function enhance() {
     buildFilterBar();
     highlightMismatches();
+    buildMonthHeader();
     applyFilter();
   }
 
@@ -461,11 +636,37 @@
 
     if (start()) return;
 
-    // The list renders asynchronously (worker, several seconds, with a spinner).
-    const startedAt = Date.now();
-    const timer = setInterval(() => {
-      if (start() || Date.now() - startedAt > 30000) clearInterval(timer);
-    }, 400);
+    // The list renders asynchronously (Web Worker, spinner, several seconds).
+    //
+    // This used to be a bare 400ms poll capped at 30s. Measured on a real account
+    // the worker can take ~40s, and when it overruns the cap the page silently
+    // ends up with NO extension enhancements at all (verified live: no filter bar,
+    // no highlighting). So watch #list directly — the observer fires whenever the
+    // worker finally writes rows, however long that takes — and keep a slow poll
+    // purely as a backstop in case the rows arrive without a childList mutation.
+    const list = getList();
+    if (list) {
+      const readyObserver = new MutationObserver(() => {
+        if (start()) {
+          readyObserver.disconnect();
+          if (typeof window.__jbe_clearManagedInterval === 'function') {
+            window.__jbe_clearManagedInterval('watch:manHourListReady');
+          }
+        }
+      });
+      readyObserver.observe(list, { childList: true, subtree: true });
+      if (typeof window.__jbe_registerManagedObserver === 'function') {
+        window.__jbe_registerManagedObserver('watch:manHourListReady', readyObserver, () => {
+          window.__jbe_manHourListPageInited = false;
+        });
+      }
+    }
+
+    if (typeof window.__jbe_startManagedInterval === 'function') {
+      window.__jbe_startManagedInterval('watch:manHourListReady', (ctx) => {
+        if (start()) ctx.stop();
+      }, 1000, { maxRuns: 120 });
+    }
   }
 
   window.setupManHourListPage = setupManHourListPage;

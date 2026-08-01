@@ -1,5 +1,10 @@
 // scripts/ui.js
 
+/* exported setupCleanupObserver, initDarkMode, fixDuplicateSidemenus,
+   enhanceSidemenuBehavior, setupHeaderVisibility, enhanceManagerNameDisplay,
+   enhanceUserDisplay, setupMenuOrderDropdown, fixSettingsIcon,
+   foldSignInRightContainer, removeLogoBorder, autoCollapseExternalPanelMisc */
+
 // Observer to cleanup intervals/observers when elements are removed
 function setupCleanupObserver() {
   if (window.__jbe_cleanupObserverInited) return;
@@ -23,6 +28,11 @@ function setupCleanupObserver() {
     });
   });
   cleanupObserver.observe(document.body, { childList: true, subtree: true });
+  // Tracked (not `watch:`-prefixed) so it survives SPA navigation: this observer
+  // is what tears down clock timers, and it is created exactly once.
+  if (typeof window.__jbe_registerManagedObserver === 'function') {
+    window.__jbe_registerManagedObserver('core:clockCleanup', cleanupObserver);
+  }
 }
 
 // Apply dark mode to the page
@@ -43,8 +53,14 @@ function initDarkMode() {
   });
 }
 
-// Listen for messages from popup.js
-chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
+// Listen for messages from popup.js.
+//
+// Only these two actions exist. There were also `testParticleEffects` and
+// `getDebugInfo` handlers here, but nothing ever sent those messages — the popup
+// has no debug UI — so they were unreachable, and their reflection over
+// window.createParticleEffect / window.addPushButtonParticleEffects was the sole
+// reason those functions were exposed on window at all.
+chrome.runtime.onMessage.addListener(function(message) {
   if (message.action === 'toggleDarkMode') {
     applyDarkMode(message.enabled);
   } else if (message.action === 'updateClockSettings') {
@@ -52,83 +68,14 @@ chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
     if (typeof updateClockSettings === 'function') {
       updateClockSettings(message);
     }
-  } else if (message.action === 'testParticleEffects') {
-    // Test particle effects for debugging
-    const clockContainers = document.querySelectorAll('.flip-clock-container');
-    if (clockContainers.length === 0) {
-      sendResponse({ success: false, message: 'No clock containers found' });
-      return;
-    }
-    
-    let effectsTriggered = 0;
-    clockContainers.forEach(container => {
-      if (typeof window.createParticleEffect === 'function') {
-        window.createParticleEffect(container);
-        effectsTriggered++;
-        
-        // Add burst effect after delay
-        setTimeout(() => {
-          if (typeof window.createBurstParticleEffect === 'function') {
-            window.createBurstParticleEffect(container);
-          }
-        }, 300);
-      }
-    });
-    
-    sendResponse({ 
-      success: true, 
-      message: `Particle effects triggered on ${effectsTriggered} clock container(s)!` 
-    });
-  } else if (message.action === 'getDebugInfo') {
-    // Get debug information
-    const clockContainers = document.querySelectorAll('.flip-clock-container');
-    const pushButtonSelectors = [
-      '#adit-button-push',
-      '.adit-button-push', 
-      '[id*="push"]',
-      '[class*="push"]',
-      'button[onclick*="push"]',
-      'input[type="submit"][value*="出勤"]',
-      'input[type="submit"][value*="退勤"]'
-    ];
-    
-    let pushButtonsFound = 0;
-    pushButtonSelectors.forEach(selector => {
-      const buttons = document.querySelectorAll(selector);
-      pushButtonsFound += buttons.length;
-    });
-    
-    const debugInfo = {
-      clockContainers: clockContainers.length,
-      pushButtons: pushButtonsFound,
-      currentUrl: window.location.href,
-      pageReady: document.readyState === 'complete',
-      particleEffectFunctions: {
-        createParticleEffect: typeof window.createParticleEffect === 'function',
-        createBurstParticleEffect: typeof window.createBurstParticleEffect === 'function',
-        addPushButtonParticleEffects: typeof window.addPushButtonParticleEffects === 'function'
-      },
-      buttonSelectors: pushButtonSelectors.map(selector => ({
-        selector: selector,
-        found: document.querySelectorAll(selector).length
-      }))
-    };
-    
-    sendResponse(debugInfo);
   }
 });
 
-// Clean up resources for a clock container
-function cleanupClockContainer(container) {
-  // Clear progress interval if it exists
-  if (container.dataset.progressIntervalId) {
-    clearInterval(parseInt(container.dataset.progressIntervalId, 10));
-    container.dataset.progressIntervalId = '';
-  }
-  
-  // Any other cleanup needed for the container
-  console.log('Cleaned up resources for removed clock container');
-}
+// cleanupClockContainer lives in scripts/clock.js, which owns the intervals and
+// the ResizeObserver it tears down. This file used to declare a second, narrower
+// copy (progress interval only); because clock.js loads after ui.js its version
+// won at runtime and this one was dead — but either file changing load order
+// would have silently swapped which cleanup ran.
 
 // Fix duplicate side menus issue
 function fixDuplicateSidemenus() {
@@ -147,9 +94,16 @@ function fixDuplicateSidemenus() {
       }
     });
   }
+  // Guard the clone-and-replace: applyEnhancements() re-runs off a debounced
+  // body-wide MutationObserver, so without this every pass replaced these live
+  // nodes (~once a second during DOM churn) — and each replacement was itself a
+  // childList mutation feeding the same observer. Every sibling enhancer here is
+  // guarded this way; this one was not.
   const menuToggleButtons = document.querySelectorAll('[data-toggle="sidemenu"], .menu-toggle, .sidebar-toggle');
   menuToggleButtons.forEach(button => {
+    if (button.dataset.jbeToggleBound === 'true') return;
     const newButton = button.cloneNode(true);
+    newButton.dataset.jbeToggleBound = 'true';
     if (button.parentNode) {
       button.parentNode.replaceChild(newButton, button);
       newButton.addEventListener('click', function(e) {
@@ -299,12 +253,9 @@ function setupMenuOrderDropdown() {
     if (menuDropdown.classList.contains('show')) menuTrigger.setAttribute('aria-expanded', 'true');
     else menuTrigger.setAttribute('aria-expanded', 'false');
   });
-  document.addEventListener('click', function(e) {
-    if (!menuTrigger.contains(e.target) && !menuDropdown.contains(e.target)) {
-      // Don't close this specific dropdown when clicking outside, keep it shown
-      // menuDropdown.classList.remove('show'); menuTrigger.setAttribute('aria-expanded', 'false');
-    }
-  });
+  // No outside-click handler on purpose: this dropdown is meant to stay open.
+  // (There used to be a document-level listener here whose entire body was
+  // commented out — a live listener on every click that did nothing.)
 }
 
 // Fix settings icon appearance
@@ -338,6 +289,9 @@ function fixSettingsIcon() {
     });
     observer.observe(document.body, { childList: true, subtree: true });
     window.__jbe_fixSettingsIconObserver = observer;
+    if (typeof window.__jbe_registerManagedObserver === 'function') {
+      window.__jbe_registerManagedObserver('core:settingsIcon', observer);
+    }
   }
   // (Removed a redundant 4s setInterval that re-ran fixSettingsButtons — the
   // MutationObserver above already re-applies when .staff-settings-btn appears.)
@@ -473,21 +427,29 @@ function autoCollapseExternalPanelMisc() {
           }
         });
         
-        // Close panel when clicking outside
-        document.addEventListener('click', (e) => {
-          if (panel.style.display !== 'none' && 
-              !panel.contains(e.target) && 
-              e.target !== toggleHeader) {
-            panel.style.display = 'none';
-            toggleHeader.classList.remove('active');
-          }
-        });
-        
         // Add toggleHeader to wrapper
         wrapper.insertBefore(toggleHeader, panel);
       }
     });
   };
+
+  // Close-on-outside-click is bound ONCE for all panels. It used to be added
+  // per panel, so every processExternalPanels() pass leaked another document
+  // listener that closed over that panel forever.
+  if (!window.__jbe_externalPanelDocClickBound) {
+    window.__jbe_externalPanelDocClickBound = true;
+    document.addEventListener('click', (e) => {
+      document.querySelectorAll('.external-panel-wrapper').forEach((wrapper) => {
+        const panel = wrapper.querySelector('.external-panel-misc');
+        const toggleHeader = wrapper.querySelector('.external-panel-toggle');
+        if (!panel || !toggleHeader) return;
+        if (panel.style.display === 'none') return;
+        if (panel.contains(e.target) || e.target === toggleHeader) return;
+        panel.style.display = 'none';
+        toggleHeader.classList.remove('active');
+      });
+    });
+  }
   
   // Process any existing external-panel-misc elements
   processExternalPanels();
@@ -529,4 +491,9 @@ function autoCollapseExternalPanelMisc() {
     childList: true,
     subtree: true
   });
+  // Sign-in page only, and reached by a full page load rather than SPA
+  // navigation — tracked for inventory/dedup, not torn down on `watch:` cleanup.
+  if (typeof window.__jbe_registerManagedObserver === 'function') {
+    window.__jbe_registerManagedObserver('core:externalPanel', observer);
+  }
 }
