@@ -305,22 +305,16 @@ async function captureScreenshot(area) {
     return;
   }
 
-  // Fix flip clock transformations
-  const flipCards = document.querySelectorAll('.flip-card');
-  flipCards.forEach(flipCard => {
-    flipCard.style.transform = 'rotateX(0deg)';
-    flipCard.classList.remove('flipping');
-    const front = flipCard.querySelector('.flip-card-front');
-    if (front) {
-      front.style.visibility = 'visible';
-      front.style.opacity = '1';
-    }
-    const back = flipCard.querySelector('.flip-card-back');
-    if (back) {
-      back.style.visibility = 'hidden';
-      back.style.opacity = '0';
-    }
-  });
+  // Settle any split-flap digit that is mid-flip, so the capture shows whole
+  // numerals rather than a leaf frozen part-way through its travel. Dropping
+  // `.is-flipping` ends the CSS animation and returns the leaf to 0deg, where its
+  // front face matches the static upper half.
+  const settleFlipDigits = (root) => {
+    root.querySelectorAll('.flip-clock-digit.is-flipping').forEach((digit) => {
+      digit.classList.remove('is-flipping');
+    });
+  };
+  settleFlipDigits(document);
 
   // Use html2canvas without window prefix
   html2canvas(document.body, {
@@ -333,15 +327,8 @@ async function captureScreenshot(area) {
     windowWidth: document.documentElement.offsetWidth,
     windowHeight: document.documentElement.offsetHeight,
     onclone: function(clonedDoc) {
-      const clonedFlipCards = clonedDoc.querySelectorAll('.flip-card');
-      clonedFlipCards.forEach(card => {
-        card.style.transform = 'rotateX(0deg)';
-        const cardBack = card.querySelector('.flip-card-back');
-        if (cardBack) {
-          cardBack.style.visibility = 'hidden';
-          cardBack.style.opacity = '0';
-        }
-      });
+      // A flip can start between the settle above and the clone being taken.
+      settleFlipDigits(clonedDoc);
     }
   }).then(canvas => {
     // Remove the selection overlay — before capture it was only hidden

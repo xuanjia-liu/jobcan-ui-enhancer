@@ -68,6 +68,21 @@
     display: none !important;
   }
 
+  /* …except inside the sidemenu, where that same utility trio is the wrapper
+     around the close button. Measured: this rule was a THIRD place hiding the
+     menu's only closer, on top of the JS in ui.js and the
+     [onclick*="closeSidemenu"] rule further down — unhiding those two alone left
+     the button at 0×0.
+     px-3/py-3 is 16px on all four sides, which stacked with the menu's own 16px
+     top padding into a 78px empty band above 出勤簿. Flex + no vertical padding
+     puts the × in the corner and hands the space back to the menu items. */
+  .jobcan-enhanced #sidemenu .text-right.px-3.py-3,
+  .jobcan-enhanced .jbc-sidemenu .text-right.px-3.py-3 {
+    display: flex !important;
+    justify-content: flex-end;
+    padding: 0 8px !important;
+  }
+
   .jobcan-enhanced .jbe-hidden {
     display: none !important;
   }
@@ -460,15 +475,32 @@
     border-radius: var(--border-radius-md);
     margin: 16px;
     padding: 16px 0;
-    overflow: hidden;
-    position: relative;
+    /* auto, not hidden: the panel is position:fixed (see below), so on a short
+       viewport `hidden` clipped the tail of the menu with no way to scroll to it —
+       measured at a 243px content height, 10 of 13 items including 申請 and
+       スタッフ設定 were unreachable. */
+    overflow-x: hidden;
+    overflow-y: auto;
+    /* No `position` here: the element carries Bootstrap's .position-fixed, which is
+       !important, so anything declared here would be a lie. The panel IS fixed —
+       which is why .main-contents-ml has to be pushed clear of it manually. */
     z-index: var(--z-index-sidemenu);
     transition: all 0.3s ease;
     left: 0;
     width: 256px;
     will-change: transform, opacity;
   }
-  
+
+  /* The fixed panel spans 12px (responsive.css margin) → 268px, but Jobcan's
+     .main-contents-ml only clears its own 240px width, so the content column
+     started 13px UNDER the panel and cleared it by padding alone. Push it past
+     the real right edge, with a 12px gap to match the panel's own margin:
+     265 + the 15px padding on the .container-fluid above it = 280 = 268 + 12.
+     .side-closed keeps Jobcan's 48px (the width of the reopen stub). */
+  .jobcan-enhanced .main-contents-ml:not(.side-closed) {
+    margin-left: 265px;
+  }
+
   /* Sidemenu closed state */
   .jobcan-enhanced .jbc-sidemenu.side-closed,
   .jobcan-enhanced #sidemenu.side-closed,
@@ -479,13 +511,7 @@
     visibility: hidden;
     pointer-events: none;
   }
-  
-  /* Ensure the content shifts when menu closes */
-  .jobcan-enhanced .side-closed ~ .contentsArea,
-  .jobcan-enhanced .side-closed ~ #main-content {
-    margin-left: 48px; /* Width of the collapsed menu button */
-  }
-  
+
   /* Collapsed/closed sidemenu styling */
   .jobcan-enhanced #sidemenu-closed,
   .jobcan-enhanced .jbc-sidemenu-closed {
@@ -530,6 +556,36 @@
     box-shadow: none;
   }
   
+  /* The menu's own closer, now that it is visible again. The .jbc-sidemenu-btn
+     defaults above lose to `.jobcan-enhanced .btn` (equal specificity, declared
+     later in this file), which paints it primary blue and stretches it to the full
+     menu width — a 256×48 blue slab above 出勤簿. An #id here outranks that.
+     It sits in a .text-right row, so margin-left:auto parks the × top-right. */
+  .jobcan-enhanced #sidemenu .jbc-sidemenu-btn,
+  .jobcan-enhanced .jbc-sidemenu .jbc-sidemenu-btn {
+    width: 28px;
+    height: 28px;
+    padding: 6px;
+    margin-left: auto;
+    background-color: transparent;
+    color: var(--color-text-secondary);
+    border-radius: var(--border-radius-md);
+    box-shadow: none;
+  }
+
+  .jobcan-enhanced #sidemenu .jbc-sidemenu-btn:hover,
+  .jobcan-enhanced .jbc-sidemenu .jbc-sidemenu-btn:hover {
+    background-color: var(--color-primary-hover-bg);
+    color: var(--color-primary);
+  }
+
+  /* The × is a filled path carrying `fill="#5c5c5c"` as a presentation attribute —
+     dark grey, near-invisible on the dark card. CSS outranks the attribute. */
+  .jobcan-enhanced #sidemenu .jbc-sidemenu-btn svg path,
+  .jobcan-enhanced .jbc-sidemenu .jbc-sidemenu-btn svg path {
+    fill: currentColor;
+  }
+
   .jobcan-enhanced #sidemenu-closed svg,
   .jobcan-enhanced .jbc-sidemenu-closed svg {
     fill: var(--color-secondary);
@@ -539,27 +595,6 @@
   .jobcan-enhanced #sidemenu-closed .btn:hover svg,
   .jobcan-enhanced .jbc-sidemenu-closed .btn:hover svg {
     fill: var(--color-primary);
-  }
-  
-  /* Fix for duplicate sidemenus */
-  .jobcan-enhanced .sidemenu + .sidemenu,
-  .jobcan-enhanced #sidemenu + #sidemenu,
-  .jobcan-enhanced .sidemenu.hidden,
-  .jobcan-enhanced #sidemenu.hidden,
-  .jobcan-enhanced .sidemenu[style*="display: none"],
-  .jobcan-enhanced #sidemenu[style*="display: none"] {
-    display: none !important;
-  }
-  
-  /* Ensure proper display for open/closed states */
-  .jobcan-enhanced .menuArea[style*="display: none"] + .menuArea,
-  .jobcan-enhanced .menuArea.closed + .menuArea,
-  .jobcan-enhanced .sidebar-collapsed .sidemenu,
-  .jobcan-enhanced .sidebar-hidden .sidemenu,
-  .jobcan-enhanced .menu-collapsed .sidemenu,
-  .jobcan-enhanced .sidemenu.closed,
-  .jobcan-enhanced #sidemenu.closed {
-    display: none !important;
   }
   
   /* Sidemenu links */
@@ -592,10 +627,13 @@
     color: var(--color-white);
   }
   
-  /* Hide close buttons in sidemenu */
-  .jobcan-enhanced .sidemenu-close,
-  .jobcan-enhanced .jbc-sidemenu-close,
-  .jobcan-enhanced [onclick*="closeSidemenu"],
+  /* Hide stray close buttons.
+     NOT the sidemenu's own closer: `[onclick*="closeSidemenu"]` used to be in this
+     list, and it matches the ONE control that collapses the menu
+     (#sidemenu > button.jbc-sidemenu-btn). With it hidden the menu could be opened
+     from the 48px stub but never closed again — and the collapsed state is the one
+     where .jbc-container goes fluid, so it stripped 670px of content width with no
+     way back. ui.js hid the same button from JS; both are gone. */
   .jobcan-enhanced button[aria-label="Close"],
   .jobcan-enhanced .btn-close,
   .jobcan-enhanced .close-btn {
@@ -628,7 +666,34 @@
     padding: 0 !important;
     margin: 0 !important;
   }
-  
+
+  /* Sidemenu submenus: keep them in the flow, never floating.
+     The rules above force every submenu open, and the `position: relative` in the
+     block before them makes them stack inline — but only for the ones Bootstrap
+     never actually opened. The group Jobcan auto-opens for the current page (工数管理
+     here) goes through Bootstrap's dropdown JS, and Popper writes
+     `position: absolute`, `top`, `left`, `transform: translate3d(...)` and
+     `will-change` as INLINE styles on it. Measured: that one submenu floated at
+     119,360 over 申請 and スタッフ設定 while its siblings sat inline. Inline styles
+     lose to !important, so pin it back into the column.
+     Scoped to the sidemenu — the manager-name and CSV-options dropdowns elsewhere
+     are meant to float. */
+  .jobcan-enhanced #sidemenu .dropdown-menu,
+  .jobcan-enhanced .jbc-sidemenu .dropdown-menu {
+    position: static !important;
+    transform: none !important;
+    top: auto !important;
+    right: auto !important;
+    bottom: auto !important;
+    left: auto !important;
+    float: none !important;
+    will-change: auto !important;
+    /* Bootstrap's .dropdown-menu is a 10rem-min-width float; as an inline block in a
+       256px column it rendered 144px wide with a ragged right edge. */
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
   .jobcan-enhanced .nav-item.has-submenu > ul,
   .jobcan-enhanced .menu-item.has-children > ul {
     position: relative !important;
@@ -724,6 +789,28 @@
   /* ==========================================================================
      4. Cards & Containers
      ========================================================================== */
+
+  /* Jobcan caps the content column with
+       @media (min-width: 1200px) { .jbc-container:not(.side-closed) { max-width: 1140px } }
+     and only stamps `side-closed` on it when the sidemenu is COLLAPSED — so opening
+     the menu costs 240px of gutter and another ~430px of content. Measured at a
+     1905px viewport: 1140px used of 1635px available with the menu open, 1811px of
+     1827px with it closed. Every page this extension touches is a dense table or
+     dashboard, so replace that cap with one of our own — 1280px in BOTH states,
+     centred in whatever room is left once the cap bites.
+
+     !important is load-bearing here, not habit: Jobcan's selector scores the same
+     0,2,0 as `.jobcan-enhanced .jbc-container` (`:not(.side-closed)` counts as a
+     class, and the @media wrapper adds nothing), and its stylesheet resolves after
+     this one, so an equal-specificity declaration loses the tie. Measured without
+     it: computed max-width stayed 1140px. The auto margins need it too — the
+     element also carries Bootstrap's `.m-0`, which is `margin: 0 !important`. */
+  .jobcan-enhanced .jbc-container {
+    max-width: 1280px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
+
   .jobcan-enhanced .card,
   .jobcan-enhanced .box,
   .jobcan-enhanced .box-default,
@@ -1206,6 +1293,13 @@
        blue against the #0077ff rest state, so it read as a different button rather
        than a hovered one. */
     background-color: color-mix(in srgb, var(--color-primary) 87%, #000);
+    /* Re-assert the label colour. Jobcan's .jbc-btn-outline-primary (PDF/CSV/表示 on
+       the man-hour pages) is a TEAL outline button — #1eb8d9 at rest, #20a3ba on
+       hover. The base .btn rule above overrides it to white while at rest, but a
+       hover rule that only touches the background lets Jobcan's :hover colour win the
+       specificity tie, so the label turned teal on our blue fill and all but
+       disappeared. */
+    color: var(--color-white);
     box-shadow: var(--shadow-primary-hover);
   }
 
@@ -1773,62 +1867,226 @@
     box-sizing: border-box;
     container-type: inline-size;
     container-name: flip-clock;
-    /* Fluid digit caps (overridden by data-clock-size) */
+    /* Vertical rhythm between the digits row and the progress card. The row no
+       longer butts up against the panel below it. */
+    gap: clamp(12px, 2.6cqi, 20px);
+    /* Fluid digit caps (overridden by data-clock-size). Font sizes derive from the
+       tile width now, so --flip-font-* / --flip-colon-max are no longer needed. */
     --flip-digit-min: 26px;
     --flip-digit-max: 80px;
-    --flip-font-min: 1.05rem;
-    --flip-font-max: 3.5rem;
-    --flip-colon-max: 30px;
   }
 
   .jobcan-enhanced .flip-clock-container[data-clock-size='small'] {
     --flip-digit-min: 22px;
     --flip-digit-max: 60px;
-    --flip-font-min: 0.95rem;
-    --flip-font-max: 2.5rem;
-    --flip-colon-max: 22px;
   }
 
   .jobcan-enhanced .flip-clock-container[data-clock-size='large'] {
     --flip-digit-min: 34px;
     --flip-digit-max: 100px;
-    --flip-font-min: 1.35rem;
-    --flip-font-max: 4.5rem;
-    --flip-colon-max: 38px;
   }
 
-  /* Clock digits container */
+  /* Clock digits container. align-items is `center`, not `stretch`: the digits set
+     their own height through aspect-ratio, so stretch never had anything to do. */
   .jobcan-enhanced .flip-clock-digits-container {
     display: flex;
-    align-items: stretch;
+    align-items: center;
     justify-content: center;
     flex-wrap: nowrap;
+    gap: clamp(2px, 0.8cqi, 6px);
     width: 100%;
     max-width: 100%;
     min-width: 0;
     box-sizing: border-box;
+    /* Pin the face. Inheriting Jobcan's body font meant the glyph metrics changed
+       with whatever it happened to be; tabular figures keep every numeral the same
+       advance width so nothing shifts optically as the digits cycle. */
+    font-family: var(--font-family-base);
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum' 1;
     /* Add containment */
     contain: layout style;
   }
-  
-  /* Digits — width scales with container (~6 digits + 3 colons) */
+
+  /* HH / MM / SS read as three panels — the pair is the unit on a real board. */
+  .jobcan-enhanced .flip-group {
+    display: flex;
+    align-items: center;
+    gap: clamp(2px, 0.9cqi, 5px);
+    padding: clamp(3px, 0.9cqi, 7px);
+    min-width: 0;
+    border-radius: calc(var(--border-radius-lg) + 4px);
+    background: var(--color-clock-group-bg);
+    border: 1px solid var(--color-clock-group-border);
+  }
+
+  /* Seconds are supporting information, so they get 0.6x the tile and less weight
+     in the composition rather than a third pair of equal-sized slabs. */
+  .jobcan-enhanced .flip-group.is-seconds,
+  .jobcan-enhanced .colon[data-position='seconds-colon'] {
+    --flip-digit-scale: 0.6;
+    opacity: 0.72;
+  }
+
+  /* Tile width. The divisor is the row's total width in digit-widths: 4 full tiles
+     + 2 at 0.6 + the colons + panel padding. With seconds hidden only HH:MM is
+     drawn, so the same space divides by ~5 instead and the digits grow to fill it
+     rather than leaving the old 6-digit gap. */
+  .jobcan-enhanced .flip-clock-container {
+    --flip-digit-w: clamp(
+      var(--flip-digit-min),
+      calc((100cqi - clamp(28px, 8cqi, 48px)) / 6.8),
+      var(--flip-digit-max)
+    );
+  }
+
+  .jobcan-enhanced .flip-clock-container[data-show-seconds='false'] {
+    --flip-digit-w: clamp(
+      var(--flip-digit-min),
+      calc((100cqi - clamp(28px, 8cqi, 48px)) / 5),
+      var(--flip-digit-max)
+    );
+  }
+
+  /* Seconds toggle. Driven by the container attribute rather than per-digit inline
+     styles, because applyClockSettingsToContainer() re-runs about once a second. */
+  .jobcan-enhanced .flip-clock-container[data-show-seconds='false'] .flip-group.is-seconds,
+  .jobcan-enhanced .flip-clock-container[data-show-seconds='false'] .colon[data-position='seconds-colon'] {
+    display: none;
+  }
+
+  /* ---- Split-flap tile -----------------------------------------------------
+     Four half-height glyph copies per digit (static upper/lower + the two faces
+     of the falling leaf). See createSelfAnimatingDigit() in scripts/clock.js for
+     which copy holds which value during a flip. */
   .jobcan-enhanced .flip-clock-digit {
     position: relative;
     box-sizing: border-box;
-    flex: 0 1 auto;
-    width: clamp(
-      var(--flip-digit-min),
-      calc((100cqi - clamp(28px, 8cqi, 48px)) / 7.5),
-      var(--flip-digit-max)
-    );
+    flex: 0 0 auto;
+    width: calc(var(--flip-digit-w) * var(--flip-digit-scale, 1));
     aspect-ratio: 2 / 3;
     height: auto;
-    margin: 0 clamp(2px, 0.9cqi, 4px);
-    perspective: 800px;
-    /* Add containment for digit elements */
-    contain: layout style paint;
+    /* Proportional, not a fixed 1000px: the flap's near edge projects wider than
+       the tile as it swings, and with a fixed distance that flare scaled with the
+       tile — barely visible at 26px, ~5% overhang at 100px, where it can reach the
+       neighbouring digit. 14x the tile width holds it at ~2.8% at every size, which
+       still reads as 3-D without crossing the gap. Measured across the full
+       rotation; worst case is at 49%, just before edge-on. */
+    perspective: calc(var(--flip-digit-w) * var(--flip-digit-scale, 1) * 14);
+    border-radius: var(--border-radius-lg);
+    box-shadow: var(--shadow-md);
+    /* Font size follows the tile instead of a separate cqi clamp, so a scaled
+       group (seconds) shrinks its glyphs by the same factor automatically. */
+    font-size: calc(var(--flip-digit-w) * var(--flip-digit-scale, 1) * 0.72);
+    line-height: 1;
+    font-weight: 700;
+    color: var(--color-text-on-primary);
+    /* Deliberately not `contain: paint`: it clips the leaf's perspective bulge
+       mid-rotation and forces transform-style back to flat. */
+    contain: layout style;
+    /* The face gradient every half reads. Neutral until #working_status resolves —
+       see the pending-state note below. */
+    --jbe-flip-face: linear-gradient(135deg, var(--color-clock-pending-start) 0%, var(--color-clock-pending-end) 100%);
   }
-  
+
+  /* Static halves */
+  .jobcan-enhanced .flip-digit-half {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 50%;
+    overflow: hidden;
+    /* One gradient spanning the whole tile, sampled top/bottom by the two halves,
+       so it does not restart at the seam. */
+    background-image: var(--jbe-flip-face);
+    background-size: 100% 200%;
+  }
+
+  .jobcan-enhanced .flip-digit-half.is-upper {
+    top: 0;
+    background-position: 0 0;
+    border-radius: var(--border-radius-lg) var(--border-radius-lg) 0 0;
+  }
+
+  .jobcan-enhanced .flip-digit-half.is-lower {
+    bottom: 0;
+    background-position: 0 100%;
+    border-radius: 0 0 var(--border-radius-lg) var(--border-radius-lg);
+  }
+
+  /* The hinge line the flap swings on. */
+  .jobcan-enhanced .flip-digit-half.is-upper::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 1px;
+    background: var(--color-clock-seam);
+  }
+
+  /* A glyph box the full height of the tile inside a half-height parent: the
+     numeral is centred on the tile, so each half shows exactly its own crop and
+     the two line up across the seam. */
+  .jobcan-enhanced .flip-digit-glyph {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 200%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .jobcan-enhanced .is-upper > .flip-digit-glyph,
+  .jobcan-enhanced .is-front > .flip-digit-glyph {
+    top: 0;
+  }
+
+  .jobcan-enhanced .is-lower > .flip-digit-glyph,
+  .jobcan-enhanced .is-back > .flip-digit-glyph {
+    bottom: 0;
+  }
+
+  /* The falling flap: upper half, hinged on its bottom edge. */
+  .jobcan-enhanced .flip-leaf {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 50%;
+    z-index: 2;
+    transform-style: preserve-3d;
+    transform-origin: center bottom;
+    transform: rotateX(0deg);
+  }
+
+  .jobcan-enhanced .flip-clock-digit.is-flipping .flip-leaf {
+    animation: jbeFlipLeaf var(--jbe-flip-duration, 600ms) cubic-bezier(0.455, 0.03, 0.515, 0.955) forwards;
+  }
+
+  .jobcan-enhanced .flip-leaf-face {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    backface-visibility: hidden;
+    background-image: var(--jbe-flip-face);
+    background-size: 100% 200%;
+  }
+
+  .jobcan-enhanced .flip-leaf-face.is-front {
+    background-position: 0 0;
+    border-radius: var(--border-radius-lg) var(--border-radius-lg) 0 0;
+  }
+
+  /* Pre-rotated so that at the end of the leaf's -180deg travel the two rotations
+     cancel and the incoming digit lands upright over the lower half. */
+  .jobcan-enhanced .flip-leaf-face.is-back {
+    transform: rotateX(180deg);
+    background-position: 0 100%;
+    border-radius: 0 0 var(--border-radius-lg) var(--border-radius-lg);
+  }
+
   /* Hide original clock */
   .jobcan-enhanced #clock,
   .jobcan-enhanced #display-time,
@@ -1842,89 +2100,56 @@
     max-width: 100%;
   }
   
-  /* Self-animating digits - optimized for performance */
-  .jobcan-enhanced .flip-clock-digit.self-animating {
-    transform-style: preserve-3d;
-    /* Add containment */
-    contain: layout style;
+  /* Clock celebration effect (fires on a genuine 出勤/退勤 transition) */
+  .jobcan-enhanced .flip-clock-container.celebrating {
+    animation: clockCelebrate 0.6s ease-out;
   }
-  
-  
+
+  /* Colon. Sized off the tile like the glyphs, so it stays in proportion at every
+     clock size and shrinks with the seconds group. */
   .jobcan-enhanced .colon {
     display: flex;
     align-items: center;
     justify-content: center;
     box-sizing: border-box;
     flex: 0 0 auto;
-    align-self: stretch;
-    width: clamp(10px, calc(var(--flip-digit-max, 80px) * 0.35), var(--flip-colon-max, 30px));
+    width: calc(var(--flip-digit-w) * var(--flip-digit-scale, 1) * 0.4);
     min-height: 0;
-    font-size: clamp(var(--flip-font-min), 8cqi, var(--flip-font-max));
+    font-size: calc(var(--flip-digit-w) * var(--flip-digit-scale, 1) * 0.6);
     line-height: 1;
-    color: var(--color-primary);
+    color: var(--color-clock-colon-not-working);
     font-weight: bold;
     /* Add containment as size doesn't change */
     contain: layout style paint;
     /* Optimize colon animation */
     animation: colonPulseOptimized 2s infinite;
   }
-  
-  .jobcan-enhanced .flip-card {
-    position: relative;
-    width: 100%;
-    height: 100%;
-    transform-style: preserve-3d;
-    /* Remove transition - handled by JavaScript animation */
-    /* Add containment */
-    contain: layout style;
-    /* Force GPU acceleration */
-    transform: translateZ(0);
+
+  /* Clock style variations. One custom property per state instead of a background
+     declaration per face — all four halves read --jbe-flip-face.
+
+     `style-gradient` is the UNKNOWN state: resolveClockColorClassFromStatus()
+     returns it whenever #working_status is missing or momentarily blank, which on a
+     hard reload is the case for the first frames after the clock mounts. It used to
+     paint the primary gradient, so the tiles flashed bright blue and then settled to
+     grey once Jobcan filled in 退室中. Unknown now matches the pending neutral, so
+     there is nothing to flash — blue appears only once 勤務中 is actually read. */
+  .jobcan-enhanced .flip-clock-digit.style-gradient {
+    --jbe-flip-face: linear-gradient(135deg, var(--color-clock-pending-start) 0%, var(--color-clock-pending-end) 100%);
   }
-  
-  .jobcan-enhanced .flip-card-front,
-  .jobcan-enhanced .flip-card-back {
-    position: absolute;
-    width: 100%;
-    height: 100%;
-    backface-visibility: hidden;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: linear-gradient(135deg, var(--color-primary-dark) 0%, var(--color-primary) 100%);
-    color: var(--color-text-on-primary);
-    font-size: clamp(var(--flip-font-min), 9cqi, var(--flip-font-max));
-    font-weight: 700;
-    border-radius: var(--border-radius-lg);
-    box-shadow: var(--shadow-md);
-    /* Add containment */
-    contain: layout style paint;
-    /* Force GPU layer */
-    transform: translateZ(0);
+
+  .jobcan-enhanced .flip-clock-digit.style-working {
+    --jbe-flip-face: linear-gradient(135deg, var(--color-clock-working-start) 0%, var(--color-clock-working-end) 100%);
   }
-  
-  .jobcan-enhanced .flip-card-back {
-    transform: rotateX(180deg) translateZ(0);
+
+  .jobcan-enhanced .flip-clock-digit.style-not-working {
+    --jbe-flip-face: linear-gradient(135deg, var(--color-clock-not-working-start) 0%, var(--color-clock-not-working-end) 100%);
   }
-  
-  /* Clock style variations */
-  .jobcan-enhanced .flip-clock-digit.style-gradient .flip-card-front,
-  .jobcan-enhanced .flip-clock-digit.style-gradient .flip-card-back {
-    background: linear-gradient(135deg, var(--color-primary-dark) 0%, var(--color-primary) 100%);
-  }
-  
-  .jobcan-enhanced .flip-clock-digit.style-working .flip-card-front,
-  .jobcan-enhanced .flip-clock-digit.style-working .flip-card-back {
-    background: linear-gradient(135deg, var(--color-clock-working-start) 0%, var(--color-clock-working-end) 100%);
-  }
-  
-  .jobcan-enhanced .flip-clock-digit.style-not-working .flip-card-front,
-  .jobcan-enhanced .flip-clock-digit.style-not-working .flip-card-back {
-    background: linear-gradient(135deg, var(--color-clock-not-working-start) 0%, var(--color-clock-not-working-end) 100%);
-  }
-  
-  /* Colon style variations */
+
+  /* Colon style variations. Default is the same neutral as the pending tiles, for
+     the same reason. */
   .jobcan-enhanced .colon.colon-default {
-    color: var(--color-primary);
+    color: var(--color-clock-colon-not-working);
   }
   
   .jobcan-enhanced .colon.colon-working {
@@ -1947,43 +2172,32 @@
     min-width: 0;
     box-sizing: border-box;
     align-self: stretch;
-    margin-top: 16px;
+    /* No margin-top: the container's `gap` owns the vertical rhythm now, so hiding
+       the digits row or the panel cannot leave an orphaned margin behind. */
     position: relative;
     min-height: 60px;
     border-radius: 16px;
     padding: 10px clamp(8px, 2cqi, 12px) 8px;
     background: linear-gradient(180deg, var(--color-work-progress-surface-start) 0%, var(--color-work-progress-surface-end) 100%);
     border: 1px solid var(--color-work-progress-border);
-    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.06);
+    /* Tokenised: these were the last hardcoded rgba() values in this block, and a
+       near-black shadow reads as grime on the dark surface. Both tokens have
+       dark-mode overrides. */
+    box-shadow: var(--shadow-sm);
     transition:
       box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1),
-      border-color 0.25s cubic-bezier(0.4, 0, 0.2, 1),
-      transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      border-color 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
+  /* Hovering the card no longer lifts it or inflates every marker at once: this is a
+     data readout, and growing all the dots together both moved a lot of pixels and
+     made their positions read as approximate. The card gets a quiet border/shadow
+     shift; only the marker actually under the cursor responds (see .work-punch-marker
+     :hover below). */
   @media (hover: hover) and (pointer: fine) {
     .jobcan-enhanced .work-progress-container:hover {
       border-color: var(--color-work-progress-hover-border);
-      box-shadow: 0 3px 10px rgba(16, 24, 40, 0.08);
-      transform: translateY(-1px);
-    }
-
-    .jobcan-enhanced .work-progress-container:hover .work-punch-marker {
-      width: var(--work-dot-hover-size);
-      height: var(--work-dot-hover-size);
-      border-radius: 50%;
-      box-shadow: 0 0 0 3px var(--color-work-progress-marker-hover-ring), 0 6px 16px var(--color-work-progress-marker-hover-shadow);
-    }
-
-    .jobcan-enhanced .work-progress-container:hover .work-progress-indicator {
-      width: 8px;
-      height: 18px;
-      border-radius: 999px;
-      box-shadow: 0 0 0 4px var(--color-work-progress-indicator-ring), 0 8px 18px var(--color-work-progress-indicator-shadow);
-    }
-
-    .jobcan-enhanced .work-progress-container:hover .work-progress-track {
-      --work-dot-active-width: var(--work-dot-hover-size);
+      box-shadow: var(--shadow-md);
     }
   }
 
@@ -1995,7 +2209,6 @@
     --work-dot-normal-width: 2px;
     --work-dot-normal-height: 12px;
     --work-dot-hover-size: 12px;
-    --work-dot-active-width: var(--work-dot-normal-width);
     --work-segment-boundary-gap: clamp(4px, 1.4cqi, 8px);
     height: clamp(16px, 4cqi, 20px);
     width: 100%;
@@ -2008,20 +2221,16 @@
     margin-top: 0;
   }
 
-  .jobcan-enhanced .work-progress-fill {
-    transition: width 800ms cubic-bezier(0.34, 1.56, 0.64, 1);
-  }
-
+  /* Inset by half a punch dot so an edge marker still sits fully on the bar. The
+     inset used to grow on card hover (via --work-dot-active-width) and animate the
+     whole band layer sideways; with per-marker hover it is simply static. */
   .jobcan-enhanced .work-schedule-layer {
     position: absolute;
     inset: 0;
     z-index: 1;
     pointer-events: none;
-    left: calc(var(--work-dot-active-width) / 2 + 1px);
-    width: calc(100% - var(--work-dot-active-width) - 2px);
-    transition:
-      left 0.25s cubic-bezier(0.4, 0, 0.2, 1),
-      width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    left: calc(var(--work-dot-normal-width) / 2 + 1px);
+    width: calc(100% - var(--work-dot-normal-width) - 2px);
   }
 
   .jobcan-enhanced .work-schedule-segment {
@@ -2040,29 +2249,65 @@
     background: linear-gradient(90deg, var(--color-work-segment-off-start) 0%, var(--color-work-segment-off-end) 100%);
   }
 
+  /* Assumed lunch band — only drawn on days with no recorded 休憩 punches. */
   .jobcan-enhanced .work-schedule-segment.segment-noon {
     background: linear-gradient(90deg, var(--color-work-segment-noon-start) 0%, var(--color-work-segment-noon-end) 100%);
     opacity: 0.96;
     box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-work-segment-noon-end) 35%, transparent 65%);
   }
+
+  /* A real, punched break. Same palette as the assumed band so rest reads as rest,
+     but fully opaque — this one is measured rather than guessed. */
+  .jobcan-enhanced .work-schedule-segment.segment-break {
+    background: linear-gradient(90deg, var(--color-work-segment-noon-start) 0%, var(--color-work-segment-noon-end) 100%);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-work-segment-noon-end) 55%, transparent 45%);
+  }
   
+  /* ---- Axis labels --------------------------------------------------------
+     The 3-hourly ticks used to carry their times in `title` tooltips only, so you
+     could not read when a band started without hovering. Labels are positioned by
+     percentage to line up with the ticks; the two ends align inward so they cannot
+     overhang the card. */
+  .jobcan-enhanced .work-progress-scale {
+    position: relative;
+    width: 100%;
+    height: 14px;
+    margin-top: 4px;
+    /* Matches .work-schedule-layer so labels sit under the tick they belong to. */
+    padding-left: calc(var(--work-dot-normal-width, 2px) / 2 + 1px);
+    padding-right: calc(var(--work-dot-normal-width, 2px) / 2 + 1px);
+    box-sizing: border-box;
+  }
+
+  .jobcan-enhanced .work-progress-scale-label {
+    position: absolute;
+    top: 0;
+    transform: translateX(-50%);
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 14px;
+    white-space: nowrap;
+    color: var(--color-work-progress-label);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .jobcan-enhanced .work-progress-scale-label.is-first {
+    transform: translateX(0);
+  }
+
+  .jobcan-enhanced .work-progress-scale-label.is-last {
+    transform: translateX(-100%);
+  }
+
   .jobcan-enhanced .work-progress-percentage {
     width: 100%;
     position: relative;
-    margin-top: 8px;
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
-    align-items: center;
-    column-gap: 10px;
+    margin-top: 4px;
+    display: block;
     font-size: 12px;
     line-height: 1.25;
     letter-spacing: 0.02em;
-  }
-
-  .jobcan-enhanced .work-progress-inline-label {
-    font-weight: 700;
-    color: var(--color-work-progress-label);
-    font-size: 11px;
+    text-align: center;
   }
 
   .jobcan-enhanced .work-progress-inline-status {
@@ -2075,14 +2320,28 @@
     text-overflow: ellipsis;
   }
 
+  /* States where the line reports the absence of data rather than a measurement, so
+     it should not carry the same weight as a real 本日勤務 figure. */
+  .jobcan-enhanced .work-progress-container[data-punch-state='loading'] .work-progress-inline-status,
+  .jobcan-enhanced .work-progress-container[data-punch-state='empty'] .work-progress-inline-status,
+  .jobcan-enhanced .work-progress-container[data-punch-state='unavailable'] .work-progress-inline-status {
+    font-weight: 500;
+    color: var(--color-work-progress-label);
+  }
+
+  /* A punch whose label contradicts Jobcan's in/out toggle. The day cannot settle
+     until it is corrected, so the card says so rather than showing a total. */
+  .jobcan-enhanced .work-progress-container[data-punch-anomaly='true'] .work-progress-inline-status {
+    color: var(--color-danger);
+  }
+
+  .jobcan-enhanced .work-progress-container[data-punch-anomaly='true'] {
+    border-color: color-mix(in srgb, var(--color-danger) 45%, transparent 55%);
+  }
+
   @container flip-clock (max-width: 520px) {
     .jobcan-enhanced .work-progress-percentage {
       font-size: 11px;
-      column-gap: clamp(4px, 1.5cqi, 10px);
-    }
-
-    .jobcan-enhanced .work-progress-inline-label {
-      font-size: 10px;
     }
 
     .jobcan-enhanced .work-progress-inline-status {
@@ -2093,18 +2352,6 @@
       word-break: break-word;
       text-overflow: unset;
     }
-  }
-  
-  .jobcan-enhanced .work-progress-marker {
-    display: none;
-  }
-  
-  .jobcan-enhanced .work-progress-marker.start-marker {
-    left: 0;
-  }
-  
-  .jobcan-enhanced .work-progress-marker.end-marker {
-    right: 0;
   }
   
   .jobcan-enhanced .time-scale-marker {
@@ -2118,11 +2365,60 @@
     box-shadow: 0 0 0 1px var(--color-work-progress-scale-ring);
   }
 
-  .jobcan-enhanced .time-scale-marker.first-scale-marker {
+  /* ---- Daily-target notch -------------------------------------------------
+     When the 8h target was hit, or is projected to be. Hidden until there is work to
+     measure or project from; dashed while it is still an estimate. */
+  .jobcan-enhanced .work-target-marker {
+    position: absolute;
+    top: -3px;
+    bottom: -3px;
+    width: 2px;
+    margin-left: -1px;
+    z-index: 8;
     display: none;
+    background: var(--color-work-target);
+    border-radius: 999px;
+    pointer-events: auto;
+    cursor: help;
+  }
+
+  .jobcan-enhanced .work-target-marker.is-visible {
+    display: block;
+  }
+
+  /* The flag head, so the notch reads as a goal line rather than another punch. */
+  .jobcan-enhanced .work-target-marker::before {
+    content: '';
+    position: absolute;
+    top: -2px;
+    left: 50%;
+    width: 7px;
+    height: 7px;
+    transform: translateX(-50%) rotate(45deg);
+    background: var(--color-work-target);
+    border-radius: 1px;
+  }
+
+  .jobcan-enhanced .work-target-marker.is-projected {
+    background: repeating-linear-gradient(
+      180deg,
+      var(--color-work-target) 0 3px,
+      transparent 3px 6px
+    );
+    opacity: 0.8;
+  }
+
+  .jobcan-enhanced .work-target-marker.is-projected::before {
+    background: transparent;
+    border: 1.5px solid var(--color-work-target);
   }
 
   .jobcan-enhanced .work-punch-marker {
+    /* Positioning moved here from the old injected stylesheet; JS sets `left`. */
+    position: absolute;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: auto;
     width: var(--work-dot-normal-width);
     height: var(--work-dot-normal-height);
     border: 2px solid var(--color-work-progress-marker-border);
@@ -2138,11 +2434,30 @@
       box-shadow 0.18s ease;
   }
 
+  /* Pinned to an axis edge because the punch falls outside 06:00–24:00. Hollowed out
+     so it does not read as an exact position; the tooltip carries the real time. */
+  .jobcan-enhanced .work-punch-marker.is-outside-axis {
+    opacity: 0.75;
+    border-style: dashed;
+  }
+
+  /* The whole hover response now lives on the individual marker. It keeps its centre
+     while growing, so the position it reports never appears to move. */
   .jobcan-enhanced .work-punch-marker:hover {
-    transform: translate(-50%, -50%) scale(1.02);
+    width: var(--work-dot-hover-size);
+    height: var(--work-dot-hover-size);
+    border-radius: 50%;
+    z-index: 7;
+    box-shadow:
+      0 0 0 3px var(--color-work-progress-marker-hover-ring),
+      0 4px 12px var(--color-work-progress-marker-hover-shadow);
   }
 
   .jobcan-enhanced .work-progress-indicator {
+    /* Positioning moved here from the old injected stylesheet; JS sets `left`. */
+    position: absolute;
+    top: 50%;
+    transform: translate(-50%, -50%);
     width: 4px;
     height: 14px;
     border-radius: 999px;
@@ -2671,18 +2986,20 @@
   
 
   
-  /* Optimized flip animation with GPU acceleration */
-  @keyframes flipAnimationOptimized {
-    0% { 
-      transform: rotateX(0deg) translateZ(0); 
-      backface-visibility: hidden;
-    }
-    100% { 
-      transform: rotateX(180deg) translateZ(0);
-      backface-visibility: hidden;
-    }
+  /* The split-flap leaf falling forward over the lower half. Hinged on its bottom
+     edge (transform-origin on .flip-leaf), so -180deg lands it face-down on the
+     bottom of the tile with its back face — the incoming digit — upright. */
+  @keyframes jbeFlipLeaf {
+    from { transform: rotateX(0deg); }
+    to { transform: rotateX(-180deg); }
   }
   
+  @keyframes clockCelebrate {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+  }
+
   /* Optimized colon pulse animation */
   @keyframes colonPulseOptimized {
     0%, 50%, 100% { 
@@ -3504,28 +3821,6 @@
   /* ==========================================================================
      12. Utilities
      ========================================================================== */
-  /* Hide empty padding div */
-  .jobcan-enhanced .text-right.px-3.py-3 {
-    display: none !important;
-  }
+  /* (The .text-right.px-3.py-3 hide rule that was duplicated here lives in §1,
+     next to the #sidemenu exception it needs.) */
 
-  /* Fix for duplicate sidemenus */
-  .jobcan-enhanced .sidemenu + .sidemenu,
-  .jobcan-enhanced #sidemenu + #sidemenu,
-  .jobcan-enhanced .sidemenu.hidden,
-  .jobcan-enhanced #sidemenu.hidden,
-  .jobcan-enhanced .sidemenu[style*="display: none"],
-  .jobcan-enhanced #sidemenu[style*="display: none"] {
-    display: none !important;
-  }
-
-  /* Ensure proper display for open/closed states */
-  .jobcan-enhanced .menuArea[style*="display: none"] + .menuArea,
-  .jobcan-enhanced .menuArea.closed + .menuArea,
-  .jobcan-enhanced .sidebar-collapsed .sidemenu,
-  .jobcan-enhanced .sidebar-hidden .sidemenu,
-  .jobcan-enhanced .menu-collapsed .sidemenu,
-  .jobcan-enhanced .sidemenu.closed,
-  .jobcan-enhanced #sidemenu.closed {
-    display: none !important;
-  }

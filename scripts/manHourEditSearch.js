@@ -339,10 +339,22 @@
   // pinned project label only appears in project dropdowns anyway, so one set is
   // enough for both プロジェクト and タスク.
   const PIN_STORE_KEY = 'jbe_manhour_pins';
-  let pins;
-  try { pins = new Set(JSON.parse(localStorage.getItem(PIN_STORE_KEY) || '[]')); }
-  catch (_) { pins = new Set(); }
-  function savePins() { try { localStorage.setItem(PIN_STORE_KEY, JSON.stringify([...pins])); } catch (_) {} }
+  // manHourEdit.js (ISOLATED world) can toggle a pin too, from the row popover on
+  // an already-filled project cell. The two worlds share the page's localStorage
+  // but not this Set, and a same-document write fires no `storage` event — so
+  // whichever side writes announces it with a DOM event, which does cross the
+  // world boundary. Keep the key and the event name in sync with that file.
+  const PIN_CHANGE_EVENT = 'jbe:manhour-pins-changed';
+  function readPins() {
+    try { return new Set(JSON.parse(localStorage.getItem(PIN_STORE_KEY) || '[]')); }
+    catch (_) { return new Set(); }
+  }
+  let pins = readPins();
+  function savePins() {
+    try { localStorage.setItem(PIN_STORE_KEY, JSON.stringify([...pins])); } catch (_) {}
+    try { window.dispatchEvent(new CustomEvent(PIN_CHANGE_EVENT)); } catch (_) {}
+  }
+  window.addEventListener(PIN_CHANGE_EVENT, () => { pins = readPins(); });
   const pinKey = (label) => String(label == null ? '' : label).trim();
   const isPinned = (label) => pins.has(pinKey(label));
   function togglePin(label) { const k = pinKey(label); if (!k) return; if (pins.has(k)) pins.delete(k); else pins.add(k); savePins(); }
@@ -486,12 +498,27 @@
   // not once. Once the full unit list is cached, answer SYNCHRONOUSLY from it
   // (prefix + substring + kana-folded). The cached items carry the same
   // {id,label,value} as the native ones (same API), so selection/save is unaffected.
+  // The kind (project / task) a unit input belongs to, from its column position.
+  function kidForInput(input) {
+    if (!kindsCache) return null;
+    const idx = rowUnitInputs(input).indexOf(input);
+    const kind = idx >= 0 ? kindsCache[idx] : null;
+    return (kind && kind.id) || null;
+  }
+
   function patchSearch(input, inst) {
     if (!inst || (inst._search && inst._search.__jbe)) return; // already ours
     if (!kindsCache) return;                                   // kinds not ready yet
-    const idx = rowUnitInputs(input).indexOf(input);
-    const kid = kindsCache[idx] ? kindsCache[idx].id : null;
+    const kid = kidForInput(input);
     if (!kid) return;
+
+    // jQuery-UI checks options.minLength BEFORE it calls _search, so with Jobcan's
+    // default the ranked list could never answer an EMPTY term — focusing a blank
+    // project cell showed nothing until the first keystroke, even though the whole
+    // pinned/最近 ranking was already sitting in the cache. Force it to 0 so
+    // openRankedList() below can open the list on focus with no typing. Re-set on
+    // every (re)patch: Jobcan recreates the widget with its own options.
+    try { inst.options.minLength = 0; } catch (_) { /* not fatal — typing still works */ }
     loadFullList(kid); // warm the cache
     const origSearch = inst._search;
     const patched = function (value) {
@@ -535,6 +562,41 @@
     if (inst) patchSearch(input, inst);
   }
 
+  // --- open the ranked list on focus, no typing required ----------------------
+  //
+  // On a normal day you book to one of a handful of projects, all of which are
+  // already pinned or badged 最近 and therefore already at the top of the ranked
+  // list. Requiring a keystroke to see that list was pure friction: focus the cell,
+  // and the same list opens by itself, so a normal entry is two clicks.
+  //
+  // Only fires when the full unit list is already cached for that kind. On a cold
+  // start the patched _search falls through to Jobcan's paginated loader, and an
+  // empty term there would spend a request per focus on a list we are about to have
+  // anyway — worse, it would open a dropdown ranked the native way (code prefix),
+  // which is the ordering this feature exists to avoid.
+  //
+  // Retries because Jobcan creates the widget LAZILY on first focus: at the first
+  // tick of a focusin there is often no instance yet, so nothing to patch or open.
+  const OPEN_RETRY_MS = [60, 140, 260];
+
+  function openRankedList(input, attempt) {
+    const n = attempt || 0;
+    if (input.value) return;                      // editing a filled cell — don't cover it
+    if (document.activeElement !== input) return; // focus moved on while we waited
+
+    const kid = kidForInput(input);
+    if (kid && Array.isArray(lists[kid])) {
+      let inst = null;
+      try { inst = window.jQuery(input).autocomplete('instance'); } catch (_) { inst = null; }
+      // Only once the patch is in place, or we would open the native ranking.
+      if (inst && inst._search && inst._search.__jbe) {
+        try { window.jQuery(input).autocomplete('search', ''); } catch (_) {}
+        return;
+      }
+    }
+    if (n < OPEN_RETRY_MS.length) setTimeout(() => openRankedList(input, n + 1), OPEN_RETRY_MS[n]);
+  }
+
   // Pre-warm: resolve the kinds (cached for re-patching) and load the full unit
   // lists as early as possible (on page load, before the user focuses a field) so
   // substring search is ready by the time they type — ~600 items / several pages.
@@ -559,6 +621,9 @@
       ensurePatched(t);
       setTimeout(() => ensurePatched(t), 60);
       setTimeout(() => ensurePatched(t), 200);
+      // Focus only — on `input` the user is already typing and jQuery-UI is
+      // running its own search; a second one here would fight it.
+      if (e.type === 'focusin') openRankedList(t);
     }
   };
   document.addEventListener('focusin', repatchFromEvent, true);

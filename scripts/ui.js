@@ -1,7 +1,7 @@
 // scripts/ui.js
 
-/* exported setupCleanupObserver, initDarkMode, fixDuplicateSidemenus,
-   enhanceSidemenuBehavior, setupHeaderVisibility, enhanceManagerNameDisplay,
+/* exported setupCleanupObserver, initDarkMode,
+   setupHeaderVisibility, enhanceManagerNameDisplay,
    enhanceUserDisplay, setupMenuOrderDropdown, fixSettingsIcon,
    foldSignInRightContainer, removeLogoBorder, autoCollapseExternalPanelMisc */
 
@@ -77,64 +77,28 @@ chrome.runtime.onMessage.addListener(function(message) {
 // won at runtime and this one was dead — but either file changing load order
 // would have silently swapped which cleanup ran.
 
-// Fix duplicate side menus issue
-function fixDuplicateSidemenus() {
-  const sidemenus = document.querySelectorAll('#sidemenu, .sidemenu');
-  if (sidemenus.length > 1) {
-    let visibleFound = false;
-    sidemenus.forEach((menu, index) => {
-      if (index === 0 && getComputedStyle(menu).display !== 'none') {
-        visibleFound = true;
-        return;
-      }
-      if (visibleFound) {
-        menu.style.display = 'none';
-      } else if (getComputedStyle(menu).display !== 'none') {
-        visibleFound = true;
-      }
-    });
-  }
-  // Guard the clone-and-replace: applyEnhancements() re-runs off a debounced
-  // body-wide MutationObserver, so without this every pass replaced these live
-  // nodes (~once a second during DOM churn) — and each replacement was itself a
-  // childList mutation feeding the same observer. Every sibling enhancer here is
-  // guarded this way; this one was not.
-  const menuToggleButtons = document.querySelectorAll('[data-toggle="sidemenu"], .menu-toggle, .sidebar-toggle');
-  menuToggleButtons.forEach(button => {
-    if (button.dataset.jbeToggleBound === 'true') return;
-    const newButton = button.cloneNode(true);
-    newButton.dataset.jbeToggleBound = 'true';
-    if (button.parentNode) {
-      button.parentNode.replaceChild(newButton, button);
-      newButton.addEventListener('click', function(e) {
-        e.preventDefault();
-        fixDuplicateSidemenus();
-        setTimeout(fixDuplicateSidemenus, 300);
-      });
-    }
-  });
-}
-
-// Enhance sidemenu behavior to close when mouse moves outside
-function enhanceSidemenuBehavior() {
-  const closeButtons = document.querySelectorAll('.sidemenu-close, .jbc-sidemenu-close, [onclick*="closeSidemenu"]');
-  closeButtons.forEach(button => { if (button) button.style.display = 'none'; });
-  const sidemenu = document.querySelector('#sidemenu, .sidemenu, .jbc-sidemenu');
-  const closedSideMenu = document.querySelector('#sidemenu-closed, .jbc-sidemenu-closed');
-  if (closedSideMenu && !closedSideMenu.hasAttribute('onclick')) {
-    closedSideMenu.setAttribute('onclick', 'openSidemenu()');
-    closedSideMenu.style.cursor = 'pointer';
-  }
-  if (sidemenu && sidemenu.dataset.jbeMouseenterBound !== 'true') {
-    // Guard: enhanceSidemenuBehavior() runs on every applyEnhancements(), so bind
-    // the listener only once per sidemenu element — otherwise a fresh mouseenter
-    // listener stacks on the same element on every re-apply.
-    sidemenu.dataset.jbeMouseenterBound = 'true';
-    sidemenu.addEventListener('mouseenter', function() {
-      sidemenu.dataset.mouseInside = 'true';
-    });
-  }
-}
+// fixDuplicateSidemenus() and enhanceSidemenuBehavior() used to live here. Both
+// were removed after measuring what they matched on the live pages
+// (/employee/man-hour-manage/achievement-list and /employee/attendance):
+//
+//   * fixDuplicateSidemenus() was a no-op. Jobcan renders exactly ONE
+//     `#sidemenu, .sidemenu` per page, so the de-dup loop never entered its
+//     `length > 1` branch, and `[data-toggle="sidemenu"], .menu-toggle,
+//     .sidebar-toggle` matched 0 elements, so the clone-and-rebind block never
+//     ran either. It re-queried all of that on every applyEnhancements() pass.
+//   * enhanceSidemenuBehavior() actively broke the menu: it hid
+//     `[onclick*="closeSidemenu"]`, which is Jobcan's ONLY collapse control
+//     (#sidemenu > button.jbc-sidemenu-btn). Once opened, the menu could not be
+//     closed — and the collapsed state is the one where .jbc-container drops its
+//     1140px cap, so it also cost ~670px of content width. The `mouseenter`
+//     handler that was meant to replace it only ever wrote
+//     `dataset.mouseInside`, which nothing read; the close-on-mouse-out it
+//     promised was never implemented. Setting `onclick="openSidemenu()"` on
+//     #sidemenu-closed was dead too — Jobcan already ships that attribute.
+//
+// The matching CSS (the hide rule for the closer, `.side-closed ~ .contentsArea`,
+// and the duplicate-sidemenu blocks) went with them. Menu open/close is Jobcan's
+// own openSidemenu()/closeSidemenu(); the extension only skins it now.
 
 // Make header always visible and style navigation
 function setupHeaderVisibility() {

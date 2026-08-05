@@ -196,6 +196,17 @@
     --color-clock-colon-working: #2d8bd8;
     --color-clock-colon-not-working: #7d8a99;
     --color-clock-text: var(--color-white);
+    /* Tile colour before #working_status has been read. Matches the not-working
+       greys so a hard reload settles into 退室中 with no visible change, and the
+       brand blue only ever appears once 勤務中 is actually confirmed. */
+    --color-clock-pending-start: #515861;
+    --color-clock-pending-end: #7d8a99;
+    /* Daily-target notch on the work progress track. */
+    --color-work-target: #b45309;
+    /* HH / MM / SS panel behind each digit pair, and the flap hinge line. */
+    --color-clock-group-bg: rgba(15, 23, 42, 0.04);
+    --color-clock-group-border: rgba(15, 23, 42, 0.07);
+    --color-clock-seam: rgba(0, 0, 0, 0.26);
     --color-work-segment-working-start: #1e7cf2;
     --color-work-segment-working-end: #13a26b;
     --color-work-segment-off-start: #858e99;
@@ -276,6 +287,12 @@
     --color-table-hover-bg: var(--color-gray-150);
     --color-table-stripe-bg: rgba(255, 255, 255, 0.02);
     --color-calendar-bg: #272736;
+
+    /* Flip clock: the panel and hinge have to invert, the tile gradients do not. */
+    --color-work-target: #fbbf24;
+    --color-clock-group-bg: rgba(255, 255, 255, 0.05);
+    --color-clock-group-border: rgba(255, 255, 255, 0.09);
+    --color-clock-seam: rgba(0, 0, 0, 0.45);
 
     --color-primary-hover-bg: #00356b;
     --color-primary-active-bg: #003366;

@@ -121,8 +121,6 @@ function applyEnhancements() {
 
   // UI tweaks
   if (isEmployeePage) {
-    if (typeof fixDuplicateSidemenus === 'function') fixDuplicateSidemenus();
-    if (typeof enhanceSidemenuBehavior === 'function') enhanceSidemenuBehavior();
     if (typeof setupHeaderVisibility === 'function') setupHeaderVisibility();
     if (typeof enhanceManagerNameDisplay === 'function') enhanceManagerNameDisplay();
     if (typeof enhanceUserDisplay === 'function') enhanceUserDisplay();

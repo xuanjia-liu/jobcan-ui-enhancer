@@ -321,6 +321,57 @@
   }
 
   const COPY_ICON = '<svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M4 2a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-1v1a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h1V2zm1 1h5a2 2 0 0 1 2 2v6a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H6a1 1 0 0 0-1 1v1zM4 4a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1V5a1 1 0 0 0-1-1H4z"/></svg>';
+  const PIN_ICON = '<svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M4.146.146A.5.5 0 0 1 4.5 0h7a.5.5 0 0 1 .354.854L10.707 2H11.5a.5.5 0 0 1 .5.5v3a.5.5 0 0 1-.5.5h-.5l-.5 4 1.5 1.5a.5.5 0 0 1-.354.854H8.5v3a.5.5 0 0 1-1 0v-3H4.354A.5.5 0 0 1 4 11.854L5.5 10.354 5 6h-.5A.5.5 0 0 1 4 5.5v-3a.5.5 0 0 1 .5-.5h.793L4.146.854A.5.5 0 0 1 4.146.146z"/></svg>';
+
+  // --- pin store, shared with manHourEditSearch.js (MAIN world) ---------------
+  //
+  // Pinning used to require opening the dropdown to reach the pin button on an
+  // option — so you could only pin a project you were in the middle of searching
+  // for, which is backwards: the ones worth pinning are the ones already in your
+  // rows. This popover is the ISOLATED-world half of the same store.
+  //
+  // Both worlds read the same localStorage key, but the MAIN world holds its copy
+  // in a Set and a same-document write fires no `storage` event. So the writer
+  // announces the change with a DOM event, which does cross the world boundary.
+  // Keep the key and event name in sync with manHourEditSearch.js.
+  const PIN_STORE_KEY = 'jbe_manhour_pins';
+  const PIN_CHANGE_EVENT = 'jbe:manhour-pins-changed';
+
+  function readPins() {
+    try { return new Set(JSON.parse(localStorage.getItem(PIN_STORE_KEY) || '[]')); }
+    catch (_) { return new Set(); }
+  }
+
+  // Keyed on the whole "(code)name" label, exactly as the dropdown keys it: the
+  // input's value IS that label, and trim() folds the trailing U+3000 the API
+  // sometimes appends (the dropdown side strips it the same way, so the two keys
+  // agree). Deliberately NOT rebuilt from the mask's code/name, which are trimmed
+  // separately and would drop any space between "(code)" and the name.
+  const pinKeyForValue = (value) => String(value == null ? '' : value).trim();
+
+  function isPinnedValue(value) {
+    const key = pinKeyForValue(value);
+    return !!key && readPins().has(key);
+  }
+
+  // Returns the new pinned state.
+  function togglePinnedValue(value) {
+    const key = pinKeyForValue(value);
+    if (!key) return false;
+    const pins = readPins();
+    if (pins.has(key)) pins.delete(key); else pins.add(key);
+    try { localStorage.setItem(PIN_STORE_KEY, JSON.stringify([...pins])); } catch (_) { /* quota */ }
+    try { window.dispatchEvent(new CustomEvent(PIN_CHANGE_EVENT)); } catch (_) {}
+    return pins.has(key);
+  }
+
+  function paintPinButton(btn, pinned) {
+    if (!btn) return;
+    btn.classList.toggle('is-pinned', pinned);
+    btn.title = pinned ? 'ピン留めを解除' : 'ドロップダウンの上部にピン留め';
+    const label = btn.querySelector('span');
+    if (label) label.textContent = pinned ? 'ピン留め中' : 'ピン留め';
+  }
 
   let unitPop = null;
   let unitPopHideTimer = null;
@@ -331,11 +382,19 @@
     unitPop.id = 'jbe-unit-idpop';
     unitPop.innerHTML =
       '<code class="jbe-unit-idpop-code"></code>'
+      + `<button type="button" class="jbe-unit-idpop-btn jbe-unit-idpop-pin" data-jbe-pin>${PIN_ICON}<span>ピン留め</span></button>`
       + `<button type="button" class="jbe-unit-idpop-btn" data-jbe-copy="code">${COPY_ICON}<span>IDをコピー</span></button>`
       + `<button type="button" class="jbe-unit-idpop-btn" data-jbe-copy="name">${COPY_ICON}<span>プロジェクト名をコピー</span></button>`;
 
     unitPop.addEventListener('mousedown', (e) => e.preventDefault()); // keep focus put
     unitPop.addEventListener('click', (e) => {
+      const pinBtn = e.target.closest('[data-jbe-pin]');
+      if (pinBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        paintPinButton(pinBtn, togglePinnedValue(unitPop.dataset.pinKey));
+        return;
+      }
       const btn = e.target.closest('[data-jbe-copy]');
       if (!btn) return;
       e.preventDefault();
@@ -365,6 +424,11 @@
     pop.dataset.code = mask.dataset.code || '';
     pop.dataset.name = mask.dataset.name || '';
     pop.querySelector('.jbe-unit-idpop-code').textContent = pop.dataset.code;
+
+    // Read the pinned state fresh: the dropdown's own pin buttons (MAIN world) may
+    // have changed it since the last time this popover opened.
+    pop.dataset.pinKey = pinKeyForValue(input.value);
+    paintPinButton(pop.querySelector('[data-jbe-pin]'), isPinnedValue(input.value));
 
     const GAP = 6;
     const r = input.getBoundingClientRect();

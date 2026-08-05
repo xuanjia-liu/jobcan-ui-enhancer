@@ -32,8 +32,6 @@ const crossFileGlobals = {
   // scripts/ui.js
   setupCleanupObserver: 'readonly',
   initDarkMode: 'readonly',
-  fixDuplicateSidemenus: 'readonly',
-  enhanceSidemenuBehavior: 'readonly',
   setupHeaderVisibility: 'readonly',
   enhanceManagerNameDisplay: 'readonly',
   enhanceUserDisplay: 'readonly',
