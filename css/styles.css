@@ -253,7 +253,6 @@
 
   .jobcan-enhanced .jbe-navbar-item:hover {
     background-color: var(--color-black-8);
-    transform: translateY(-1px);
     box-shadow: var(--shadow-button-sm);
   }
 
@@ -1191,16 +1190,32 @@
     border-radius: var(--border-radius-md);
     padding: 8px 16px;
     transition: var(--transition);
-    will-change: transform, box-shadow;
+    /* No transform is animated on hover any more (see below), so promoting one just
+       burns a compositor layer on every button. */
+    will-change: box-shadow;
   }
-  
+
+  /* Buttons do not shift on hover — colour and shadow carry the state. A 1-2px lift
+     nudges whatever sits next to the button, and in a dense table it reads as the row
+     twitching. Keep every button-family :hover below transform-free. */
   .jobcan-enhanced .btn:hover,
   .jobcan-enhanced :where(button:hover),
   .jobcan-enhanced :where(input[type="button"]:hover),
   .jobcan-enhanced :where(input[type="submit"]:hover) {
-    background-color: var(--color-primary-dark);
-    transform: translateY(-2px);
+    /* Same hue, lower value (#0068de). --color-primary-dark is #0040ff — a violet
+       blue against the #0077ff rest state, so it read as a different button rather
+       than a hovered one. */
+    background-color: color-mix(in srgb, var(--color-primary) 87%, #000);
     box-shadow: var(--shadow-primary-hover);
+  }
+
+  /* On a dark surface a filled button has to come forward, and darkening makes it
+     recede — so lighten on the same hue instead (#1f87ff). */
+  .jobcan-enhanced body.dark-mode .btn:hover,
+  .jobcan-enhanced body.dark-mode :where(button:hover),
+  .jobcan-enhanced body.dark-mode :where(input[type="button"]:hover),
+  .jobcan-enhanced body.dark-mode :where(input[type="submit"]:hover) {
+    background-color: color-mix(in srgb, var(--color-primary) 88%, #fff);
   }
   
   /* Small buttons with white background */
@@ -1234,13 +1249,17 @@
   .jobcan-enhanced :where(td button:hover),
   .jobcan-enhanced td .btn:hover,
   .jobcan-enhanced .btn-secondary:hover {
-    background-color: var(--color-white);
+    /* Was var(--color-white) + var(--color-primary) — both already the rest values,
+       so in light mode the entire hover was a border swap plus a shadow going from
+       rgba(0,0,0,.05) to rgba(0,0,0,.08). Measured: bg #fdfdfd → #fdfdfd, text
+       #0278ff → #0278ff. The lift that used to sit here was doing all the work.
+       Dark mode overrides this block (variables.css) and already reads clearly. */
+    background-color: color-mix(in srgb, var(--color-primary) 10%, var(--color-white));
     color: var(--color-primary);
-    transform: translateY(-1px);
     box-shadow: var(--shadow-button-sm-hover);
     border-color: var(--color-primary);
   }
-  
+
   /* Icon-only small buttons */
   .jobcan-enhanced .btn-icon,
   .jobcan-enhanced :where(button.icon),
@@ -1261,9 +1280,10 @@
   .jobcan-enhanced .btn-icon:hover,
   .jobcan-enhanced :where(button.icon:hover),
   .jobcan-enhanced .icon-btn:hover {
-    background-color: var(--color-gray-100);
+    /* Same primary tint as the small-button family above, rather than a neutral
+       grey, so the two read as one system. */
+    background-color: color-mix(in srgb, var(--color-primary) 10%, var(--color-white));
     color: var(--color-primary);
-    transform: translateY(-1px);
     box-shadow: var(--shadow-button-sm-hover);
     border-color: var(--color-primary);
   }
@@ -1600,7 +1620,6 @@
     color: var(--color-primary);
     background-color: var(--color-primary-light);
     border-color: var(--color-primary);
-    transform: translateY(-1px);
   }
   
   .jobcan-enhanced .pagination .page-item.active .page-link {

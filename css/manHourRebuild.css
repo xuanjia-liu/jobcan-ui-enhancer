@@ -8,6 +8,267 @@
  */
 
 /* ------------------------------------------------------------------ */
+/* Achievement-list page: 表示月度 search bar                            */
+/* ------------------------------------------------------------------ */
+
+/* .jbe-mh-searchbar is stamped on by restyleSearchBar() so none of this leaks onto
+   another page's .search_wrapper. */
+
+.jobcan-enhanced .jbe-mh-searchbar {
+  flex-wrap: wrap;
+  gap: 10px 16px;
+}
+
+/* The 表示月度 caption only repeats the 年 / 月度 already printed between the two
+   selects. */
+.jobcan-enhanced .jbe-mh-searchbar > span.col-auto {
+  display: none !important;
+}
+
+/* col's `flex: 1 0 0%` stretches the form across the row and leaves the actions no
+   room; let it size to its content and push them right instead. */
+.jobcan-enhanced .jbe-mh-searchbar > #search-term {
+  flex: 0 1 auto;
+}
+
+.jobcan-enhanced .jbe-mh-searchbar #search .form-inline {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 4px;
+}
+
+/* 年 / 月度 are bare text nodes between the selects. */
+.jobcan-enhanced .jbe-mh-searchbar .jbc-ymd-select {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 4px;
+}
+
+.jobcan-enhanced .jbe-mh-searchbar #year,
+.jobcan-enhanced .jbe-mh-searchbar #month,
+.jobcan-enhanced .jbe-mh-searchbar #search input.btn {
+  height: 32px !important;
+  min-height: 0 !important;
+}
+
+.jobcan-enhanced .jbe-mh-searchbar #year,
+.jobcan-enhanced .jbe-mh-searchbar #month {
+  padding: 0 24px 0 10px !important;
+  background-position: right 7px center;
+}
+
+.jobcan-enhanced .jbe-mh-searchbar #search input.btn {
+  padding: 0 16px !important;
+  line-height: 1;
+}
+
+/* < / > / 📅 shipped at 22×27 against 38px selects. Square them off to the new
+   32px control height so the row reads as one band. */
+.jobcan-enhanced .jbe-mh-searchbar #search .btn.d-inline-flex {
+  width: 32px;
+  height: 32px;
+  padding: 0 !important;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+}
+
+.jobcan-enhanced .jbe-mh-searchbar #search .btn.d-inline-flex svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* The download actions ride inside #dsbd-buttons (their delegation root) into the
+   gap on the right of the search bar. */
+.jobcan-enhanced .jbe-mh-searchbar > #dsbd-buttons {
+  width: auto;
+  margin: 0 0 0 auto;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+/* One 32px control row across the whole bar. Two things were off, measured:
+   #search is not a flex container, so 表示 (an inline-replaced <input>) sat on the
+   line box's baseline and rendered 4.5px low — 32px @175.2 against the select
+   group's 32px @170.7; and the download actions are <button>s *outside* #search, so
+   the sizing above never reached them and they kept the global .btn
+   `padding: 8px 16px` + 21px line-height, coming out 37px. */
+.jobcan-enhanced .jbe-mh-searchbar #search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.jobcan-enhanced .jbe-mh-searchbar #jbe-dsbd-actions .btn,
+.jobcan-enhanced .jbe-mh-searchbar #jbe-dsbd-actions button {
+  height: 32px;
+  min-height: 0;
+  padding: 0 16px;
+  /* inline-flex centres the label inside the 32px box whatever line-height it
+     inherits, rather than depending on symmetrical vertical padding. */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+/* ⚙ is an icon button — square it like the < > and calendar buttons. */
+.jobcan-enhanced .jbe-mh-searchbar #show-csv-options {
+  width: 32px;
+  padding: 0 !important;
+}
+
+/* ------------------------------------------------------------------ */
+/* Achievement-list page: 集計軸 controls                                */
+/* ------------------------------------------------------------------ */
+
+/* Row 1 of the #dsbd grid, spanning the pie and bar columns so the controls sit
+   centred over the charts they drive.
+   `display` is !important because Jobcan's showSummary ends with
+   `$dsbd.children().show()`, which writes an inline display onto every #dsbd child. */
+.jobcan-enhanced #jbe-axis-bar {
+  display: flex !important;
+  grid-column: 1 / 3;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px 22px;
+  padding: 14px 12px 2px;
+}
+
+.jobcan-enhanced #jbe-axis-bar .unload-no-track {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px 22px;
+}
+
+.jobcan-enhanced #jbe-axis-bar label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-secondary, #666);
+  white-space: nowrap;
+}
+
+/* Driven by the tab strip now, but kept in the DOM — Jobcan reads its value and
+   rebuilds its <option>s on every render. */
+.jobcan-enhanced #jbe-axis-bar #axis1 {
+  display: none !important;
+}
+
+.jobcan-enhanced #jbe-axis1-tabs {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: 999px;
+  background: var(--color-surface, #eef0f3);
+}
+
+.jobcan-enhanced .jbe-axis-tab {
+  padding: 5px 16px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-text-secondary, #666);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.3;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.jobcan-enhanced .jbe-axis-tab:hover {
+  color: var(--color-text-primary, #333);
+}
+
+.jobcan-enhanced .jbe-axis-tab.is-active {
+  background: var(--color-primary, #0077ff);
+  color: #fff;
+}
+
+.jobcan-enhanced .jbe-axis-tab:focus-visible {
+  outline: 2px solid var(--color-focus-ring-strong, rgba(16, 159, 255, 0.42));
+  outline-offset: 1px;
+}
+
+.jobcan-enhanced #jbe-axis-bar select {
+  height: 32px !important;
+  min-height: 0 !important;
+  font-size: 13px;
+}
+
+/* Jobcan d-none's whichever dimension 集計軸1 took, so with only two defined this
+   select is left holding a single option — a dropdown that cannot be dropped.
+   Render it as the static label it actually is. */
+.jobcan-enhanced #jbe-axis-bar select.jbe-axis-static {
+  /* These are bare <select>s with no Bootstrap class, so the caret is the native
+     one — only appearance:none removes it. */
+  appearance: none;
+  -webkit-appearance: none;
+  padding: 0 2px !important;
+  border-color: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  color: var(--color-text-primary, #333) !important;
+  font-weight: 600;
+  cursor: default;
+  pointer-events: none;
+}
+
+/* ------------------------------------------------------------------ */
+/* Achievement-list page: dashboard action buttons                     */
+/* ------------------------------------------------------------------ */
+
+/* PDF / CSV / ⚙ collected out of the #dsbd grid into the #dsbd-buttons row by
+   groupDashboardButtons() in scripts/manHourList.js. Jobcan already gives that row
+   `display:flex; justify-content:space-between`, so this is simply its second flex
+   item and sits hard right of the 集計軸 selects. */
+.jobcan-enhanced #jbe-dsbd-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-left: auto;
+}
+
+/* ⚙ configures the CSV export — keep it welded to that button. */
+.jobcan-enhanced #jbe-dsbd-actions #csv {
+  margin-right: -4px;
+}
+
+/* The BOM checkbox the ⚙ reveals. Own line under the buttons, as in Jobcan's
+   original layout — it must stay the gear's next sibling, so it cannot simply be
+   placed to the left. jQuery's .show() writes an inline `display`, which is why
+   nothing here sets one. */
+.jobcan-enhanced #jbe-dsbd-actions #csv-options {
+  flex: 0 0 100%;
+  margin: 0;
+  padding: 6px 0 0;
+  white-space: nowrap;
+}
+
+.jobcan-enhanced #jbe-dsbd-actions #csv-options label {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--color-text-secondary, #666);
+}
+
+/* A wrapper we emptied is still a #dsbd grid item and still reserves its row. */
+.jobcan-enhanced #dsbd > .jbe-dsbd-emptied {
+  display: none !important;
+}
+
+/* ------------------------------------------------------------------ */
 /* Achievement-list page: filter buttons + mismatch highlighting       */
 /* ------------------------------------------------------------------ */
 
@@ -57,6 +318,26 @@
    (tinted) mismatch row — plain --color-danger sits at ~3.5:1 there. */
 .jobcan-enhanced body.dark-mode #list td.date.jbe-mismatch-date {
   color: color-mix(in srgb, var(--color-danger, #DC3545) 72%, #ffffff 28%);
+}
+
+/* Hover the whole DAY, not one entry row.
+   A day's date / 合計 / 総労働時間 / 最終更新 cells are rowspan'd onto its first
+   <tr>, so styles.css's `tr:hover td` repaints only the row under the cursor and a
+   five-entry day looks like a one-row selection. scripts/manHourList.js tags every
+   row of a day with data-jbe-day and mirrors .jbe-day-hover across the group.
+   The #list id is what lets these beat the !important single-row hover rule. */
+.jobcan-enhanced #list tr.jbe-day-hover > td {
+  background-color: var(--color-table-hover-bg, #f0f7ff) !important;
+}
+
+/* Mismatch days keep their red identity while hovered — a step up from the
+   at-rest tint rather than the neutral hover grey. */
+.jobcan-enhanced #list tr.jbe-mismatch-row.jbe-day-hover > td {
+  background-color: color-mix(in srgb, var(--color-danger, #DC3545) 18%, transparent) !important;
+}
+
+.jobcan-enhanced body.dark-mode #list tr.jbe-mismatch-row.jbe-day-hover > td {
+  background-color: color-mix(in srgb, var(--color-danger, #DC3545) 26%, transparent) !important;
 }
 
 /* ------------------------------------------------------------------ */
@@ -152,29 +433,102 @@
 /* Achievement-list page: per-day edit link + delta badge              */
 /* ------------------------------------------------------------------ */
 
+/* Jobcan writes `text-decoration: underline` as an INLINE style on td.date, and a
+   decoration set on a block propagates to every inline descendant — the child
+   cannot switch it off. So the date came out with Jobcan's solid underline *and*
+   our dotted border-bottom (pushed 4px down and 16px wide by the `padding: 4px 8px`
+   styles.css puts on every .jbc-table a), and the delta badge below inherited the
+   underline too, reading as struck-through. Kill it at the source — only
+   !important beats an inline style — and let the link own its own affordance.
+   The narrower cell padding buys the link's pill room in a ~68px column. */
+.jobcan-enhanced #list td.date {
+  text-decoration: none !important;
+  padding: 6px 4px !important;
+  line-height: 1.25;
+}
+
 .jobcan-enhanced #list td.date .jbe-day-link {
+  display: inline-block;
+  padding: 2px 7px !important;
+  border-radius: 6px;
   color: inherit;
-  text-decoration: none;
-  border-bottom: 1px dotted currentColor;
-}
-
-.jobcan-enhanced #list td.date .jbe-day-link:hover {
-  color: var(--color-primary, #0077ff);
-}
-
-.jobcan-enhanced #list td.date .jbe-day-delta {
-  display: block;
-  margin-top: 2px;
-  font-size: 11px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-  line-height: 1.2;
+  /* text-decoration (not border-bottom) so the rule hugs the digits instead of the
+     inherited horizontal padding. */
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-decoration-color: color-mix(in srgb, currentColor 32%, transparent);
+  text-underline-offset: 3px;
+  transition: background-color 0.15s ease, color 0.15s ease, text-decoration-color 0.15s ease;
 }
 
-.jobcan-enhanced #list td.date .jbe-day-delta--under { color: var(--color-danger, #DC3545); }
-.jobcan-enhanced #list td.date .jbe-day-delta--over  { color: var(--color-warning-text, #8a6100); }
+/* On a mismatch day the link is red on a red-tinted row, where a 32% rule vanishes
+   — keep the "clickable" cue visible without shouting. */
+.jobcan-enhanced #list td.date.jbe-mismatch-date .jbe-day-link {
+  text-decoration-color: color-mix(in srgb, currentColor 55%, transparent);
+}
+
+/* styles.css paints every .jbc-table a:hover with --color-primary-light (#109fff,
+   a saturated blue) while leaving the text at --color-primary (#0077ff): blue on
+   blue, ~1.5:1 — the label all but disappeared. Use the tinted hover surface. */
+.jobcan-enhanced #list td.date .jbe-day-link:hover,
+.jobcan-enhanced #list td.date .jbe-day-link:focus-visible {
+  background-color: var(--color-primary-hover-bg, #f5f9ff) !important;
+  color: var(--color-primary, #0077ff) !important;
+  text-decoration-color: currentColor;
+  outline: none;
+}
+
+.jobcan-enhanced #list td.date .jbe-day-link:focus-visible {
+  box-shadow: 0 0 0 2px var(--color-focus-ring, rgba(16, 159, 255, 0.28));
+}
+
+/* Dark mode: --color-primary-hover-bg is #00356b there, and --color-primary on it
+   is only ~2.9:1. Lift the text rather than darkening the surface. */
+.jobcan-enhanced body.dark-mode #list td.date .jbe-day-link:hover,
+.jobcan-enhanced body.dark-mode #list td.date .jbe-day-link:focus-visible {
+  color: color-mix(in srgb, var(--color-primary, #0077ff) 35%, #ffffff 65%) !important;
+}
+
+/* The 工数差異 delta is a second, quieter line under the date. As plain text in the
+   same red at nearly the same size it just doubled the date; as a shrink-wrapped
+   chip it reads as a badge and stops competing with it. */
+.jobcan-enhanced #list td.date .jbe-day-delta {
+  display: block;
+  width: fit-content;
+  margin: 3px auto 0;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  line-height: 1.5;
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+.jobcan-enhanced #list td.date .jbe-day-delta--under {
+  background-color: color-mix(in srgb, var(--color-danger, #DC3545) 14%, transparent);
+  border-color: color-mix(in srgb, var(--color-danger, #DC3545) 38%, transparent);
+  color: var(--color-danger, #DC3545);
+}
+
+.jobcan-enhanced #list td.date .jbe-day-delta--over {
+  background-color: color-mix(in srgb, var(--color-warning, #FFC107) 16%, transparent);
+  border-color: color-mix(in srgb, var(--color-warning, #FFC107) 42%, transparent);
+  color: var(--color-warning-text, #8a6100);
+}
+
+.jobcan-enhanced body.dark-mode #list td.date .jbe-day-delta--under {
+  background-color: color-mix(in srgb, var(--color-danger, #DC3545) 22%, transparent);
+  color: color-mix(in srgb, var(--color-danger, #DC3545) 65%, #ffffff 35%);
+}
 
 .jobcan-enhanced body.dark-mode #list td.date .jbe-day-delta--over {
+  background-color: color-mix(in srgb, var(--color-warning, #FFC107) 20%, transparent);
   color: var(--color-warning, #FFC107);
 }
 

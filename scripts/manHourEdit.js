@@ -2,8 +2,9 @@
 //
 // Isolated-world enhancements for the rebuilt man-hour edit page
 // (/employee/man-hour-manage/edit-achievement):
-//   * decimal-hour normalization on input.manhour ("3" -> "3:00", "3.5" -> "3:30")
-//   * プロジェクト cells: hide the "(code)" prefix until hover, + copy buttons
+//   * decimal-hour normalization on input.manhour ("3" -> "3:00", "3.5" -> "3:30"),
+//     including unblocking the "." key that Jobcan's own keydown filter rejects
+//   * プロジェクト cells: hide the "(code)" prefix, surface it in a hover popover
 //   * compact summary header (実績 vs 実労働時間) and date navigation
 //   * keyboard shortcuts (Shift+Enter = add row, Cmd/Ctrl+Enter = save)
 //
@@ -40,9 +41,11 @@
   // 1. Decimal-hour normalization on the man-hour (実績) input
   // ---------------------------------------------------------------------------
 
+  // Hours are zero-padded to match how Jobcan renders the rest of the 実績 column
+  // ("06:33", "00:30") — an unpadded "0:30" next to those reads as a typo.
   function formatMinutesAsHMM(totalMinutes) {
     const safe = Math.max(0, Math.round(Number(totalMinutes) || 0));
-    return `${Math.floor(safe / 60)}:${String(safe % 60).padStart(2, '0')}`;
+    return `${String(Math.floor(safe / 60)).padStart(2, '0')}:${String(safe % 60).padStart(2, '0')}`;
   }
 
   function normalizeTypedDecimalHours(raw) {
@@ -114,6 +117,28 @@
     });
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && isManHourInput(e.target)) commit(e.target);
+    }, true);
+
+    // Let "." actually be typed.
+    //
+    // Jobcan filters keystrokes on input.manhour with a jQuery-delegated keydown on
+    // the tbody whose whitelist is digits + Delete/Backspace/Enter/Tab/End/Home/
+    // arrows + ":" — no ".". Returning false from a delegated jQuery handler
+    // preventDefaults the event, so the decimal shorthand above was literally
+    // untypeable however correct the parsing was.
+    //
+    // Jobcan's handler is delegated (bubble phase, on the tbody), so stopping the
+    // event during the DOCUMENT's capture phase means it never reaches the tbody and
+    // the browser's default insertion happens normally. stopPropagation — not
+    // stopImmediatePropagation — so our own document-level listeners above, and any
+    // other listener on document, still run. Scoped to the "." keys alone; every
+    // other key still goes through Jobcan's filter untouched.
+    const DECIMAL_KEYS = ['.', '．', 'Decimal']; // ASCII, full-width, numpad
+    document.addEventListener('keydown', (e) => {
+      if (!DECIMAL_KEYS.includes(e.key)) return;
+      if (e.ctrlKey || e.metaKey || e.altKey) return; // leave shortcuts alone
+      if (!isManHourInput(e.target)) return;
+      e.stopPropagation();
     }, true);
   }
 

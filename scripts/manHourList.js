@@ -130,13 +130,63 @@
   }
 
   function highlightMismatches() {
-    parseListDays().forEach((day) => {
+    parseListDays().forEach((day, index) => {
       const mismatch = dayIsMismatch(day);
-      day.rows.forEach((row) => row.classList.toggle('jbe-mismatch-row', mismatch));
+      day.rows.forEach((row) => {
+        row.classList.toggle('jbe-mismatch-row', mismatch);
+        // Tag every row of the day with its group id so hovering any one of them
+        // can light the whole day (see bindDayHover).
+        row.dataset.jbeDay = String(index);
+      });
       const dateCell = day.dateCell;
       if (dateCell) dateCell.classList.toggle('jbe-mismatch-date', mismatch);
       decorateDateCell(day, mismatch);
     });
+  }
+
+  // --- day-group hover --------------------------------------------------------
+  //
+  // A day's date / 合計 / 総労働時間 / 最終更新 cells are rowspan'd onto the day's
+  // FIRST <tr>, so the browser's own tr:hover repaints only the single row under
+  // the cursor: on a multi-entry day that reads as "one entry is highlighted"
+  // rather than "this is the day I'm pointing at". Mirror the hover across every
+  // row carrying the same data-jbe-day.
+  let hoverBoundList = null;
+
+  function setDayHover(key, on) {
+    const list = getList();
+    if (!list) return;
+    Array.from(list.children).forEach((row) => {
+      if (row.dataset && row.dataset.jbeDay === key) row.classList.toggle('jbe-day-hover', on);
+    });
+  }
+
+  function bindDayHover() {
+    const list = getList();
+    // The worker refills #list rather than replacing it, so this normally binds
+    // once; the identity check only matters if Jobcan ever swaps the tbody.
+    if (!list || hoverBoundList === list) return;
+    hoverBoundList = list;
+
+    let activeKey = null;
+    const clear = () => {
+      if (activeKey === null) return;
+      setDayHover(activeKey, false);
+      activeKey = null;
+    };
+
+    list.addEventListener('mouseover', (event) => {
+      const node = event.target;
+      const row = node && node.closest ? node.closest('tr[data-jbe-day]') : null;
+      const key = row && row.parentNode === list ? row.dataset.jbeDay : null;
+      if (key === activeKey) return;
+      clear();
+      if (key != null) {
+        activeKey = key;
+        setDayHover(key, true);
+      }
+    });
+    list.addEventListener('mouseleave', clear);
   }
 
   // --- per-day delta + jump-to-editor (feature 4) -----------------------------
@@ -317,6 +367,214 @@
       wrapper.insertBefore(bar, table);
     } else if (table.parentNode) {
       table.parentNode.insertBefore(bar, table);
+    }
+  }
+
+  // --- dashboard action buttons ------------------------------------------------
+  //
+  // Jobcan scatters the three dashboard actions down the #dsbd grid: PDFダウンロード
+  // gets a full-width row above the charts, CSVダウンロード + its ⚙ options toggle get
+  // another one below them — ~600px and two graphs apart. Collect all three into
+  // #dsbd-buttons (already `display:flex; justify-content:space-between`, so they
+  // land right of the 集計軸 selects) and drop the two emptied grid rows.
+  //
+  // Two constraints, both read out of Jobcan's own bundle rather than guessed:
+  //   * `const $dsbd = $("#dsbd, #dsbd-buttons")` then `$dsbd.on('click', '#pdf'…)`
+  //     / `'#csv'` — the downloads are DELEGATED, and #dsbd-buttons is already one
+  //     of the two roots, so moving the buttons there keeps them wired. exportPDF
+  //     reads `$dsbd.find('.pie'|'.bar')`, which still resolves for the same reason.
+  //   * the ⚙ handler is `$(t.currentTarget).next()` — #csv-options must stay the
+  //     gear's IMMEDIATE next sibling or the toggle silently stops working
+  //     (verified live: reorder it and nothing happens).
+  // Hence the order below is load-bearing; #csv-options must come last.
+  const DSBD_ACTION_IDS = ['pdf', 'csv', 'show-csv-options', 'csv-options'];
+
+  function groupDashboardButtons() {
+    const bar = document.getElementById('dsbd-buttons');
+    if (!bar) return;
+
+    // Whichever of the four Jobcan actually rendered — enhance() re-runs on every
+    // worker re-render, so bail before touching the DOM once they are all home.
+    const present = DSBD_ACTION_IDS.map((id) => document.getElementById(id)).filter(Boolean);
+    if (!present.length) return;
+
+    let actions = document.getElementById('jbe-dsbd-actions');
+    if (actions && actions.parentNode === bar && present.every((el) => el.parentNode === actions)) return;
+    if (!actions) {
+      actions = document.createElement('div');
+      actions.id = 'jbe-dsbd-actions';
+    }
+    if (actions.parentNode !== bar) bar.appendChild(actions);
+
+    present.forEach((el) => {
+      const wrapper = el.parentNode;
+      actions.appendChild(el);
+      // An emptied wrapper is still a #dsbd grid item and still eats a row.
+      if (wrapper && wrapper.parentNode && wrapper.parentNode.id === 'dsbd'
+        && !wrapper.querySelector('button, input, select, a')) {
+        wrapper.classList.add('jbe-dsbd-emptied');
+      }
+    });
+  }
+
+  // --- search bar ---------------------------------------------------------------
+  //
+  // The 表示月度 row is mostly air: a caption that repeats the 年 / 月度 already printed
+  // between the selects, two 27px icon buttons next to 38px selects, and a wide empty
+  // gap on the right. Tighten it and park the download actions in that gap.
+  //
+  // The actions ride along inside #dsbd-buttons rather than being moved on their own:
+  // Jobcan delegates their clicks from `$("#dsbd, #dsbd-buttons")`, so #dsbd-buttons
+  // has to stay their ancestor or the downloads go dead (see groupDashboardButtons).
+  function restyleSearchBar() {
+    const wrapper = document.querySelector('.search_wrapper');
+    if (!wrapper) return;
+    // Marker class: this module only runs on the list page, so it keeps the CSS off
+    // any other page that happens to render a .search_wrapper.
+    wrapper.classList.add('jbe-mh-searchbar');
+
+    const bar = document.getElementById('dsbd-buttons');
+    if (bar && bar.parentNode !== wrapper) wrapper.appendChild(bar);
+  }
+
+  // --- 集計軸 controls ------------------------------------------------------------
+  //
+  // Jobcan puts the two 集計軸 selects in a row of their own above the dashboard, far
+  // from the charts they drive. Move them to the top of #dsbd, centred over the pie
+  // and the bar, and turn 集計軸1 into a tab strip — it picks between two or three
+  // named dimensions, which is a segmented control, not a dropdown.
+  //
+  // #axis1 itself stays in the DOM, hidden: Jobcan reads `$("#axis1").val()` and its
+  // dsbd_render step does `$("#axis1").add($("#axis2")).empty()` then re-appends the
+  // <option>s on EVERY summary render, so the tabs are rebuilt from the select rather
+  // than the other way round. Both selects must also stay inside #dsbd or
+  // #dsbd-buttons — that pair is the delegation root for their change handler.
+  function axisOptions(select) {
+    // Jobcan d-none's the option 集計軸1 has taken, so 集計軸2 cannot duplicate it.
+    return Array.from(select.options).filter((option) => !option.classList.contains('d-none'));
+  }
+
+  function renderAxisTabs(select, tabs) {
+    const options = axisOptions(select);
+    // Jobcan's render step empties both selects before re-appending the <option>s;
+    // don't wipe the strip if we happen to look during that window.
+    if (!options.length) return;
+    const signature = options.map((option) => `${option.value}${option.text}`).join('');
+    if (tabs.dataset.jbeSig !== signature) {
+      tabs.dataset.jbeSig = signature;
+      tabs.textContent = '';
+      options.forEach((option) => {
+        const tab = document.createElement('button');
+        tab.type = 'button';
+        tab.className = 'jbe-axis-tab';
+        tab.setAttribute('role', 'tab');
+        tab.dataset.value = option.value;
+        tab.textContent = option.text;
+        tab.addEventListener('click', () => {
+          if (select.value === option.value) return;
+          select.value = option.value;
+          // Jobcan's handler is a jQuery delegated one, i.e. a native listener on
+          // #dsbd — a bubbling native change event reaches it.
+          select.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+        tabs.appendChild(tab);
+      });
+    }
+    Array.from(tabs.children).forEach((tab) => {
+      const active = tab.dataset.value === select.value;
+      tab.classList.toggle('is-active', active);
+      tab.setAttribute('aria-selected', active ? 'true' : 'false');
+    });
+  }
+
+  // The 集計軸1 / 集計軸2 captions are bare text nodes inside the <label>s, so CSS
+  // cannot hide them on their own. Take them out, and carry the wording over to the
+  // controls as aria-label + title so removing the visible text does not also remove
+  // the only thing naming them.
+  function stripAxisCaption(label, targets) {
+    if (!label || label.dataset.jbeCaption) return;
+    const nodes = Array.from(label.childNodes).filter((node) => node.nodeType === 3);
+    const caption = nodes.map((node) => node.textContent.trim()).filter(Boolean).join(' ');
+    if (!caption) return;
+    nodes.forEach((node) => node.remove());
+    label.dataset.jbeCaption = caption;
+    targets.filter(Boolean).forEach((target) => {
+      target.setAttribute('aria-label', caption);
+      target.title = caption;
+    });
+  }
+
+  function setupAxisControls() {
+    const axis1 = document.getElementById('axis1');
+    const axis2 = document.getElementById('axis2');
+    const dsbd = document.getElementById('dsbd');
+    if (!dsbd || (!axis1 && !axis2)) return;
+
+    const group = (axis1 || axis2).closest('.unload-no-track') || (axis1 || axis2).parentNode;
+
+    let host = document.getElementById('jbe-axis-bar');
+    if (!host) {
+      host = document.createElement('div');
+      host.id = 'jbe-axis-bar';
+    }
+    if (host.parentNode !== dsbd || dsbd.firstElementChild !== host) {
+      dsbd.insertBefore(host, dsbd.firstChild);
+    }
+    if (group && group.parentNode !== host) host.appendChild(group);
+
+    if (axis1) {
+      const label = axis1.closest('label') || axis1.parentNode;
+      let tabs = document.getElementById('jbe-axis1-tabs');
+      if (!tabs) {
+        tabs = document.createElement('div');
+        tabs.id = 'jbe-axis1-tabs';
+        tabs.setAttribute('role', 'tablist');
+      }
+      if (tabs.parentNode !== label) label.appendChild(tabs);
+      stripAxisCaption(label, [tabs, axis1]);
+      renderAxisTabs(axis1, tabs);
+    }
+
+    if (axis2) {
+      stripAxisCaption(axis2.closest('label'), [axis2]);
+      // With only two dimensions defined, 集計軸2 always has exactly one option left —
+      // a dropdown that cannot be dropped. Strip the affordance instead.
+      axis2.classList.toggle('jbe-axis-static', axisOptions(axis2).length <= 1);
+    }
+
+    if (!host.dataset.jbeAxisBound) {
+      host.dataset.jbeAxisBound = '1';
+      // Jobcan rebuilds both option lists while handling the change; re-read them
+      // once its handler has run. enhance() re-syncs again when the list re-renders.
+      host.addEventListener('change', () => { setTimeout(setupAxisControls, 0); });
+    }
+
+    watchAxisOptions(axis1, axis2);
+  }
+
+  // enhance() alone is not enough to keep the tab strip filled. Jobcan's showSummary
+  // writes the table rows first (`await setAchievement()` → tableRender) and only then
+  // fills the <option>s (`dsbd_render`), so the #list observer that drives enhance()
+  // has already fired by the time the options exist — measured: the strip was created,
+  // read zero options, and never ran again, leaving an empty 8px pill. Watch the
+  // selects themselves so the tabs follow whenever Jobcan repopulates them.
+  let axisWatchBound = false;
+
+  function watchAxisOptions(axis1, axis2) {
+    if (axisWatchBound) return;
+    const targets = [axis1, axis2].filter(Boolean);
+    if (!targets.length) return;
+    axisWatchBound = true;
+
+    // setupAxisControls never touches the selects' children, so this cannot re-trigger
+    // itself. Both selects are emptied and refilled in one synchronous pass, and the
+    // observer callback runs after it, so it always sees the finished list.
+    const observer = new MutationObserver(() => setupAxisControls());
+    targets.forEach((target) => observer.observe(target, { childList: true }));
+    if (typeof window.__jbe_registerManagedObserver === 'function') {
+      window.__jbe_registerManagedObserver('watch:manHourAxis', observer, () => {
+        axisWatchBound = false;
+      });
     }
   }
 
@@ -585,7 +843,11 @@
 
   function enhance() {
     buildFilterBar();
+    restyleSearchBar();
+    groupDashboardButtons();
+    setupAxisControls();
     highlightMismatches();
+    bindDayHover();
     buildMonthHeader();
     applyFilter();
   }
@@ -614,6 +876,14 @@
   function setupManHourListPage() {
     if (window.__jbe_manHourListPageInited) return;
     window.__jbe_manHourListPageInited = true;
+
+    // The search bar, the download buttons and the 集計軸 selects are all
+    // server-rendered and do not wait on the worker, so lay them out now rather than
+    // leaving them as-is for the ~40s the list can take. The poll below re-runs this
+    // in case Jobcan injects any of it late.
+    restyleSearchBar();
+    groupDashboardButtons();
+    setupAxisControls();
 
     const start = () => {
       if (!listHasRows()) return false;
@@ -658,12 +928,16 @@
       if (typeof window.__jbe_registerManagedObserver === 'function') {
         window.__jbe_registerManagedObserver('watch:manHourListReady', readyObserver, () => {
           window.__jbe_manHourListPageInited = false;
+          hoverBoundList = null;
         });
       }
     }
 
     if (typeof window.__jbe_startManagedInterval === 'function') {
       window.__jbe_startManagedInterval('watch:manHourListReady', (ctx) => {
+        restyleSearchBar();
+        groupDashboardButtons();
+        setupAxisControls();
         if (start()) ctx.stop();
       }, 1000, { maxRuns: 120 });
     }
