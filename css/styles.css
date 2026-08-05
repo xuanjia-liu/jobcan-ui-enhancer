@@ -2434,13 +2434,6 @@
       box-shadow 0.18s ease;
   }
 
-  /* Pinned to an axis edge because the punch falls outside 06:00–24:00. Hollowed out
-     so it does not read as an exact position; the tooltip carries the real time. */
-  .jobcan-enhanced .work-punch-marker.is-outside-axis {
-    opacity: 0.75;
-    border-style: dashed;
-  }
-
   /* The whole hover response now lives on the individual marker. It keeps its centre
      while growing, so the position it reports never appears to move. */
   .jobcan-enhanced .work-punch-marker:hover {

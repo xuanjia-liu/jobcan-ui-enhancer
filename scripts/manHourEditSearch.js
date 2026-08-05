@@ -240,6 +240,10 @@
   // { [kindId]: Map(unitId -> { n, last }) }
   let recentByKind = null;
   let activeKid = null; // kind of the field currently being searched (for decoration)
+  // reRankOpenMenu bookkeeping: how many times we have corrected the open menu for
+  // the current field, so a pathological re-render war can't spin (see MAX_RERANKS).
+  let reRankInput = null;
+  let reRankCount = 0;
 
   const dayOffsetYmd = (days) => {
     const d = new Date();
@@ -479,6 +483,8 @@
       obs.disconnect();
       try { decorateAll(); } catch (_) {}
       obs.observe(base, { childList: true, subtree: true });
+      // AFTER re-observing, so the menu this may render gets decorated in turn.
+      try { reRankOpenMenu(); } catch (_) {}
     });
     obs.observe(base, { childList: true, subtree: true });
     window.__jbeMenuDecorator = obs;
@@ -540,7 +546,33 @@
           }
           return a.norm.indexOf(nterm) - b.norm.indexOf(nterm);  // earlier (prefix) match first
         });
-        this.__response(matches.slice(0, 100).map((o) => ({ id: o.id, label: o.label, value: o.label })));
+        // `__jbe` marks these as ours all the way onto the rendered <li>s: jQuery-UI's
+        // _normalize passes an item through untouched when it already has label+value,
+        // and stashes it on the <li> as data('ui-autocomplete-item'). menuIsRanked()
+        // reads it back to tell a ranked menu from a native one.
+        const items = matches.slice(0, 100)
+          .map((o) => ({ id: o.id, label: o.label, value: o.label, __jbe: true }));
+
+        // Answer through _response(), NOT __response() directly.
+        //
+        // _response() increments the widget's requestIndex, and that is the ONLY
+        // thing that makes jQuery-UI drop a reply belonging to an earlier search.
+        // Jobcan fires its own source request for a field right after 追加 clones the
+        // row, so one is typically still in flight when we answer from cache.
+        // __response() left requestIndex untouched, so that late reply passed the
+        // freshness check and repainted the menu with the native code-prefix list a
+        // split second after the ranked list had appeared — the reported bug.
+        //
+        // pending++ mirrors what jQuery-UI's own _search does before dispatching, so
+        // the callback's pending-- keeps the ui-autocomplete-loading bookkeeping
+        // balanced (an unpaired decrement leaves pending negative, i.e. truthy, and
+        // the loading class stuck on).
+        if (typeof this._response === 'function') {
+          this.pending = (this.pending || 0) + 1;
+          this._response()(items);
+        } else {
+          this.__response(items); // no _response() to bump — nothing we can do
+        }
         return;
       }
       // List not cached yet (cold start, ~2s): use Jobcan's native search now, then
@@ -597,6 +629,62 @@
     if (n < OPEN_RETRY_MS.length) setTimeout(() => openRankedList(input, n + 1), OPEN_RETRY_MS[n]);
   }
 
+  // 追加 clones a new row and Jobcan focuses its プロジェクト field and searches it
+  // ITSELF — on its own schedule, sometimes after every openRankedList retry above
+  // has already run and found no widget to patch. The menu that appeared was
+  // therefore Jobcan's native code-prefix list, and you had to type or click away
+  // and refocus to get the pinned/最近 ranking. Chasing that timing with longer
+  // retries is guesswork, so this watches the RESULT instead: called from the menu
+  // observer, it re-answers from the cache whenever a menu renders for an empty unit
+  // field and the ranking is not what produced it.
+  //
+  // Loop-free by construction: the menu our correction renders reads as ranked, so
+  // the observer pass it triggers returns immediately (and MAX_RERANKS backstops it).
+  // Whether the menu on screen right now is the ranked one. Read from the RENDERED
+  // items, not from which side searched last: a late native reply repaints the menu
+  // without any search of its own, so "we searched most recently" was true at the
+  // exact moment the native list was on screen.
+  function menuIsRanked() {
+    const li = document.querySelector('ul.ui-autocomplete li.ui-menu-item');
+    if (!li) return false;
+    try {
+      const item = window.jQuery(li).data('ui-autocomplete-item');
+      return !!(item && item.__jbe);
+    } catch (_) { return false; }
+  }
+
+  // Cap on corrections per field visit. The _response() fix above should mean this
+  // never fires more than once, but if a jQuery-UI version ever strips our `__jbe`
+  // marker, menuIsRanked() would read false forever and an uncapped loop would spin
+  // the observer against itself and freeze the page.
+  const MAX_RERANKS = 4;
+
+  function reRankOpenMenu() {
+    const input = document.activeElement;
+    if (!input || !input.classList || !input.classList.contains('unit')) return;
+    if (!input.closest || !input.closest('table.jbc-table')) return;
+    if (input.value) return;   // a term the user typed — leave their results alone
+    if (menuIsRanked()) return; // already the ranked list
+
+    // Only when a menu is actually OPEN with items. Without this, the empty render
+    // that CLOSING the menu produces would be read as "Jobcan answered" and we would
+    // immediately re-open it — Escape would stop working.
+    if (!document.querySelector('ul.ui-autocomplete li.ui-menu-item')) return;
+
+    const kid = kidForInput(input);
+    if (!kid || !Array.isArray(lists[kid])) return; // cold cache — native list is all there is
+
+    if (input !== reRankInput) { reRankInput = input; reRankCount = 0; }
+    if (reRankCount >= MAX_RERANKS) return;
+
+    ensurePatched(input); // the widget Jobcan just built may not carry our patch yet
+    let inst = null;
+    try { inst = window.jQuery(input).autocomplete('instance'); } catch (_) { inst = null; }
+    if (!inst || !inst._search || !inst._search.__jbe) return;
+    reRankCount += 1;
+    try { window.jQuery(input).autocomplete('search', ''); } catch (_) {}
+  }
+
   // Pre-warm: resolve the kinds (cached for re-patching) and load the full unit
   // lists as early as possible (on page load, before the user focuses a field) so
   // substring search is ready by the time they type — ~600 items / several pages.
@@ -628,6 +716,11 @@
   };
   document.addEventListener('focusin', repatchFromEvent, true);
   document.addEventListener('input', repatchFromEvent, true);
+
+  // A fresh visit to the field gets a fresh correction budget.
+  document.addEventListener('focusout', (e) => {
+    if (e.target === reRankInput) { reRankInput = null; reRankCount = 0; }
+  }, true);
 
   // No polling loop and no body-wide observer here on purpose. Jobcan creates the
   // jQuery-UI autocomplete widget LAZILY on first focus, so `autocomplete('instance')`

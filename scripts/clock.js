@@ -32,7 +32,6 @@ const STALE_PUNCH_DATA_MINUTES = 10;
 const AXIS_DEFAULT_START_MINUTES = 7 * 60;
 const AXIS_DEFAULT_END_MINUTES = 21 * 60;
 const AXIS_PAD_MINUTES = 30;
-const AXIS_MIN_SPAN_MINUTES = 8 * 60;
 
 function getAxisWindow(entries) {
   const now = new Date();
@@ -56,11 +55,10 @@ function getAxisWindow(entries) {
   start = Math.max(0, Math.floor(start / 60) * 60);
   end = Math.min(24 * 60, Math.ceil(end / 60) * 60);
 
-  if (end - start < AXIS_MIN_SPAN_MINUTES) {
-    end = Math.min(24 * 60, start + AXIS_MIN_SPAN_MINUTES);
-    start = Math.max(0, end - AXIS_MIN_SPAN_MINUTES);
-  }
-
+  // No minimum-span guard: the default window is already 14h and the loop above only
+  // ever widens it, so the span cannot come out below that. Verified by sweeping
+  // every hour of the day against empty / midnight / midday / 23:59 punch sets —
+  // 14h was the minimum observed.
   return { start, end, span: end - start };
 }
 
@@ -851,17 +849,13 @@ function renderPunchMarkers(track, entries, axis) {
   markerMap.forEach((item) => {
     const marker = document.createElement('div');
     marker.className = 'work-punch-marker';
-    const percent = axisPercent(item.minutes, axis);
-    const clamped = Math.max(0, Math.min(100, percent));
-    marker.style.left = `${clamped}%`;
+    // getAxisWindow() widens the window to cover every punch, so this clamp is not
+    // expected to bite; it stays as cheap insurance against a future change to the
+    // axis rules silently pushing a dot off the end of the bar.
+    const percent = Math.max(0, Math.min(100, axisPercent(item.minutes, axis)));
+    marker.style.left = `${percent}%`;
     marker.style.backgroundColor = getPunchMarkerColor(item.type);
-    const label = `${item.time}${item.type ? ` ${item.type}` : ''}`;
-    // A punch outside the axis window is pinned to the edge rather than dropped, so
-    // it stays visible and its tooltip still reports the real time. The window
-    // widens to include punches, so this is now only reachable in odd cases.
-    const outsideAxis = percent !== clamped;
-    const markerTitle = outsideAxis ? `${label}（表示範囲外）` : label;
-    if (outsideAxis) marker.classList.add('is-outside-axis');
+    const markerTitle = `${item.time}${item.type ? ` ${item.type}` : ''}`;
     // No `title` attribute here: it raced the custom tooltip below, so hovering a
     // marker produced two tooltips — the styled one immediately, then the native
     // one about a second later, offset from it.
