@@ -67,10 +67,21 @@ function setupPunchCard() {
 function placePunchActionsRow(clock) {
   if (!clock) return;
   const actions = document.querySelector('.jbe-punch-actions');
+  const digits = clock.querySelector('.flip-clock-digits-container');
   const progress = clock.querySelector('.work-progress-container');
-  if (!actions || !progress) return;
-  if (actions.parentElement === clock) return;
-  clock.insertBefore(actions, progress);
+  if (!actions || !digits || !progress) return;
+
+  // The two rows live in one column so they resolve to one width: the group is
+  // sized by the digits and the PUSH row is stretched to match, which lines the
+  // clock and the buttons up on both edges (see .jbe-clock-group in styles.css).
+  let group = clock.querySelector('.jbe-clock-group');
+  if (!group) {
+    group = document.createElement('div');
+    group.className = 'jbe-clock-group';
+    clock.insertBefore(group, digits);
+    group.appendChild(digits);
+  }
+  if (actions.parentElement !== group) group.appendChild(actions);
 }
 
 /* ---- Finding a Jobcan card by the text it contains -------------------------

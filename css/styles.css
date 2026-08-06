@@ -1957,19 +1957,27 @@
     --flip-digit-max: 160px;
   }
 
-  /* Inside the stretched card (min-height above), the digits row and the PUSH row
-     take an auto margin each, which centres the pair in the free space between the
-     card top and the timeline. `!important` on the second: the PUSH col carries
+  /* Inside the stretched card (min-height above), the clock group takes an auto
+     margin top and bottom, which centres it in the free space between the card top
+     and the timeline. The two bare selectors are the fallback for the moment before
+     punchCard.js builds the group — and for any page that has a clock but no PUSH
+     button, where it never builds one. `!important` because the PUSH col carries
      Bootstrap's `.mb-3` (`margin-bottom: 1rem !important`). */
+  .jobcan-enhanced .flip-clock-container > .jbe-clock-group,
   .jobcan-enhanced .flip-clock-container > .flip-clock-digits-container {
     margin-top: auto;
   }
 
+  .jobcan-enhanced .flip-clock-container > .jbe-clock-group,
   .jobcan-enhanced .flip-clock-container > .jbe-punch-actions {
+    margin-bottom: auto !important;
+  }
+
+  /* Descendant, not child: the row is one level deeper once it is inside the group. */
+  .jobcan-enhanced .flip-clock-container .jbe-punch-actions {
     /* flex none: the row is a Bootstrap .col (flex-grow: 1), which in this column
        flex would absorb the card's free height and stretch the PUSH button with it. */
     flex: 0 0 auto;
-    margin-bottom: auto !important;
     /* The row sits inside Jobcan's .display-2 now, whose display-size font (and
        our 600 weight on it) would cascade into the settings popover's native rows
        (打刻場所 label, 通常/夜勤 radios). Reset to page text here so everything
@@ -1977,6 +1985,38 @@
     font-size: var(--font-size-base);
     font-weight: 400;
     line-height: 1.5;
+  }
+
+  /* One column for the digits and the PUSH row, so the two resolve to a single
+     width and line up on both edges. Built in punchCard.js. */
+  .jobcan-enhanced .jbe-clock-group {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    /* Same rhythm the clock container's own gap gave the two rows before. */
+    gap: clamp(12px, 2.6cqi, 20px);
+    width: fit-content;
+    max-width: 100%;
+    min-width: 0;
+    /* align-self, because the parent's `align-items: stretch` cannot centre an item
+       that has a definite width. */
+    align-self: center;
+  }
+
+  .jobcan-enhanced .jbe-clock-group > .flip-clock-digits-container {
+    width: 100%;
+  }
+
+  .jobcan-enhanced .jbe-clock-group > .jbe-punch-actions {
+    /* `width: 0` keeps this row out of the group's max-content sizing, so the group
+       is always as wide as the digits and never the other way round; `min-width`
+       then stretches it back to that width once it is known. Without the pair, a
+       narrow clock is outgrown by the 240px toggle + PUSH button and the digits
+       end up narrower than the buttons — the misalignment this fixes. */
+    width: 0;
+    min-width: 100%;
+    max-width: none;
+    margin: 0 !important;
   }
 
   /* Clock digits container. align-items is `center`, not `stretch`: the digits set
@@ -1987,7 +2027,12 @@
     justify-content: center;
     flex-wrap: nowrap;
     gap: clamp(2px, 0.8cqi, 6px);
-    width: 100%;
+    /* Hug the digits instead of spanning the card: the tiles are sized in cqi off
+       .flip-clock-container, so at `width: 100%` the row carried ~43px of dead
+       `justify-content` space on each side. `align-self` because the parent's
+       `align-items: stretch` cannot centre an item that has a definite width. */
+    width: fit-content;
+    align-self: center;
     max-width: 100%;
     min-width: 0;
     box-sizing: border-box;
@@ -4038,16 +4083,24 @@
   /* Four columns, always — `auto-fit` reflowed them into a 3 + 1 ragged block as
      soon as the row dipped under 4 × 150px. The tiles shed their icons and then
      their padding instead of wrapping; see the container queries below. */
+  /* The row sits above the clock card, as a sibling of .flip-clock-container
+     inside .display-2. Its narrow-width fallbacks (@container flip-clock, below)
+     and the tiles' cqi units need a query container ANCESTOR — the row itself
+     being a container would leave its own grid-template rules with nothing to
+     query. So the shared parent carries the flip-clock name: it has the same
+     inline size as the card, and the clock's internals still resolve against the
+     nearer .flip-clock-container. */
+  .jobcan-enhanced .display-2:has(> .jbe-work-stats) {
+    container-type: inline-size;
+    container-name: flip-clock;
+  }
+
   .jobcan-enhanced .jbe-work-stats {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: clamp(6px, 1.6cqi, 14px);
     width: 100%;
     min-width: 0;
-    /* The row sits above the clock card, on the page background, as a sibling of
-       .flip-clock-container — so it is its own query container. It spans the same
-       width the clock card does, so the tiles' cqi values resolve as before. */
-    container-type: inline-size;
     margin-bottom: 16px;
   }
 
