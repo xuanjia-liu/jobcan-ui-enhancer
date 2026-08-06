@@ -201,20 +201,18 @@
   
  
   
-  /* Remove border-right from jbcid-logo */
+  /* Remove the divider border from jbcid-logo. Both rules used to zero
+     `border-right` only — that is the divider Jobcan draws in the wide layout,
+     but the collapsed (<768px) layout puts one on the other sides too, which
+     showed up as a line across the brand header. Zero all four sides. */
   .jobcan-enhanced .jbcid-logo {
-    border-right-color: transparent !important;
-    border-right-style: none !important;
-    border-right-width: 0 !important;
+    border: none !important;
     border-radius: var(--border-radius-lg);
     padding-left: 4px;
   }
 
   .jobcan-enhanced .jbe-logo-no-border {
-    border-right-color: transparent !important;
-    border-right-style: none !important;
-    border-right-width: 0 !important;
-    border-right: none !important;
+    border: none !important;
     width: auto !important;
     height: 10px !important;
   }
@@ -240,6 +238,20 @@
   .jobcan-enhanced .jbcid-header.jbe-header-enhanced {
     background-color: transparent;
     box-shadow: none;
+  }
+
+  /* Below Bootstrap's md breakpoint Jobcan switches the ID bar to its collapsed
+     layout, where `.jbcid-navbar-header` carries a bottom border and
+     `.jbcid-navbar-menu.jbcid-navbar-right` a left border. The rule above only
+     zeroes the bar's background and shadow, so with nothing painted behind them
+     those two borders read as a stray line ruled across the blue brand header
+     plus a vertical stub next to ログアウト. Scoped to the wrapper elements: the
+     centred 動怠 pill (.jbe-navbar-menu-enhanced) keeps the border it is given
+     below. */
+  .jobcan-enhanced .jbcid-header .jbcid-navbar-header,
+  .jobcan-enhanced .jbcid-header .jbcid-navbar-menu.jbcid-navbar-right {
+    border: none !important;
+    box-shadow: none !important;
   }
 
   .jobcan-enhanced .jbcid-navbar-menu.jbcid-navbar-left.jbe-navbar-menu-enhanced {
@@ -1446,6 +1458,9 @@
   .jobcan-enhanced input[value="PUSH"] {
     font-size: 18px;
     font-weight: 600;
+    /* Larger than the 8px every other button gets — it is the biggest control on
+       the clock card and matches the 打刻詳細設定 toggle beside it. */
+    border-radius: var(--border-radius-lg);
     padding: 16px 48px;
     width: 100%;
     max-width: 400px;
@@ -2324,9 +2339,10 @@
   }
   
   .jobcan-enhanced .work-progress-track {
+    /* Named for the punch dots it used to size. Those are gone; it survives as the
+       band layer's side inset and as the floor for the gap between two bands, and
+       renderWorkScheduleSegments() reads it off this element for that math. */
     --work-dot-normal-width: 2px;
-    --work-dot-normal-height: 12px;
-    --work-dot-hover-size: 12px;
     --work-segment-boundary-gap: clamp(4px, 1.4cqi, 8px);
     height: clamp(16px, 4cqi, 20px);
     width: 100%;
@@ -2339,9 +2355,9 @@
     margin-top: 0;
   }
 
-  /* Inset by half a punch dot so an edge marker still sits fully on the bar. The
-     inset used to grow on card hover (via --work-dot-active-width) and animate the
-     whole band layer sideways; with per-marker hover it is simply static. */
+  /* A 2px side inset, so the first and last band clear the bar's rounded ends. The
+     axis labels below pad by the same amount, which is what keeps each label's dot
+     over the point on the track it names. */
   .jobcan-enhanced .work-schedule-layer {
     position: absolute;
     inset: 0;
@@ -2352,8 +2368,8 @@
   }
 
   /* `pointer-events: auto` re-enables hover on the bands only — their layer stays
-     `none` so it cannot swallow events meant for the punch markers, which sit at a
-     higher z-index and keep priority where a dot overlaps a band. */
+     `none` so it cannot swallow events meant for what sits above it on the track
+     (the 現在時刻 indicator and the target marker). */
   .jobcan-enhanced .work-schedule-segment {
     position: absolute;
     top: 2px;
@@ -2401,8 +2417,9 @@
   .jobcan-enhanced .work-progress-scale {
     position: relative;
     width: 100%;
-    height: 14px;
-    margin-top: 4px;
+    /* 14px of text plus the 6px band above it that holds each label's dot. */
+    height: 20px;
+    margin-top: 3px;
     /* Matches .work-schedule-layer so labels sit under the tick they belong to. */
     padding-left: calc(var(--work-dot-normal-width, 2px) / 2 + 1px);
     padding-right: calc(var(--work-dot-normal-width, 2px) / 2 + 1px);
@@ -2411,7 +2428,7 @@
 
   .jobcan-enhanced .work-progress-scale-label {
     position: absolute;
-    top: 0;
+    top: 6px;
     transform: translateX(-50%);
     font-size: 10px;
     font-weight: 600;
@@ -2429,15 +2446,32 @@
     transform: translateX(-100%);
   }
 
-  .jobcan-enhanced .time-scale-marker {
+  /* The tick that marks each label's position on the track. It used to be a
+     `.time-scale-marker` hairline inside .work-progress-track, drawn over the
+     schedule bands; now it is a dot in the gap between the track and the label, so
+     the bar stays clean. Positioned to the label's own anchor point rather than its
+     box centre, which is why the two inward-aligned ends need their own rules. */
+  .jobcan-enhanced .work-progress-scale-label::before {
+    content: '';
     position: absolute;
-    top: 5px;
-    width: 1px;
-    height: 8px;
-    background-color: var(--color-work-progress-scale);
-    z-index: 6;
+    bottom: 100%;
+    margin-bottom: 1px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 3px;
+    height: 3px;
     border-radius: 999px;
-    box-shadow: 0 0 0 1px var(--color-work-progress-scale-ring);
+    background-color: var(--color-work-progress-scale);
+  }
+
+  .jobcan-enhanced .work-progress-scale-label.is-first::before {
+    left: 0;
+    transform: none;
+  }
+
+  .jobcan-enhanced .work-progress-scale-label.is-last::before {
+    left: 100%;
+    transform: translateX(-100%);
   }
 
   /* ---- Timeline legend ----------------------------------------------------
@@ -2538,39 +2572,6 @@
   .jobcan-enhanced .work-target-marker.is-projected::before {
     background: transparent;
     border: 1.5px solid var(--color-work-target);
-  }
-
-  .jobcan-enhanced .work-punch-marker {
-    /* Positioning moved here from the old injected stylesheet; JS sets `left`. */
-    position: absolute;
-    top: 50%;
-    transform: translate(-50%, -50%);
-    pointer-events: auto;
-    width: var(--work-dot-normal-width);
-    height: var(--work-dot-normal-height);
-    border: 2px solid var(--color-work-progress-marker-border);
-    border-radius: 999px;
-    box-shadow: 0 1px 4px var(--color-work-progress-marker-shadow);
-    cursor: pointer;
-    z-index: 4;
-    transition:
-      width 0.25s cubic-bezier(0.4, 0, 0.2, 1),
-      height 0.25s cubic-bezier(0.4, 0, 0.2, 1),
-      border-radius 0.25s cubic-bezier(0.4, 0, 0.2, 1),
-      transform 0.18s ease,
-      box-shadow 0.18s ease;
-  }
-
-  /* The whole hover response now lives on the individual marker. It keeps its centre
-     while growing, so the position it reports never appears to move. */
-  .jobcan-enhanced .work-punch-marker:hover {
-    width: var(--work-dot-hover-size);
-    height: var(--work-dot-hover-size);
-    border-radius: 50%;
-    z-index: 7;
-    box-shadow:
-      0 0 0 3px var(--color-work-progress-marker-hover-ring),
-      0 4px 12px var(--color-work-progress-marker-hover-shadow);
   }
 
   .jobcan-enhanced .work-progress-indicator {
@@ -4402,7 +4403,7 @@
     flex: 0 1 220px;
     min-width: 0;
     padding: 8px 12px;
-    border-radius: var(--border-radius-md);
+    border-radius: var(--border-radius-lg);
     border: 1px solid var(--color-control-border);
     background-color: var(--color-control-bg);
     color: var(--color-text-primary);

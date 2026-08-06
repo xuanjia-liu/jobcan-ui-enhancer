@@ -964,15 +964,6 @@ function parsePunchMinutesOfDay(time) {
   return (hour * 60) + minute;
 }
 
-function getPunchMarkerColor(type) {
-  if ((type || '').includes('入室')) return 'var(--color-success)';
-  if ((type || '').includes('退室')) return 'var(--color-danger)';
-  if ((type || '').includes('出勤')) return 'var(--color-success)';
-  if ((type || '').includes('退勤')) return 'var(--color-danger)';
-  if ((type || '').includes('休憩')) return 'var(--color-warning)';
-  return 'var(--color-info)';
-}
-
 function getCelebrationColors() {
   const styles = getComputedStyle(document.body);
   return [
@@ -988,51 +979,6 @@ function getCelebrationColors() {
 function filterTodayPunchEntries(entries) {
   const todayKeys = getTodayDateKeys();
   return entries.filter((entry) => entry && entry.date && todayKeys.has(entry.date));
-}
-
-function renderPunchMarkers(track, entries, axis) {
-  if (!track) return;
-
-  track.querySelectorAll('.work-punch-marker').forEach((node) => node.remove());
-  if (!Array.isArray(entries) || entries.length === 0) return;
-
-  const markerMap = new Map();
-
-  entries.forEach((entry) => {
-    const time = normalizePunchTime(entry.time);
-    const minutes = parsePunchMinutesOfDay(time);
-    if (!time || minutes === null) return;
-    const key = `${time}-${entry.type || ''}`;
-    if (markerMap.has(key)) return;
-    markerMap.set(key, {
-      time,
-      type: entry.type || '',
-      minutes
-    });
-  });
-
-  markerMap.forEach((item) => {
-    const marker = document.createElement('div');
-    marker.className = 'work-punch-marker';
-    // getAxisWindow() widens the window to cover every punch, so this clamp is not
-    // expected to bite; it stays as cheap insurance against a future change to the
-    // axis rules silently pushing a dot off the end of the bar.
-    const percent = Math.max(0, Math.min(100, axisPercent(item.minutes, axis)));
-    marker.style.left = `${percent}%`;
-    marker.style.backgroundColor = getPunchMarkerColor(item.type);
-    const markerTitle = `${item.time}${item.type ? ` ${item.type}` : ''}`;
-    // No `title` attribute here: it raced the custom tooltip below, so hovering a
-    // marker produced two tooltips — the styled one immediately, then the native
-    // one about a second later, offset from it.
-    marker.addEventListener('mouseenter', (e) => {
-      showPunchMarkerTooltip(markerTitle, e.clientX, e.clientY);
-    });
-    marker.addEventListener('mousemove', (e) => {
-      showPunchMarkerTooltip(markerTitle, e.clientX, e.clientY);
-    });
-    marker.addEventListener('mouseleave', hidePunchMarkerTooltip);
-    track.appendChild(marker);
-  });
 }
 
 function isWorkStartType(type) {
@@ -1257,9 +1203,13 @@ function renderTargetMarker(track, entries, axis) {
 }
 
 /**
- * Ticks on the track plus their labels underneath. Both ends are always labelled so
- * the window is readable at a glance, with interior labels at round intervals;
- * interior ticks that would collide with an end label are dropped.
+ * The axis labels under the track. Both ends are always labelled so the window is
+ * readable at a glance, with interior labels at round intervals; an interior label
+ * that would collide with an end label is dropped.
+ *
+ * Each label carries its own dot marking the position on the track (a ::before in
+ * styles.css) — the track itself used to hold hairline `.time-scale-marker` divs,
+ * which drew over the schedule bands. A dropped label therefore drops its dot too.
  */
 function renderAxisScale(progressContainer, axis) {
   const track = progressContainer.querySelector('.work-progress-track');
@@ -1275,7 +1225,6 @@ function renderAxisScale(progressContainer, axis) {
   if (track.dataset.axisSignature === signature) return;
   track.dataset.axisSignature = signature;
 
-  track.querySelectorAll('.time-scale-marker').forEach((node) => node.remove());
   scaleRow.innerHTML = '';
 
   const points = [{ minutes: axis.start, edge: 'first' }];
@@ -1287,15 +1236,9 @@ function renderAxisScale(progressContainer, axis) {
   points.forEach((point) => {
     const percent = axisPercent(point.minutes, axis);
 
-    // The tick is a hairline and never collides, so every step position gets one.
-    const tick = document.createElement('div');
-    tick.className = 'time-scale-marker';
-    tick.style.left = `${percent}%`;
-    track.appendChild(tick);
-
     // The label is ~40px wide and the two ends are aligned inward, so an interior
     // label too close to an end would overlap it — that is what put "21:0022:00" on
-    // the card. Drop the label, keep the tick.
+    // the card.
     const distanceFromEndPx = Math.min(percent, 100 - percent) / 100 * trackWidthPx;
     if (!point.edge && distanceFromEndPx < AXIS_LABEL_MIN_SPACING_PX) return;
 
@@ -1392,9 +1335,10 @@ function renderWorkScheduleSegments(track, entries, axis) {
     const segmentNode = document.createElement('div');
     segmentNode.className = `work-schedule-segment segment-${segment.state}`;
 
-    // Every band gets the same hover treatment. No `title` attribute: it races the
-    // styled tooltip, which is why the punch markers dropped theirs — you would get
-    // the custom one immediately and the native one a second later, offset from it.
+    // Every band gets the same hover treatment, and since the punch dots were
+    // removed this is the only way to read a time off the bar. No `title` attribute:
+    // it races the styled tooltip below — you would get the custom one immediately
+    // and the native one a second later, offset from it.
     const description = describeScheduleSegment(segment.source || segment);
     segmentNode.addEventListener('mouseenter', (e) => {
       showPunchMarkerTooltip(description, e.clientX, e.clientY);
@@ -1513,7 +1457,6 @@ function renderProgressTrack(container, entries) {
 
   renderAxisScale(progressContainer, axis);
   renderWorkScheduleSegments(track, entries, axis);
-  renderPunchMarkers(track, entries, axis);
   renderTargetMarker(track, entries, axis);
 }
 

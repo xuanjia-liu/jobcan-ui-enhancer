@@ -222,11 +222,7 @@
     --color-work-progress-track-border: rgba(15, 23, 42, 0.12);
     --color-work-progress-label: #465365;
     --color-work-progress-scale: rgba(54, 70, 90, 0.52);
-    --color-work-progress-scale-ring: rgba(255, 255, 255, 0.32);
     --color-work-progress-marker-border: rgba(255, 255, 255, 0.96);
-    --color-work-progress-marker-shadow: rgba(15, 23, 42, 0.16);
-    --color-work-progress-marker-hover-ring: rgba(15, 23, 42, 0.1);
-    --color-work-progress-marker-hover-shadow: rgba(15, 23, 42, 0.22);
     /* Red-tinted: the indicator is red now (see .work-progress-indicator). */
     --color-work-progress-indicator-shadow: rgba(220, 53, 69, 0.3);
     --color-work-progress-indicator-ring: rgba(220, 53, 69, 0.14);
@@ -339,11 +335,7 @@
     --color-work-progress-track-border: rgba(255, 255, 255, 0.12);
     --color-work-progress-label: #d6deea;
     --color-work-progress-scale: rgba(248, 250, 252, 0.62);
-    --color-work-progress-scale-ring: rgba(2, 6, 23, 0.28);
     --color-work-progress-marker-border: rgba(248, 250, 252, 0.92);
-    --color-work-progress-marker-shadow: rgba(2, 6, 23, 0.34);
-    --color-work-progress-marker-hover-ring: rgba(148, 163, 184, 0.18);
-    --color-work-progress-marker-hover-shadow: rgba(2, 6, 23, 0.4);
     /* Red-tinted: the indicator is red now (see .work-progress-indicator). */
     --color-work-progress-indicator-shadow: rgba(248, 113, 113, 0.34);
     --color-work-progress-indicator-ring: rgba(248, 113, 113, 0.18);

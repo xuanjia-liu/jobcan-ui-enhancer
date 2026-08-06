@@ -1901,3 +1901,95 @@
   background-color: var(--color-control-bg, #2f3042);
   color: var(--color-text-primary, #e4e6eb);
 }
+
+/* ------------------------------------------------------------------ */
+/* 優先表示設定 page (/employee/man-hour-manage/priority-setting)        */
+/* ------------------------------------------------------------------ */
+/* This page was never covered by the extension's theming. Its own
+   priority-setting.css paints the two transfer panes light and — the part that
+   actually breaks dark mode — sets `#favarite { color: #333 }` on the grid that
+   wraps both tables. That is a DECLARATION on an ancestor, so it beats the light
+   text every descendant would otherwise inherit from body.dark-mode, while the
+   extension's dark surfaces still win the cell backgrounds. Measured live: dark
+   grey #333 text on the dark cells, i.e. the 選択できる項目 / 優先表示 lists were
+   effectively unreadable, headers included.
+
+   Jobcan's own declarations here (verified in priority-setting.css):
+     #favarite               color #333
+     #favarite .pane th      background #e6e6e6, borders #adadad
+     #favarite .pane td      background #fff,    borders #adadad
+   None carry !important, but they out-specify the generic td/th rules in
+   styles.css, hence the explicit overrides below. */
+
+.jobcan-enhanced body.dark-mode #favarite {
+  color: var(--color-text-primary, #e4e6eb) !important;
+}
+
+.jobcan-enhanced body.dark-mode #favarite .pane th {
+  background-color: var(--color-gray-100, #33333f) !important;
+  color: var(--color-text-primary, #e4e6eb) !important;
+  border-color: var(--color-border, #3a3a4c) !important;
+}
+
+.jobcan-enhanced body.dark-mode #favarite .pane td {
+  background-color: transparent !important;
+  color: var(--color-text-primary, #e4e6eb) !important;
+  border-color: var(--color-border, #3a3a4c) !important;
+}
+
+/* The transparent cell background above out-specifies the generic row-hover rule
+   in styles.css, so restate it for these two tables. */
+.jobcan-enhanced body.dark-mode #favarite .pane tr:not(.no-hover):hover td {
+  background-color: var(--color-table-hover-bg, #3a3a4c) !important;
+}
+
+/* 追加 / 取消 buttons sit in a `width: 0` fit column, so the extension's default
+   .btn padding wrapped the two-character label onto two lines ("追" / "加"). */
+.jobcan-enhanced #favarite .pane .btn {
+  white-space: nowrap !important;
+  padding: 4px 10px !important;
+}
+
+/* Kind tabs (プロジェクト / タスク). Jobcan gives the active tab a white fill and
+   the inactive ones rgba(0,0,0,.03) — both leave the label dark-on-dark here. */
+.jobcan-enhanced body.dark-mode #kinds-tabs > li > a {
+  background-color: var(--color-surface, #2a2a3c) !important;
+  color: var(--color-text-secondary, #b0b3b8) !important;
+  border-color: var(--color-border, #3a3a4c) !important;
+}
+
+.jobcan-enhanced body.dark-mode #kinds-tabs > li.active > a {
+  background-color: var(--color-card, #272736) !important;
+  color: var(--color-text-primary, #e4e6eb) !important;
+}
+
+/* Jobcan's full-page loading veil is a 50%-white scrim (fires on load and on
+   every tab switch here) — a white flash over the dark page. */
+.jobcan-enhanced body.dark-mode div.loading {
+  background-color: var(--color-black-50, rgba(0, 0, 0, 0.5)) !important;
+}
+
+/* Drag handle in the 優先表示 pane's 移動 column. Jobcan draws it with a
+   Bootstrap 3 `glyphicon-menu-hamburger`, i.e. a private-use codepoint from the
+   Glyphicons Halflings webfont. It renders on the bare page but not once the
+   extension's font stack is in play — measured live, the cell comes out blank in
+   dark mode (and tofu once the text colour above makes it visible). Draw the
+   three bars instead: no webfont, and it inherits currentColor in both themes. */
+.jobcan-enhanced #favarite .glyphicon-menu-hamburger {
+  display: inline-block !important;
+  position: relative;
+  top: 0;
+  width: 14px;
+  height: 12px;
+}
+
+.jobcan-enhanced #favarite .glyphicon-menu-hamburger::before {
+  content: "" !important;
+  position: absolute;
+  left: 0;
+  top: 5px;
+  width: 14px;
+  height: 2px;
+  background-color: currentColor;
+  box-shadow: 0 -5px 0 currentColor, 0 5px 0 currentColor;
+}
