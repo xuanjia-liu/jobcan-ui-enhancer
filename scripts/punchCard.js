@@ -151,6 +151,9 @@ function relocateConfirmationItems() {
 }
 
 function renderConfirmationAlertsFrom(card) {
+  // The preview holds this lock; without it the next pass (or the ajax observer
+  // below) would overwrite the fake chips within a second.
+  if (window.__jbe_punchPreview) return;
   const stats = document.querySelector('.jbe-work-stats');
   if (!stats) return;
   const items = parseConfirmationItems(card).filter((item) => item.count > 0);
@@ -292,6 +295,8 @@ function relocateAdminNotices() {
     document.querySelector('.adit-control-area') ||
     document.querySelector('.jbe-punch-card');
   if (!anchor || !anchor.parentElement) return;
+
+  if (window.__jbe_punchPreview) return;
 
   const notices = extractAdminNotices(card);
   const signature = notices.map((node) => (node.textContent || '').replace(/\s+/g, ' ').trim()).join('||');
@@ -554,5 +559,115 @@ function createPunchSettingsToggle(panel, select, anchor) {
   return toggle;
 }
 
+/* ---- Preview hook ----------------------------------------------------------
+ * Both relocations only render when Jobcan has something to show, which on a normal
+ * day is never: the counts are 0件 and there are no notices. This fakes both so the
+ * layout can be checked without waiting for a real one.
+ *
+ * From the page console (the default context — the CustomEvent crosses into the
+ * content script's isolated world):
+ *
+ *   jbePreview()                                  // 2 alerts + 1 notice
+ *   jbePreview({ alerts: 1, notices: 2 })         // counts
+ *   jbePreview({ items: [{ label: '打刻エラー', count: 3 }] })
+ *   jbePreview({ notices: ['メンテナンスのお知らせ'] })
+ *   jbePreview({ reset: true })                   // back to the real data
+ *
+ * where `jbePreview = (o) => window.dispatchEvent(new CustomEvent('jbe:preview', { detail: o }))`.
+ * In the extension's own console context, call window.__jbe_previewPunchCards()
+ * directly. The preview holds a lock so the once-a-second re-apply does not wipe it;
+ * reset releases the lock and re-reads the real cards.
+ */
+
+const PREVIEW_DEFAULT_ITEMS = [
+  { label: '打刻漏れ・打刻間違い', count: 2, href: '/employee/attendance' },
+  { label: '打刻エラー', count: 1, href: '/employee/attendance' }
+];
+
+const PREVIEW_DEFAULT_NOTICES = [
+  '【重要】12月28日〜1月4日は年末年始休業のため、勤怠の締め処理を行いません。',
+  '打刻漏れの修正申請は毎月5日までにお願いします。'
+];
+
+function previewPunchCards(options = {}) {
+  const stats = document.querySelector('.jbe-work-stats');
+
+  if (options.reset) {
+    window.__jbe_punchPreview = false;
+    document.querySelectorAll('.jbe-notices[data-preview="true"]').forEach((node) => node.remove());
+    if (stats) {
+      const alerts = stats.querySelector('.jbe-stat-alerts');
+      if (alerts) alerts.remove();
+      delete stats.dataset.alerts;
+    }
+    relocateConfirmationItems();
+    relocateAdminNotices();
+    return 'preview off — showing the real cards again';
+  }
+
+  window.__jbe_punchPreview = true;
+
+  // Alerts: either explicit items, or the first N of the defaults.
+  const items = Array.isArray(options.items)
+    ? options.items.map((item, index) => ({
+      label: item.label || `確認項目 ${index + 1}`,
+      count: Number(item.count) || 1,
+      href: item.href || '/employee/attendance'
+    }))
+    : PREVIEW_DEFAULT_ITEMS.slice(0, options.alerts === undefined ? 2 : Number(options.alerts) || 0);
+
+  if (stats) {
+    const existing = stats.querySelector('.jbe-stat-alerts');
+    if (existing) existing.remove();
+    renderConfirmationAlerts(stats, items);
+  }
+
+  // Notices: either explicit strings, or the first N of the defaults.
+  const texts = Array.isArray(options.notices)
+    ? options.notices
+    : PREVIEW_DEFAULT_NOTICES.slice(0, options.notices === undefined ? 1 : Number(options.notices) || 0);
+
+  document.querySelectorAll('.jbe-notices').forEach((node) => node.remove());
+
+  if (texts.length) {
+    const anchor = document.getElementById('adit-control-area') ||
+      document.querySelector('.adit-control-area') ||
+      document.querySelector('.jbe-punch-card');
+
+    if (anchor && anchor.parentElement) {
+      const list = document.createElement('div');
+      list.className = 'jbe-notices';
+      list.dataset.preview = 'true';
+      list.dataset.signature = 'preview';
+
+      texts.forEach((text) => {
+        const noticeCard = document.createElement('div');
+        noticeCard.className = 'jbe-notice-card';
+        const body = document.createElement('div');
+        body.className = 'card-text';
+        body.textContent = text;
+        noticeCard.appendChild(body);
+        list.appendChild(noticeCard);
+      });
+
+      anchor.parentElement.insertBefore(list, anchor.nextSibling);
+    }
+  }
+
+  return `preview on — ${items.length} alert(s), ${texts.length} notice(s). ` +
+    'Call again with { reset: true } to restore.';
+}
+
+if (!window.__jbe_punchPreviewBound) {
+  window.__jbe_punchPreviewBound = true;
+  // The listener is what makes this reachable from the page's own console; the
+  // isolated world's globals are not.
+  window.addEventListener('jbe:preview', (event) => {
+    const result = previewPunchCards((event && event.detail) || {});
+    console.info('[jobcan-ui-enhancer]', result);
+  });
+}
+
 window.setupPunchCard = setupPunchCard;
 window.syncPunchStatusBadge = syncPunchStatusBadge;
+window.__jbe_previewPunchCards = previewPunchCards;

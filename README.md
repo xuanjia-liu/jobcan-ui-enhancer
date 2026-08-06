@@ -49,7 +49,7 @@ confetti.min.js        打刻時の演出
 | `utils.js` | `showNotification`（トースト）※唯一の定義元 |
 | `ui.js` | ヘッダー・サイドメニュー・ダークモードなど全体的なUI調整 |
 | `clock.js` | フリップ時計・勤務進捗バー・サマリータイル |
-| `punchCard.js` | トップページの打刻カード（枠の除去・状態ピル・打刻詳細設定の折りたたみ） |
+| `punchCard.js` | トップページの打刻カード（枠の除去・状態ピル・打刻詳細設定の折りたたみ・確認件数／お知らせの移設） |
 | `screenshot.js` | フローティングアクションメニュー（FAB）とスクリーンショット |
 | `overlay.js` | 「労働データ」オーバーレイ |
 | `dataExtraction.js` | 出勤簿・打刻一覧から勤怠データを抽出（`fetch` + `DOMParser`） |
@@ -62,6 +62,25 @@ confetti.min.js        打刻時の演出
 | `manHourList.js` | 工数実績一覧ページ（フィルタ・不一致ハイライト・レポート） |
 | `manHourEditSearch.js` | プロジェクト検索の部分一致対応（**MAIN ワールド**で実行） |
 | `loginInjector.js` | ログインページへの資格情報入力 |
+
+## デバッグ
+
+「以下の項目の確認」の件数は通常0件、「管理者からのお知らせ」も普段は空なので、
+移設後の見た目を確認する手段がありません。トップページのコンソール（ページ側の
+コンテキストでOK）から次を実行するとダミーで再現できます。
+
+```js
+const jbePreview = (o) => window.dispatchEvent(new CustomEvent('jbe:preview', { detail: o }));
+
+jbePreview();                                   // 警告2件＋お知らせ1件
+jbePreview({ alerts: 1, notices: 2 });          // 件数を指定
+jbePreview({ items: [{ label: '打刻エラー', count: 3 }] });
+jbePreview({ notices: ['メンテナンスのお知らせ'] });
+jbePreview({ reset: true });                    // 実データに戻す
+```
+
+プレビュー中はロックがかかり、1秒ごとの再適用で上書きされません。`reset` でロックを
+外して実際のカードを読み直します。
 
 ## 設計上の注意点
 

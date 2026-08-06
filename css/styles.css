@@ -160,9 +160,22 @@
     font-weight: bold;
   }
   
-  /* PUSH button container styling */
-  .jobcan-enhanced .col.mb-3:has(#adit-button-push) {
-    padding: 0;
+  /* Page chrome. Measured from the viewport in to the clock card: container-fluid
+     15px + main.col 8px + jbc-container 20px margin + 15px padding + col 8px, i.e.
+     ~58px of stacked inset per side before a card even starts, then the card's own
+     16px. Three of those layers do the same job, so the two innermost paddings go
+     and the container's 20px margin carries the gutter. (The old
+     `.col.mb-3:has(#adit-button-push) { padding: 0 }` that lived here is covered by
+     the punch-card rules in §13.) */
+  .jobcan-enhanced main.col {
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  /* `!important` because Jobcan's own `.jbc-container` padding carries it. */
+  .jobcan-enhanced .jbc-container {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
   }
   
   /* ==========================================================================
@@ -827,10 +840,17 @@
     overflow: hidden; /* Add this line to clip child content */
   }
   
+  /* The 1rem is spacing *between* stacked blocks. On the first one it is padding the
+     card already provides, which showed up as a dead strip at the top of the
+     relocated notice cards. */
   .jobcan-enhanced .card-text {
     margin-top: 1rem;
   }
-  
+
+  .jobcan-enhanced .card-text:first-child {
+    margin-top: 0;
+  }
+
   .jobcan-enhanced .card-header,
   .jobcan-enhanced .box-header,
   .jobcan-enhanced .panel-header {
@@ -3809,6 +3829,32 @@
     padding: 0 !important;
   }
 
+  /* Inside the punch card, the Bootstrap grid adds another layer of gutters that
+     buys nothing — there is only ever one column per row. Zeroing them puts the
+     summary tiles, the clock and the PUSH row on a single left edge. */
+  .jobcan-enhanced .jbe-punch-card .row {
+    margin-left: 0;
+    margin-right: 0;
+  }
+
+  .jobcan-enhanced .jbe-punch-card [class*="col-"],
+  .jobcan-enhanced .jbe-punch-card .col {
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  /* The PUSH block sits in a `.col-lg-7.m-auto`, whose auto margins centred it
+     ~267px in from the clock above it. `m-auto` is `margin: auto !important`. */
+  .jobcan-enhanced .jbe-punch-card .m-auto,
+  .jobcan-enhanced .jbe-punch-card .mx-auto {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+
+  .jobcan-enhanced .jbe-punch-card .display-2 {
+    margin-bottom: 8px;
+  }
+
   /* ---- Status pill --------------------------------------------------------- */
 
   /* Solid, not a tint: this is the one element that says whether you are on the
@@ -4075,7 +4121,13 @@
     background-color: var(--color-warning-bg-light);
     border-color: var(--color-warning-border);
     color: var(--color-text-primary);
-    text-decoration: none;
+  }
+
+  /* `!important` is load-bearing: Jobcan's own link rule is an `a:not(…)` chain of
+     six pseudo-classes, which out-specifies any plain declaration we can write.
+     Measured on the live page — without it the whole tile stays underlined. */
+  .jobcan-enhanced a.jbe-stat-alert {
+    text-decoration: none !important;
   }
 
   .jobcan-enhanced .jbe-stat-alert .jbe-stat-icon {
@@ -4137,6 +4189,8 @@
      them onto separate lines. Margins off (`m-auto` is `margin: auto !important`,
      so this needs `!important` too), nowrap, and a max-width so the PUSH button
      does not stretch across a wide screen instead. */
+  /* Gutters and the auto margins that centred this row are handled once, for the
+     whole card, above — this only has to size the row. */
   .jobcan-enhanced .jbe-punch-actions {
     display: flex !important;
     align-items: stretch;
@@ -4144,10 +4198,6 @@
     flex-wrap: nowrap;
     width: 100%;
     max-width: 720px;
-    margin-left: 0 !important;
-    margin-right: 0 !important;
-    padding-left: 0;
-    padding-right: 0;
   }
 
   .jobcan-enhanced .jbe-punch-actions .jbe-punch-push {
