@@ -42,6 +42,7 @@
         "scripts/manHourList.js",
         "scripts/requestStatus.js",
         "scripts/emptyState.js",
+        "scripts/requestHeader.js",
         "scripts/main.js",
         "scripts/loginInjector.js"
       ]

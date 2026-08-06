@@ -148,7 +148,11 @@ function ensureClockSettingsInvalidation() {
 function setupFlipClock() {
   ensureClockSettingsInvalidation();
   // Find clock elements
-  const clockElements = document.querySelectorAll('#clock, #display-time, .display-2 > div:not(.flip-clock-container)');
+  // The two :not() exclusions are our own rows, which live in the same
+  // `.display-2` as the clock now: the stats row permanently, the PUSH row
+  // transiently while a clock rebuild evacuates it. Without them this selector
+  // matches those divs as "clock elements" and consumes them.
+  const clockElements = document.querySelectorAll('#clock, #display-time, .display-2 > div:not(.flip-clock-container):not(.jbe-work-stats):not(.jbe-punch-actions)');
   clockElements.forEach(clockElement => {
     if (clockElement.dataset.enhanced === 'true') return;
     clockElement.dataset.enhanced = 'true';
@@ -182,10 +186,18 @@ function createSelfAnimatingClock(clockElement) {
   // Clean up any existing clock containers in this parent
   const existingContainers = parentElement.querySelectorAll('.flip-clock-container');
   existingContainers.forEach(container => {
+    // The PUSH row is Jobcan's own controls, moved inside the card by
+    // punchCard.js — park it back outside first so a clock rebuild can never
+    // destroy the native button. punchCard re-places it on its next pass.
+    const actions = container.querySelector('.jbe-punch-actions');
+    if (actions) parentElement.insertBefore(actions, container);
     cleanupClockContainer(container);
     container.remove();
   });
-  
+  // The stats row is a sibling of the container (see below), so the rebuild has
+  // to remove it explicitly — removing the container no longer takes it along.
+  parentElement.querySelectorAll(':scope > .jbe-work-stats').forEach((row) => row.remove());
+
   const flipClockContainer = document.createElement('div');
   flipClockContainer.className = 'flip-clock-container';
   flipClockContainer.dataset.clockSize = 'medium';
@@ -194,10 +206,6 @@ function createSelfAnimatingClock(clockElement) {
   // The split-flap keyframes read their duration from here, so ANIMATION.flip stays
   // the single source of truth for both the CSS animation and the settle timeout.
   flipClockContainer.style.setProperty('--jbe-flip-duration', `${ANIMATION.flip}ms`);
-  // Summary tiles first, so the day's numbers read above the digits. They live
-  // inside the clock container rather than beside it so they inherit its container
-  // query context and are torn down with it.
-  flipClockContainer.appendChild(createWorkStatsRow());
   const clockDigitsContainer = document.createElement('div');
   clockDigitsContainer.className = 'flip-clock-digits-container';
   flipClockContainer.appendChild(clockDigitsContainer);
@@ -226,6 +234,7 @@ function createSelfAnimatingClock(clockElement) {
 
   progressContainer.appendChild(progressTrack);
   progressContainer.appendChild(scaleRow);
+  progressContainer.appendChild(createProgressLegend());
   if (typeof ResizeObserver !== 'undefined') {
     const scheduleResizeObserver = new ResizeObserver(() => {
       if (!document.body.contains(flipClockContainer)) {
@@ -249,6 +258,11 @@ function createSelfAnimatingClock(clockElement) {
   flipClockContainer.appendChild(progressContainer);
   const initialTime = clockElement.textContent.trim();
   setupSelfAnimatingClockDigits(clockDigitsContainer, initialTime);
+  // Summary tiles sit above the card, on the page background, as their own row.
+  // .jbe-work-stats is its own container-query context now (same width as the
+  // card, so the tiles' cqi values resolve as before), and the rebuild cleanup
+  // above removes it together with the clock container.
+  parentElement.appendChild(createWorkStatsRow());
   parentElement.appendChild(flipClockContainer);
   applyClockSettings(flipClockContainer);
   // Initial color sync (apply working status color on load)
@@ -697,6 +711,36 @@ function updateWorkProgressBar(container) {
   });
 }
 
+/* ---- Timeline legend ------------------------------------------------------
+ * Static row under the axis: one entry per drawable segment state plus the
+ * current-time indicator. The swatches are colored by the same tokens as the
+ * segments themselves (see .work-legend-swatch in styles.css), so the legend can
+ * never drift from the bar.
+ */
+
+const PROGRESS_LEGEND_ITEMS = [
+  { state: 'working', label: '勤務時間' },
+  { state: 'break', label: '休憩時間' },
+  { state: 'noon', label: '休憩（推定）' },
+  { state: 'off', label: '未確定' },
+  { state: 'now', label: '現在時刻' }
+];
+
+function createProgressLegend() {
+  const legend = document.createElement('div');
+  legend.className = 'work-progress-legend';
+  PROGRESS_LEGEND_ITEMS.forEach((item) => {
+    const entry = document.createElement('span');
+    entry.className = 'work-legend-item';
+    const swatch = document.createElement('span');
+    swatch.className = `work-legend-swatch legend-${item.state}`;
+    entry.appendChild(swatch);
+    entry.appendChild(document.createTextNode(item.label));
+    legend.appendChild(entry);
+  });
+  return legend;
+}
+
 /* ---- Summary tiles -------------------------------------------------------
  * A four-tile readout above the digits: worked time, progress against the daily
  * target, remaining time, and when the target is (or was) reached. Every figure
@@ -778,7 +822,10 @@ function setStatText(tile, selector, text) {
 }
 
 function updateWorkStatsRow(container, state) {
-  const row = container.querySelector('.jbe-work-stats');
+  // The stats row is a sibling of the clock container, not a child — see
+  // createSelfAnimatingClock.
+  const scope = container.parentElement || container;
+  const row = scope.querySelector('.jbe-work-stats');
   if (!row) return;
 
   const tiles = {};

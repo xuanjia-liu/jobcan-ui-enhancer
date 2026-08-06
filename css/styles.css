@@ -485,9 +485,11 @@
   .jobcan-enhanced .jbc-sidemenu {
     background-color: var(--color-card);
     box-shadow: var(--shadow);
-    border-radius: var(--border-radius-md);
+    border-radius: var(--border-radius-xl);
     margin: 16px;
-    padding: 16px 0;
+    /* No bottom padding: the 言語 select row at the menu's foot carries its own
+       spacing, so the panel's padding doubled it. */
+    padding: 16px 0 0;
     /* auto, not hidden: the panel is position:fixed (see below), so on a short
        viewport `hidden` clipped the tail of the menu with no way to scroll to it —
        measured at a 243px content height, 10 of 13 items including 申請 and
@@ -1171,6 +1173,27 @@
   .jobcan-enhanced body.dark-mode .jbc-table-footer th {
     background-color: var(--color-surface) !important;
     color: var(--color-text-primary) !important;
+  }
+
+  /* Request-list pages: the h2 and the 新規申請 buttons are lifted into one row by
+     scripts/requestHeader.js, so the primary action sits right of the title. */
+  .jobcan-enhanced .jbe-page-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    margin-bottom: 16px;
+  }
+
+  .jobcan-enhanced .jbe-page-head > h2 {
+    margin-bottom: 0 !important;
+  }
+
+  /* The moved block keeps Jobcan's .card-title, which carries card spacing. */
+  .jobcan-enhanced .jbe-page-head .jbe-page-head-actions {
+    margin-bottom: 0 !important;
+    margin-left: auto;
   }
 
   /* Friendly empty state injected on request-list pages with no records. */
@@ -1899,6 +1922,12 @@
     box-sizing: border-box;
     container-type: inline-size;
     container-name: flip-clock;
+    /* The card fills the viewport below the header and the summary tiles, so the
+       digits+PUSH group floats in the free space and the timeline sits on the
+       card's bottom edge (auto margins on the children do the distribution).
+       The subtrahend is header + tiles row + page margins, measured on the live
+       page; content taller than this simply grows past it. */
+    min-height: clamp(480px, calc(100dvh - 244px), 1600px);
     /* Vertical rhythm between the digits row and the progress card. The row no
        longer butts up against the panel below it. */
     gap: clamp(12px, 2.6cqi, 20px);
@@ -1926,6 +1955,28 @@
   .jobcan-enhanced .flip-clock-container[data-clock-size='xxlarge'] {
     --flip-digit-min: 46px;
     --flip-digit-max: 160px;
+  }
+
+  /* Inside the stretched card (min-height above), the digits row and the PUSH row
+     take an auto margin each, which centres the pair in the free space between the
+     card top and the timeline. `!important` on the second: the PUSH col carries
+     Bootstrap's `.mb-3` (`margin-bottom: 1rem !important`). */
+  .jobcan-enhanced .flip-clock-container > .flip-clock-digits-container {
+    margin-top: auto;
+  }
+
+  .jobcan-enhanced .flip-clock-container > .jbe-punch-actions {
+    /* flex none: the row is a Bootstrap .col (flex-grow: 1), which in this column
+       flex would absorb the card's free height and stretch the PUSH button with it. */
+    flex: 0 0 auto;
+    margin-bottom: auto !important;
+    /* The row sits inside Jobcan's .display-2 now, whose display-size font (and
+       our 600 weight on it) would cascade into the settings popover's native rows
+       (打刻場所 label, 通常/夜勤 radios). Reset to page text here so everything
+       inside — popover included — inherits sane metrics. */
+    font-size: var(--font-size-base);
+    font-weight: 400;
+    line-height: 1.5;
   }
 
   /* Clock digits container. align-items is `center`, not `stretch`: the digits set
@@ -2125,10 +2176,12 @@
     border-radius: 0 0 var(--border-radius-lg) var(--border-radius-lg);
   }
 
-  /* Hide original clock */
+  /* Hide original clock. The :not() exclusions mirror setupFlipClock's selector:
+     the stats row and (during a rebuild) the PUSH row are our own divs in the
+     same .display-2 and must stay visible. */
   .jobcan-enhanced #clock,
   .jobcan-enhanced #display-time,
-  .jobcan-enhanced .display-2 > div:not(.flip-clock-container) {
+  .jobcan-enhanced .display-2 > div:not(.flip-clock-container):not(.jbe-work-stats):not(.jbe-punch-actions) {
     display: none;
   }
   
@@ -2287,11 +2340,12 @@
     box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-work-segment-noon-end) 35%, transparent 65%);
   }
 
-  /* A real, punched break. Same palette as the assumed band so rest reads as rest,
-     but fully opaque — this one is measured rather than guessed. */
+  /* A real, punched break. Its own teal palette, distinct from the yellow assumed
+     band — this one is measured rather than guessed, and the legend names the two
+     separately (休憩時間 vs 休憩（推定）). */
   .jobcan-enhanced .work-schedule-segment.segment-break {
-    background: linear-gradient(90deg, var(--color-work-segment-noon-start) 0%, var(--color-work-segment-noon-end) 100%);
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-work-segment-noon-end) 55%, transparent 45%);
+    background: linear-gradient(90deg, var(--color-work-segment-break-start) 0%, var(--color-work-segment-break-end) 100%);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-work-segment-break-end) 55%, transparent 45%);
   }
   
   /* ---- Axis labels --------------------------------------------------------
@@ -2339,6 +2393,58 @@
     z-index: 6;
     border-radius: 999px;
     box-shadow: 0 0 0 1px var(--color-work-progress-scale-ring);
+  }
+
+  /* ---- Timeline legend ----------------------------------------------------
+     Built once per clock in createProgressLegend(). The swatches reuse the segment
+     tokens verbatim so legend and bar cannot disagree. */
+  .jobcan-enhanced .work-progress-legend {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px clamp(14px, 2.4cqi, 32px);
+    margin-top: 10px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+  }
+
+  .jobcan-enhanced .work-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    white-space: nowrap;
+  }
+
+  .jobcan-enhanced .work-legend-swatch {
+    flex: 0 0 auto;
+    width: 13px;
+    height: 13px;
+    border-radius: 4px;
+  }
+
+  .jobcan-enhanced .work-legend-swatch.legend-working {
+    background: linear-gradient(90deg, var(--color-work-segment-working-start) 0%, var(--color-work-segment-working-end) 100%);
+  }
+
+  .jobcan-enhanced .work-legend-swatch.legend-break {
+    background: linear-gradient(90deg, var(--color-work-segment-break-start) 0%, var(--color-work-segment-break-end) 100%);
+  }
+
+  .jobcan-enhanced .work-legend-swatch.legend-noon {
+    background: linear-gradient(90deg, var(--color-work-segment-noon-start) 0%, var(--color-work-segment-noon-end) 100%);
+  }
+
+  .jobcan-enhanced .work-legend-swatch.legend-off {
+    background: linear-gradient(90deg, var(--color-work-segment-off-start) 0%, var(--color-work-segment-off-end) 100%);
+  }
+
+  /* Shaped like the indicator it stands for: a slim red bar, not a square. */
+  .jobcan-enhanced .work-legend-swatch.legend-now {
+    width: 5px;
+    height: 14px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, var(--color-danger) 0%, var(--color-danger-dark) 100%);
   }
 
   /* ---- Daily-target notch -------------------------------------------------
@@ -2430,7 +2536,9 @@
     width: 4px;
     height: 14px;
     border-radius: 999px;
-    background: linear-gradient(180deg, var(--color-info) 0%, color-mix(in srgb, var(--color-info) 72%, var(--color-black-85) 28%) 100%);
+    /* Red, matching the 現在時刻 legend entry — blue-on-blue disappeared into the
+       working segments it usually sits on. */
+    background: linear-gradient(180deg, var(--color-danger) 0%, color-mix(in srgb, var(--color-danger) 72%, var(--color-black-85) 28%) 100%);
     border: 2px solid var(--color-work-progress-marker-border);
     box-shadow: 0 0 0 2px var(--color-work-progress-indicator-ring), 0 2px 8px var(--color-work-progress-indicator-shadow);
     z-index: 9;
@@ -3807,6 +3915,17 @@
      `!important` on the wrapper properties is load-bearing: the card carries
      Bootstrap utilities (.bg-white, .border, .p-*) that specificity cannot beat. */
 
+  /* Jobcan caps .jbc-container at 1280px, which strands the punch UI in the
+     middle of a wide window with dead space either side. Lift the cap on the top
+     page only (:has scopes it to the container holding the punch card — the
+     tables on other pages keep Jobcan's width). The clock sizes itself in cqi
+     units and the summary tiles flex, so they absorb the extra width.
+     `!important` is load-bearing: Jobcan's own cap is `!important` (verified —
+     without it the container stays at 1280px). */
+  .jobcan-enhanced .jbc-container:has(.jbe-punch-card) {
+    max-width: none !important;
+  }
+
   .jobcan-enhanced .jbe-punch-card {
     background: transparent !important;
     background-color: transparent !important;
@@ -3925,6 +4044,11 @@
     gap: clamp(6px, 1.6cqi, 14px);
     width: 100%;
     min-width: 0;
+    /* The row sits above the clock card, on the page background, as a sibling of
+       .flip-clock-container — so it is its own query container. It spans the same
+       width the clock card does, so the tiles' cqi values resolve as before. */
+    container-type: inline-size;
+    margin-bottom: 16px;
   }
 
   .jobcan-enhanced .jbe-stat-tile {
@@ -3937,9 +4061,9 @@
        all three lines against the icon. */
     text-align: left;
     border-radius: var(--border-radius-xl);
-    /* The clock container is white now, so white tiles on it would be delineated by
-       the border alone. Same quiet surface the progress panel uses below. */
-    background-color: var(--color-surface);
+    /* The tiles float on the page background now (the row sits above the clock
+       card), so they carry the card surface themselves. */
+    background-color: var(--color-card);
     border: 1px solid var(--color-border-light);
     box-shadow: var(--shadow-sm);
   }
@@ -4191,6 +4315,15 @@
      does not stretch across a wide screen instead. */
   /* Gutters and the auto margins that centred this row are handled once, for the
      whole card, above — this only has to size the row. */
+  /* …except horizontally: 打刻詳細設定 + PUSH sit under the centred clock, so this
+     one column keeps the auto side margins the card-wide reset strips. Tagged in
+     punchCard.js. The second rule handles a column wider than the row's
+     max-width, where centring has to happen inside the column instead. */
+  .jobcan-enhanced .jbe-punch-card .jbe-punch-actions-col {
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
+
   .jobcan-enhanced .jbe-punch-actions {
     display: flex !important;
     align-items: stretch;
@@ -4198,6 +4331,8 @@
     flex-wrap: nowrap;
     width: 100%;
     max-width: 720px;
+    margin-left: auto;
+    margin-right: auto;
   }
 
   .jobcan-enhanced .jbe-punch-actions .jbe-punch-push {

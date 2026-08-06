@@ -207,8 +207,12 @@
     --color-clock-group-bg: rgba(15, 23, 42, 0.04);
     --color-clock-group-border: rgba(15, 23, 42, 0.07);
     --color-clock-seam: rgba(0, 0, 0, 0.26);
+    /* Working reads as one blue (the old blue→green gradient made every span look
+       like two states); teal is reserved for real punched breaks. */
     --color-work-segment-working-start: #1e7cf2;
-    --color-work-segment-working-end: #13a26b;
+    --color-work-segment-working-end: #4a9df5;
+    --color-work-segment-break-start: #14b8a6;
+    --color-work-segment-break-end: #0d9488;
     --color-work-segment-off-start: #858e99;
     --color-work-segment-off-end: #77818e;
     --color-work-segment-noon-start: #e8b931;
@@ -223,8 +227,9 @@
     --color-work-progress-marker-shadow: rgba(15, 23, 42, 0.16);
     --color-work-progress-marker-hover-ring: rgba(15, 23, 42, 0.1);
     --color-work-progress-marker-hover-shadow: rgba(15, 23, 42, 0.22);
-    --color-work-progress-indicator-shadow: rgba(14, 165, 233, 0.3);
-    --color-work-progress-indicator-ring: rgba(14, 165, 233, 0.14);
+    /* Red-tinted: the indicator is red now (see .work-progress-indicator). */
+    --color-work-progress-indicator-shadow: rgba(220, 53, 69, 0.3);
+    --color-work-progress-indicator-ring: rgba(220, 53, 69, 0.14);
     --color-work-progress-tooltip-bg: rgba(15, 23, 42, 0.94);
     --color-work-progress-tooltip-text: #f8fafc;
     --color-celebration-1: #0066DD;
@@ -322,7 +327,9 @@
     --shadow-modal: -5px 0 25px rgba(0, 0, 0, 0.4);
     --shadow-modal-content: -2px 0 10px rgba(0, 0, 0, 0.4);
     --color-work-segment-working-start: #4ea8ff;
-    --color-work-segment-working-end: #2ac18e;
+    --color-work-segment-working-end: #6db7ff;
+    --color-work-segment-break-start: #2dd4bf;
+    --color-work-segment-break-end: #14b8a6;
     --color-work-segment-off-start: #3c424b;
     --color-work-segment-off-end: #31363e;
     --color-work-segment-noon-start: #c9a227;
@@ -337,8 +344,9 @@
     --color-work-progress-marker-shadow: rgba(2, 6, 23, 0.34);
     --color-work-progress-marker-hover-ring: rgba(148, 163, 184, 0.18);
     --color-work-progress-marker-hover-shadow: rgba(2, 6, 23, 0.4);
-    --color-work-progress-indicator-shadow: rgba(102, 194, 255, 0.34);
-    --color-work-progress-indicator-ring: rgba(102, 194, 255, 0.18);
+    /* Red-tinted: the indicator is red now (see .work-progress-indicator). */
+    --color-work-progress-indicator-shadow: rgba(248, 113, 113, 0.34);
+    --color-work-progress-indicator-ring: rgba(248, 113, 113, 0.18);
     --color-work-progress-tooltip-bg: rgba(15, 23, 42, 0.96);
     --color-work-progress-tooltip-text: #f8fafc;
     --color-celebration-1: #66a3ff;

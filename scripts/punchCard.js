@@ -53,8 +53,24 @@ function setupPunchCard() {
   ensurePunchStatusBadge(clock);
   syncPunchStatusBadge();
   collapsePunchSettings(card, push, clock);
+  placePunchActionsRow(clock);
   relocateConfirmationItems();
   relocateAdminNotices();
+}
+
+/* The 打刻詳細設定+PUSH row lives inside the clock card, between the digits and
+ * the timeline. It is Jobcan's own column (tagged .jbe-punch-actions by
+ * collapsePunchSettings) carrying the native PUSH button — verified: the button
+ * is not inside any <form>, its onclick attribute travels with it — so the node
+ * is moved, never rebuilt. clock.js parks it back outside before tearing a clock
+ * container down, so a rebuild can never destroy it. */
+function placePunchActionsRow(clock) {
+  if (!clock) return;
+  const actions = document.querySelector('.jbe-punch-actions');
+  const progress = clock.querySelector('.work-progress-container');
+  if (!actions || !progress) return;
+  if (actions.parentElement === clock) return;
+  clock.insertBefore(actions, progress);
 }
 
 /* ---- Finding a Jobcan card by the text it contains -------------------------
@@ -488,6 +504,12 @@ function collapsePunchSettings(card, push, clock) {
   push.parentElement.insertBefore(anchor, push);
   push.parentElement.classList.add('jbe-punch-actions');
   push.classList.add('jbe-punch-push');
+
+  // Tag the Bootstrap column that wraps the row (`.col-lg-7.m-auto`) so CSS can
+  // re-centre this one column. The card-wide `m-auto` reset left-aligns every
+  // column, but this row belongs under the centred clock.
+  const actionsCol = push.closest('.m-auto');
+  if (actionsCol) actionsCol.classList.add('jbe-punch-actions-col');
 }
 
 function createPunchSettingsToggle(panel, select, anchor) {

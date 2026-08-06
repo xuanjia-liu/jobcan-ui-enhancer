@@ -72,6 +72,7 @@ const crossFileGlobals = {
   setupManHourListPage: 'readonly',
   setupRequestStatusBadges: 'readonly',
   setupRequestListEmptyState: 'readonly',
+  setupRequestHeaderActions: 'readonly',
   JBE_ManHourApi: 'readonly'
 };
 
