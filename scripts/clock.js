@@ -114,7 +114,7 @@ const ALIGNED_TICK_SAFETY_MS = 5;
 // re-triggers roughly once a second during DOM churn — and each call used to be
 // its own chrome.storage.sync.get round-trip. The cache is invalidated by the
 // storage.onChanged listener below, so the popup's writes still land immediately.
-const CLOCK_SETTING_KEYS = ['clockSize', 'showSeconds', 'showProgressBar'];
+const CLOCK_SETTING_KEYS = ['clockSize', 'showProgressBar'];
 let cachedClockSettings = null;
 let clockSettingsPromise = null;
 
@@ -194,6 +194,10 @@ function createSelfAnimatingClock(clockElement) {
   // The split-flap keyframes read their duration from here, so ANIMATION.flip stays
   // the single source of truth for both the CSS animation and the settle timeout.
   flipClockContainer.style.setProperty('--jbe-flip-duration', `${ANIMATION.flip}ms`);
+  // Summary tiles first, so the day's numbers read above the digits. They live
+  // inside the clock container rather than beside it so they inherit its container
+  // query context and are torn down with it.
+  flipClockContainer.appendChild(createWorkStatsRow());
   const clockDigitsContainer = document.createElement('div');
   clockDigitsContainer.className = 'flip-clock-digits-container';
   flipClockContainer.appendChild(clockDigitsContainer);
@@ -220,11 +224,8 @@ function createSelfAnimatingClock(clockElement) {
   const scaleRow = document.createElement('div');
   scaleRow.className = 'work-progress-scale';
 
-  const percentageIndicator = document.createElement('div');
-  percentageIndicator.className = 'work-progress-percentage';
   progressContainer.appendChild(progressTrack);
   progressContainer.appendChild(scaleRow);
-  progressContainer.appendChild(percentageIndicator);
   if (typeof ResizeObserver !== 'undefined') {
     const scheduleResizeObserver = new ResizeObserver(() => {
       if (!document.body.contains(flipClockContainer)) {
@@ -357,7 +358,18 @@ function setupSelfAnimatingClockDigits(container, timeString) {
       if (isSeconds) digitElement.dataset.position = 'seconds';
       group.appendChild(digitElement);
     }
-    container.appendChild(group);
+    if (!isSeconds) {
+      container.appendChild(group);
+      return;
+    }
+    // The seconds pair sits at the bottom of the row with the working-status pill
+    // stacked above it (punchCard.js fills the slot). Wrapping rather than
+    // positioning keeps the digits in document order, which the tick cache and the
+    // colour sync both rely on — they read a flat querySelectorAll.
+    const stack = document.createElement('div');
+    stack.className = 'flip-seconds-stack';
+    stack.appendChild(group);
+    container.appendChild(stack);
   };
 
   const appendColon = (isSecondsColon) => {
@@ -635,23 +647,27 @@ function animateDigitChangeOptimized(cachedDigit, newDigit) {
 
 // Optimized work progress bar update with cached elements
 function updateWorkProgressBar(container) {
-  const progressContainer = container.querySelector('.work-progress-container'); 
+  // The summary tiles are outside the progress panel and must refresh even when the
+  // panel is hidden by the popup's setting, so they are updated before the bail-outs.
+  updateWorkStatsRow(container, container._punchDataState || 'loading');
+
+  const progressContainer = container.querySelector('.work-progress-container');
   if (!progressContainer) return;
-  
+
   // Cache elements if not already cached. There is no `.work-progress-fill` any
   // more: it had no CSS at all (no height, no background), so it rendered nothing
   // — the coloured bands come from `.work-schedule-layer`. Its `progress-state-*`
-  // classes were equally unstyled.
+  // classes were equally unstyled. The `.work-progress-percentage` status line is
+  // gone too: worked time, progress and remaining time all read off the summary
+  // tiles now, and the two wordings could only ever repeat each other.
   if (!progressContainer._cachedElements) {
     progressContainer._cachedElements = {
       track: progressContainer.querySelector('.work-progress-track'),
-      indicator: progressContainer.querySelector('.work-progress-indicator'),
-      percentage: progressContainer.querySelector('.work-progress-percentage')
+      indicator: progressContainer.querySelector('.work-progress-indicator')
     };
   }
 
-  const { indicator, percentage } = progressContainer._cachedElements;
-  if (!percentage) return;
+  const { indicator } = progressContainer._cachedElements;
 
   const now = new Date();
   const currentMinOfDay = now.getHours() * 60 + now.getMinutes();
@@ -668,99 +684,201 @@ function updateWorkProgressBar(container) {
 
   const progress = Math.max(0, Math.min(100, axisPercent(currentMinOfDay, axis)));
 
-  const state = container._punchDataState || 'loading';
-  const statusText = describeWorkProgress(state, container);
-  const hasAnomaly = state === 'ok' && getPunchAnomalies(container._cachedPunchEntries || []).length > 0;
-
-  // Batch DOM updates to avoid multiple reflows
+  // Batch DOM updates to avoid multiple reflows. The `data-punch-state` /
+  // `data-punch-anomaly` attributes that used to be written here are gone with the
+  // panel's surface: both cues now live on the summary tiles, which is where the
+  // wording they annotated ended up.
   requestAnimationFrame(() => {
-    progressContainer.dataset.punchState = state;
-    progressContainer.dataset.punchAnomaly = hasAnomaly ? 'true' : 'false';
-
     // Update indicator position if it exists
     if (indicator) {
       indicator.style.left = `${progress}%`;
       indicator.title = `現在時刻 ${now.toTimeString().slice(0,5)}`;
     }
-
-    // Update text content
-    renderProgressText(percentage, statusText);
   });
 }
 
-/**
- * The status line. The bar is wall-clock time-of-day; this text reports WORKED time
- * against the daily target, so 経過 / 残り / 本日勤務 all describe the same quantity.
- *
- * Each data state gets its own wording. Previously only the `ok` wording existed:
- * a failed storage read, a day with no punches yet, and a genuine 0分 all rendered
- * as `本日勤務 0分`, so there was no way to tell "nothing recorded" from "could not
- * read the data".
+/* ---- Summary tiles -------------------------------------------------------
+ * A four-tile readout above the digits: worked time, progress against the daily
+ * target, remaining time, and when the target is (or was) reached. Every figure
+ * comes from the same punch entries and the same segment analysis as the progress
+ * bar's status line, so the two can never disagree.
  */
-function describeWorkProgress(state, container) {
-  if (state === 'loading') return '勤務データを読み込み中…';
-  if (state === 'unavailable') return '勤務データを取得できませんでした';
-  if (state === 'empty') return '本日の打刻はまだありません';
 
-  const punchEntries = container._cachedPunchEntries || [];
+const WORK_STAT_TILES = [
+  { key: 'worked', label: '本日勤務時間', icon: 'clock' },
+  { key: 'progress', label: '定時進捗率', icon: 'pie' },
+  { key: 'remaining', label: '残り時間', icon: 'flag' },
+  { key: 'finish', label: '目標達成時刻', icon: 'calendar' }
+];
 
-  // A contradicted punch means Jobcan itself will not settle the day, so leading
-  // with a worked-time figure would be presenting a number that is going to change.
-  const anomalies = getPunchAnomalies(punchEntries);
-  if (anomalies.length > 0) {
-    const first = anomalies[0];
-    return `打刻エラー: ${formatMinutesAsClock(first.minutes)} の${first.type}が入室として扱われています`;
+/** Inline SVGs — no external assets, and `currentColor` follows the theme. */
+const WORK_STAT_ICONS = {
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  pie: '<path d="M12 3a9 9 0 1 0 9 9h-9z"/><path d="M12 3v9h9A9 9 0 0 0 12 3z"/>',
+  flag: '<path d="M5 21V4"/><path d="M5 5h11l-1.6 3L16 11H5z"/>',
+  calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>'
+};
+
+function createWorkStatsRow() {
+  const row = document.createElement('div');
+  row.className = 'jbe-work-stats';
+
+  WORK_STAT_TILES.forEach((tile) => {
+    const node = document.createElement('div');
+    node.className = 'jbe-stat-tile';
+    node.dataset.stat = tile.key;
+
+    const icon = document.createElement('span');
+    icon.className = 'jbe-stat-icon';
+    icon.innerHTML =
+      `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" ` +
+      `stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${WORK_STAT_ICONS[tile.icon]}</svg>`;
+
+    const body = document.createElement('div');
+    body.className = 'jbe-stat-body';
+
+    const label = document.createElement('span');
+    label.className = 'jbe-stat-label';
+    label.textContent = tile.label;
+
+    const value = document.createElement('span');
+    value.className = 'jbe-stat-value';
+    value.textContent = '—';
+
+    const sub = document.createElement('span');
+    sub.className = 'jbe-stat-sub';
+
+    body.appendChild(label);
+    body.appendChild(value);
+
+    if (tile.key === 'progress') {
+      const bar = document.createElement('span');
+      bar.className = 'jbe-stat-bar';
+      const fill = document.createElement('span');
+      fill.className = 'jbe-stat-bar-fill';
+      bar.appendChild(fill);
+      body.appendChild(bar);
+    } else {
+      body.appendChild(sub);
+    }
+
+    node.appendChild(icon);
+    node.appendChild(body);
+    row.appendChild(node);
+  });
+
+  return row;
+}
+
+/** Write `text` only when it differs — this runs on every progress tick. */
+function setStatText(tile, selector, text) {
+  const node = tile ? tile.querySelector(selector) : null;
+  if (!node) return;
+  if (node.textContent !== text) node.textContent = text;
+}
+
+function updateWorkStatsRow(container, state) {
+  const row = container.querySelector('.jbe-work-stats');
+  if (!row) return;
+
+  const tiles = {};
+  WORK_STAT_TILES.forEach((tile) => {
+    tiles[tile.key] = row.querySelector(`.jbe-stat-tile[data-stat="${tile.key}"]`);
+  });
+
+  if (row.dataset.punchState !== state) row.dataset.punchState = state;
+
+  // Anything other than a successful read has no numbers to show. Blanking the
+  // values and saying why beats presenting 0時間 as if it were measured.
+  if (state !== 'ok') {
+    const reason = state === 'loading'
+      ? '読み込み中'
+      : state === 'empty' ? '打刻なし' : '取得できません';
+    WORK_STAT_TILES.forEach((tile) => {
+      setStatText(tiles[tile.key], '.jbe-stat-value', '—');
+      setStatText(tiles[tile.key], '.jbe-stat-sub', reason);
+    });
+    const fill = row.querySelector('.jbe-stat-bar-fill');
+    if (fill) fill.style.width = '0%';
+    return;
   }
 
-  const workedMinutes = getWorkedMinutesToday(punchEntries);
+  const entries = container._cachedPunchEntries || [];
   const target = WORK_HOURS.targetMinutes;
-  let text;
+  const worked = getWorkedMinutesToday(entries);
+  const percent = target > 0 ? Math.round((worked / target) * 100) : 0;
+  const remaining = Math.max(0, target - worked);
+  const over = Math.max(0, worked - target);
+  const workState = getWorkStateAtNow(entries);
 
-  if (workedMinutes >= target) {
-    const over = workedMinutes - target;
-    text = `本日勤務 ${formatWorkedDurationMinutes(workedMinutes)} • 目標達成${over > 0 ? ` (+${formatWorkedDurationMinutes(over)})` : ''}`;
-  } else {
-    const pct = target > 0 ? Math.min(100, (workedMinutes / target) * 100) : 0;
-    text = `本日勤務 ${formatWorkedDurationMinutes(workedMinutes)} • ${pct.toFixed(0)}% • 残り ${formatWorkedDurationMinutes(target - workedMinutes)}`;
+  setStatText(tiles.worked, '.jbe-stat-value', formatWorkedDurationMinutes(worked));
+  setStatText(tiles.worked, '.jbe-stat-sub', describeWorkedSpan(entries, workState, container));
+  // The two warnings the removed status line used to carry. A contradicted punch
+  // means Jobcan will not settle the day, so the figures above it are provisional.
+  const anomalies = getPunchAnomalies(entries);
+  if (tiles.worked) {
+    tiles.worked.dataset.warn = anomalies.length > 0 ? 'anomaly' : '';
+    const first = anomalies[0];
+    const warning = first
+      ? `打刻エラー: ${formatMinutesAsClock(first.minutes)} の${first.type}が入室として扱われています`
+      : '';
+    if (tiles.worked.title !== warning) tiles.worked.title = warning;
   }
 
-  // Surface staleness rather than presenting old numbers as current. fetchedAt was
-  // already being stored by the punch loader and never shown anywhere.
+  setStatText(tiles.progress, '.jbe-stat-value', `${percent}%`);
+  const fill = row.querySelector('.jbe-stat-bar-fill');
+  if (fill) {
+    const width = `${Math.max(0, Math.min(100, percent))}%`;
+    if (fill.style.width !== width) fill.style.width = width;
+    fill.classList.toggle('is-complete', worked >= target);
+  }
+
+  setStatText(
+    tiles.remaining,
+    '.jbe-stat-value',
+    over > 0 ? `+${formatWorkedDurationMinutes(over)}` : formatWorkedDurationMinutes(remaining)
+  );
+  setStatText(
+    tiles.remaining,
+    '.jbe-stat-sub',
+    over > 0 ? `目標 ${formatWorkedDurationMinutes(target)} 超過` : `目標 ${formatWorkedDurationMinutes(target)}`
+  );
+
+  const completion = getTargetCompletion(entries);
+  setStatText(tiles.finish, '.jbe-stat-value', completion ? formatMinutesAsClock(completion.minutes) : '—');
+  setStatText(
+    tiles.finish,
+    '.jbe-stat-sub',
+    completion ? (completion.projected ? '到達見込み' : '到達済み') : '見込み未定'
+  );
+}
+
+/**
+ * The `06:00 - 現在` style sub-line on the worked-time tile: first punch of the day
+ * through either now (still on the clock) or the last recorded punch.
+ *
+ * Also where staleness is surfaced — showing an hour-old figure as `現在` would be
+ * presenting a stale number as live. fetchedAt is written by the punch loader.
+ */
+function describeWorkedSpan(entries, workState, container) {
+  const working = getResolvedDaySegments(entries).filter((s) => s.state === 'working');
+  if (!working.length) return '打刻なし';
+
+  const start = formatMinutesAsClock(working[0].start);
+  const end = workState === 'working' ? '現在' : formatMinutesAsClock(working[working.length - 1].end);
+
   const ageMinutes = getPunchDataAgeMinutes(container);
-  if (ageMinutes !== null && ageMinutes >= STALE_PUNCH_DATA_MINUTES) {
-    text += ` • ${ageMinutes}分前の記録`;
-  }
+  const stale = ageMinutes !== null && ageMinutes >= STALE_PUNCH_DATA_MINUTES
+    ? ` • ${ageMinutes}分前`
+    : '';
 
-  return text;
+  return `${start} - ${end}${stale}`;
 }
 
 function getPunchDataAgeMinutes(container) {
   const fetchedAt = Number(container._punchFetchedAt) || 0;
   if (!fetchedAt) return null;
   return Math.max(0, Math.floor((Date.now() - fetchedAt) / 60000));
-}
-
-/**
- * The status line. The axis ends used to be pinned here as fixed 06:00 / 24:00
- * labels; the scale row under the track now carries them (and every tick between),
- * so the status text gets the full width instead of a squeezed middle column.
- */
-function renderProgressText(percentageElement, statusText) {
-  if (!percentageElement) return;
-
-  let status = percentageElement.querySelector('.work-progress-inline-status');
-  if (!status) {
-    percentageElement.innerHTML = '';
-    status = document.createElement('span');
-    status.className = 'work-progress-inline-status';
-    percentageElement.appendChild(status);
-  }
-
-  // Only touch the DOM when the wording actually changes — this runs every 30s.
-  if (status.textContent !== statusText) {
-    status.textContent = statusText;
-    status.title = statusText;
-  }
 }
 
 function getTodayDateKeys() {
@@ -1177,6 +1295,27 @@ function getOrCreateWorkScheduleLayer(track) {
   return layer;
 }
 
+/**
+ * Tooltip text for one band: what it is, when it ran, and how long it lasted.
+ *
+ * The `off` band that runs to midnight is the day's remaining time rather than a
+ * recorded absence, so it is worded as such — labelling it 退勤 would be asserting
+ * a clock-out that has not happened.
+ */
+function describeScheduleSegment(segment) {
+  const span = `${formatMinutesAsClock(segment.start)}–${formatMinutesAsClock(segment.end)}`;
+  const duration = formatWorkedDurationMinutes(segment.end - segment.start);
+
+  if (segment.state === 'working') return `勤務 ${span}（${duration}）`;
+  if (segment.state === 'break') return `休憩 ${span}（${duration}）`;
+  if (segment.state === 'noon') return `昼休憩 ${span}（打刻がないため推定）`;
+
+  const now = new Date();
+  const nowMinutes = (now.getHours() * 60) + now.getMinutes();
+  if (segment.start >= nowMinutes) return `未経過 ${span}（${duration}）`;
+  return `勤務外 ${span}（${duration}）`;
+}
+
 function renderWorkScheduleSegments(track, entries, axis) {
   if (!track) return;
   const layer = getOrCreateWorkScheduleLayer(track);
@@ -1192,18 +1331,31 @@ function renderWorkScheduleSegments(track, entries, axis) {
   const layerWidthPx = Math.max(layer.clientWidth || trackWidth - dotNormal - 2, 1);
   const boundaryGapPercent = (boundaryGapPx / layerWidthPx) * 100;
   // Segments are built in absolute minutes, so clip them to the axis for drawing.
+  // `source` is the unclipped span: geometry uses the clamped one, the tooltip
+  // reports the real times so a band cut off by the axis edge does not read as if
+  // it ended there.
   const visibleSegments = getResolvedDaySegments(entries)
-    .map((segment) => clampSegmentToAxis(segment, axis))
+    .map((segment) => {
+      const clamped = clampSegmentToAxis(segment, axis);
+      return clamped ? { ...clamped, source: segment } : null;
+    })
     .filter(Boolean);
 
   visibleSegments.forEach((segment, visIndex) => {
     const segmentNode = document.createElement('div');
     segmentNode.className = `work-schedule-segment segment-${segment.state}`;
-    if (segment.state === 'noon') {
-      segmentNode.title = '昼休憩 13:00–14:00（打刻がないため推定）';
-    } else if (segment.state === 'break') {
-      segmentNode.title = `休憩 ${formatMinutesAsClock(segment.start)}–${formatMinutesAsClock(segment.end)}`;
-    }
+
+    // Every band gets the same hover treatment. No `title` attribute: it races the
+    // styled tooltip, which is why the punch markers dropped theirs — you would get
+    // the custom one immediately and the native one a second later, offset from it.
+    const description = describeScheduleSegment(segment.source || segment);
+    segmentNode.addEventListener('mouseenter', (e) => {
+      showPunchMarkerTooltip(description, e.clientX, e.clientY);
+    });
+    segmentNode.addEventListener('mousemove', (e) => {
+      showPunchMarkerTooltip(description, e.clientX, e.clientY);
+    });
+    segmentNode.addEventListener('mouseleave', hidePunchMarkerTooltip);
 
     let left = axisPercent(segment.start, axis);
     let right = axisPercent(segment.end, axis);
@@ -1339,17 +1491,15 @@ function normalizeTimeFormat(timeString) {
 
 function applyClockSettingsToContainer(container, settings) {
   const clockSize = settings.clockSize || 'medium';
-  const showSeconds = settings.showSeconds !== false;
   const showProgressBar = settings.showProgressBar !== false;
 
   // Every setting is expressed as one attribute on the container and resolved by
-  // CSS (see the [data-show-seconds='false'] rules in styles.css). This function
+  // CSS (see the [data-clock-size] rules in styles.css). This function
   // runs on every applyEnhancements() pass — roughly once a second — so it must
   // not walk the digits: it used to write 8 inline styles per digit per pass, all
   // of which the stylesheet could do for free. Writing an unchanged dataset value
   // is a no-op in the DOM, so the steady-state path now costs nothing.
   container.dataset.clockSize = clockSize;
-  container.dataset.showSeconds = showSeconds ? 'true' : 'false';
 
   const prog = container.querySelector('.work-progress-container');
   if (prog) prog.classList.toggle('hidden', !showProgressBar);
@@ -1357,7 +1507,8 @@ function applyClockSettingsToContainer(container, settings) {
   updateFlipClockColors(container);
 }
 
-// Apply saved clock settings (size, seconds toggle, progress bar visibility)
+// Apply saved clock settings (size, progress bar visibility). Seconds are always
+// shown: the toggle was removed from the popup, so there is no `false` state left.
 function applyClockSettings(specificContainer = null) {
   // Bail before touching storage when there is no clock on the page — this runs
   // on every applyEnhancements() pass, including on pages that have no clock.
@@ -1377,7 +1528,6 @@ function updateClockSettings(settings = {}) {
   getClockSettings().then((stored) => {
     const merged = {
       clockSize: settings.clockSize ?? stored.clockSize ?? 'medium',
-      showSeconds: settings.showSeconds ?? stored.showSeconds,
       showProgressBar: settings.showProgressBar ?? stored.showProgressBar
     };
 
@@ -1428,6 +1578,10 @@ function ensureWorkingStatusObserver() {
     if (!el || el.dataset.jbeStatusObserved === 'true') return;
     el.dataset.jbeStatusObserved = 'true';
     const obs = new MutationObserver(() => {
+      // The status pill in the clock is a text mirror of #working_status (see
+      // punchCard.js), so it has to be re-read here rather than only once a second
+      // from applyEnhancements().
+      if (typeof syncPunchStatusBadge === 'function') syncPunchStatusBadge();
       document.querySelectorAll('.flip-clock-container').forEach((c) => {
         updateFlipClockColors(c);
         celebrateTransitionOnce(c);

@@ -48,7 +48,8 @@ confetti.min.js        打刻時の演出
 | `main.js` | エントリポイント。URL を見て各機能を呼び分ける。共有リソース管理レジストリもここ |
 | `utils.js` | `showNotification`（トースト）※唯一の定義元 |
 | `ui.js` | ヘッダー・サイドメニュー・ダークモードなど全体的なUI調整 |
-| `clock.js` | フリップ時計と勤務進捗バー |
+| `clock.js` | フリップ時計・勤務進捗バー・サマリータイル |
+| `punchCard.js` | トップページの打刻カード（枠の除去・状態ピル・打刻詳細設定の折りたたみ） |
 | `screenshot.js` | フローティングアクションメニュー（FAB）とスクリーンショット |
 | `overlay.js` | 「労働データ」オーバーレイ |
 | `dataExtraction.js` | 出勤簿・打刻一覧から勤怠データを抽出（`fetch` + `DOMParser`） |

@@ -1,6 +1,5 @@
 document.addEventListener('DOMContentLoaded', function() {
   const darkModeToggle = document.getElementById('darkMode');
-  const showSecondsToggle = document.getElementById('showSeconds');
   const showProgressBarToggle = document.getElementById('showProgressBar');
   const clockSizeRadios = document.querySelectorAll('input[name="clockSize"]');
   
@@ -36,7 +35,7 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // Load saved settings
   chrome.storage.sync.get(
-    ['darkMode', 'clockSize', 'showSeconds', 'showProgressBar'], 
+    ['darkMode', 'clockSize', 'showProgressBar'], 
     function(result) {
       if (result.darkMode !== undefined) {
         darkModeToggle.checked = result.darkMode;
@@ -51,11 +50,6 @@ document.addEventListener('DOMContentLoaded', function() {
       // Set clock size radio buttons
       if (result.clockSize) {
         document.querySelector(`input[name="clockSize"][value="${result.clockSize}"]`).checked = true;
-      }
-      
-      // Set seconds toggle
-      if (result.showSeconds !== undefined) {
-        showSecondsToggle.checked = result.showSeconds;
       }
       
       // Set progress bar toggle
@@ -125,7 +119,7 @@ document.addEventListener('DOMContentLoaded', function() {
     radio.addEventListener('change', function() {
       if (this.checked) {
         chrome.storage.sync.set({clockSize: this.value});
-        const clockSizeLabels = { small: '小', medium: '中', large: '大' };
+        const clockSizeLabels = { small: '小', medium: '中', large: '大', xlarge: '特大', xxlarge: '最大' };
         showToast(`時計のサイズを「${clockSizeLabels[this.value] || this.value}」に変更しました`);
         
         // Send message to content script
@@ -136,23 +130,6 @@ document.addEventListener('DOMContentLoaded', function() {
               clockSize: radio.value
             });
           }
-        });
-      }
-    });
-  });
-  
-  // Handle show seconds toggle
-  showSecondsToggle.addEventListener('change', function() {
-    const isEnabled = this.checked;
-    chrome.storage.sync.set({showSeconds: isEnabled});
-    showToast(isEnabled ? '秒の表示をオンにしました' : '秒の表示をオフにしました');
-    
-    // Send message to content script
-    chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
-      if (tabs[0]) {
-        chrome.tabs.sendMessage(tabs[0].id, {
-          action: 'updateClockSettings',
-          showSeconds: isEnabled
         });
       }
     });

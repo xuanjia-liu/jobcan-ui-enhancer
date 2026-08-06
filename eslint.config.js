@@ -45,6 +45,9 @@ const crossFileGlobals = {
   cleanupClockContainer: 'readonly',
   applyClockSettings: 'readonly',
   updateClockSettings: 'readonly',
+  // scripts/punchCard.js
+  setupPunchCard: 'readonly',
+  syncPunchStatusBadge: 'readonly',
   // scripts/screenshot.js
   registerFloatingAction: 'readonly',
   closeFloatingActionMenu: 'readonly',

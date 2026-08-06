@@ -189,11 +189,11 @@
     
     
     /* Flip Clock Colors */
-    --color-clock-working-start: #1a5fa0;
-    --color-clock-working-end: #2d8bd8;
+    --color-clock-working-start: #00bbff;
+    --color-clock-working-end: #0066ff;
     --color-clock-not-working-start: #515861;
     --color-clock-not-working-end: #7d8a99;
-    --color-clock-colon-working: #2d8bd8;
+    --color-clock-colon-working: #0066ff;
     --color-clock-colon-not-working: #7d8a99;
     --color-clock-text: var(--color-white);
     /* Tile colour before #working_status has been read. Matches the not-working
@@ -213,15 +213,10 @@
     --color-work-segment-off-end: #77818e;
     --color-work-segment-noon-start: #e8b931;
     --color-work-segment-noon-end: #d4a017;
-    --color-work-progress-surface-start: #f9fafb;
-    --color-work-progress-surface-end: #f1f3f5;
-    --color-work-progress-border: rgba(0, 0, 0, 0.08);
-    --color-work-progress-hover-border: rgba(0, 102, 221, 0.25);
     --color-work-progress-track-start: #d7dde5;
     --color-work-progress-track-end: #c8d0da;
     --color-work-progress-track-border: rgba(15, 23, 42, 0.12);
     --color-work-progress-label: #465365;
-    --color-work-progress-status: #1f2a37;
     --color-work-progress-scale: rgba(54, 70, 90, 0.52);
     --color-work-progress-scale-ring: rgba(255, 255, 255, 0.32);
     --color-work-progress-marker-border: rgba(255, 255, 255, 0.96);
@@ -332,15 +327,10 @@
     --color-work-segment-off-end: #31363e;
     --color-work-segment-noon-start: #c9a227;
     --color-work-segment-noon-end: #a67c0d;
-    --color-work-progress-surface-start: rgba(37, 38, 40, 0.18);
-    --color-work-progress-surface-end: rgba(24, 25, 27, 0.36);
-    --color-work-progress-border: rgba(255, 255, 255, 0.1);
-    --color-work-progress-hover-border: rgba(126, 180, 255, 0.24);
     --color-work-progress-track-start: #0f1012;
     --color-work-progress-track-end: #0b0c0d;
     --color-work-progress-track-border: rgba(255, 255, 255, 0.12);
     --color-work-progress-label: #d6deea;
-    --color-work-progress-status: #e2e8f0;
     --color-work-progress-scale: rgba(248, 250, 252, 0.62);
     --color-work-progress-scale-ring: rgba(2, 6, 23, 0.28);
     --color-work-progress-marker-border: rgba(248, 250, 252, 0.92);

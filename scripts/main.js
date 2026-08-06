@@ -129,6 +129,9 @@ function applyEnhancements() {
 
   // Flip clock and status
   if (isEmployeePage && typeof setupFlipClock === 'function') setupFlipClock();
+  // After setupFlipClock: the status pill and the collapse panel are positioned
+  // relative to the flip clock, so the clock has to exist first.
+  if (isEmployeePage && typeof setupPunchCard === 'function') setupPunchCard();
   if (isEmployeePage && typeof setupScreenshotButton === 'function') setupScreenshotButton();
 
   // Other enhancements
@@ -188,12 +191,23 @@ applyEnhancements();
 
   let debounceTimer = null;
   let lastRunTs = 0;
+  let pendingSinceTs = 0;
   const MIN_INTERVAL_MS = 1200; // prevent too-frequent re-inits
   const DEBOUNCE_MS = 800;
+  // Ceiling on how long a pending run may keep being pushed back. Measured on the
+  // live top page: this observer had gone quiet for minutes. Every mutation cleared
+  // the timer and set a new one, and on a page that mutates faster than the debounce
+  // — Jobcan's own clock ticking, plus whatever other extensions are installed —
+  // the timer never survived to fire, so applyEnhancements() simply stopped running
+  // after the two direct calls at load. Anything that arrives late (the 以下の項目の確認
+  // card is filled in by ajax) was therefore never picked up.
+  const MAX_WAIT_MS = 2500;
 
   const ignoredSelectors = [
     '.flip-clock-container',
     '.work-progress-container',
+    '.jbe-work-stats',
+    '.jbe-notices',
     '.work-time-overlay',
     '.screenshot-notification',
     '#jbe-manhour-report',
@@ -214,21 +228,27 @@ applyEnhancements();
     return false;
   }
 
+  function runApply() {
+    debounceTimer = null;
+    pendingSinceTs = 0;
+    lastRunTs = Date.now();
+    applyEnhancements();
+  }
+
   function scheduleApply() {
     const now = Date.now();
-    if (now - lastRunTs < MIN_INTERVAL_MS) {
-      clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(() => {
-        lastRunTs = Date.now();
-        applyEnhancements();
-      }, MIN_INTERVAL_MS - (now - lastRunTs));
-      return;
-    }
+    if (!pendingSinceTs) pendingSinceTs = now;
+
+    // Never let the debounce push a pending run past MAX_WAIT_MS — that starvation
+    // is what stopped the observer entirely. The MIN_INTERVAL floor still applies,
+    // so this cannot make the pass run more often than every 1.2s.
+    const waited = now - pendingSinceTs;
+    const sinceRun = now - lastRunTs;
+    const floor = Math.max(0, MIN_INTERVAL_MS - sinceRun);
+    const delay = waited >= MAX_WAIT_MS ? floor : Math.max(floor, DEBOUNCE_MS);
+
     clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(() => {
-      lastRunTs = Date.now();
-      applyEnhancements();
-    }, DEBOUNCE_MS);
+    debounceTimer = setTimeout(runApply, delay);
   }
 
   const domObserver = new MutationObserver(mutations => {

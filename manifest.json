@@ -33,6 +33,7 @@
         "scripts/draggable.js",
         "scripts/ui.js",
         "scripts/clock.js",
+        "scripts/punchCard.js",
         "scripts/screenshot.js",
         "scripts/formEnhancer.js",
         "scripts/dataExtraction.js",
