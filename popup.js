@@ -7,17 +7,16 @@ document.addEventListener('DOMContentLoaded', function() {
   // Mirrors CLOCK_BACKGROUNDS / DEFAULT_CLOCK_BACKGROUND in scripts/clock.js.
   const CLOCK_BACKGROUND_LABELS = {
     none: 'なし',
-    pulse: 'パルス',
     wave: 'ウェーブメッシュ',
     particles: 'パーティクル',
-    blob: 'ブラーブロブ',
-    orbit: 'オービット',
+    mesh: 'メッシュグラデーション',
     godray: 'ゴッドレイ'
   };
-  // Same alias as CLOCK_BACKGROUND_ALIASES in scripts/clock.js: the god-ray slot
-  // was stored as 'aurora' before it was rebuilt.
-  const CLOCK_BACKGROUND_ALIASES = { aurora: 'godray' };
-  const DEFAULT_CLOCK_BACKGROUND = 'pulse';
+  // Same aliases as CLOCK_BACKGROUND_ALIASES in scripts/clock.js: both slots were
+  // stored under an older id before they were rebuilt. The removed 'pulse' and
+  // 'orbit' get none on purpose — the labels lookup below drops them to the default.
+  const CLOCK_BACKGROUND_ALIASES = { aurora: 'godray', blob: 'mesh' };
+  const DEFAULT_CLOCK_BACKGROUND = 'mesh';
   
   // Login form elements
   const employeeLoginBtn = document.getElementById('employeeLoginBtn');

@@ -1511,26 +1511,38 @@ function normalizeTimeFormat(timeString) {
 }
 
 /* ---- Ambient status background ------------------------------------------
-   Six selectable backdrops for the clock card (popup → 表示設定 → 背景アニメーション),
+   Four selectable backdrops for the clock card (popup → 表示設定 → 背景アニメーション),
    plus 'none'. Each one is a single <div class="jbe-clock-bg"> prepended to the
-   container and styled entirely from css/styles.css by its [data-variant]; the
-   markup here only lays out the pieces (rings, dots, blobs, orbit shells, an SVG
-   wave field) and hands their per-element randomness over as inline custom
-   properties. Nothing here runs after mount: every moving part animates transform
-   or opacity in CSS, so the feature costs no JS frames and no layout.
+   container, and the variant decides what goes inside it:
+
+   * メッシュグラデーション and ゴッドレイ are DOM figures. The builders here lay out the
+     pieces (blur orbs, light shafts) and hand their per-element randomness over as
+     inline custom properties; css/styles.css does everything else off
+     [data-variant]. Nothing runs after mount — every moving part animates transform
+     or opacity in CSS, so they cost no JS frames and no layout.
+   * ウェーブメッシュ and パーティクル are a single <canvas>, driven by the shared runtime
+     below (startClockCanvas). Both port an effect whose look IS per-point maths — a
+     lit surface in perspective, a cursor force field — which CSS has no way to
+     express. The runtime's block comment covers what that costs and what was cut to
+     get it down to a few hundred points at 30fps.
 
    Colour is NOT decided here. The layer reads --jbe-bg-tint / --jbe-bg-strength,
    which css/styles.css derives from the container's own [data-clock-color-class] —
    the attribute updateFlipClockColors() already maintains from #working_status. So
    勤務中 / 退室中 / pending each tint the background for free, and the tokens stay
    the single source of truth for the state colours. */
-const CLOCK_BACKGROUNDS = ['none', 'pulse', 'wave', 'particles', 'blob', 'orbit', 'godray'];
-const DEFAULT_CLOCK_BACKGROUND = 'pulse';
+const CLOCK_BACKGROUNDS = ['none', 'wave', 'particles', 'mesh', 'godray'];
+const DEFAULT_CLOCK_BACKGROUND = 'mesh';
 
-// 'aurora' was this slot's id while it was a striped light-beam wash; it is god
-// rays now. Kept as an alias so a value already in storage.sync resolves to the
-// rebuilt variant instead of silently falling back to the default.
-const CLOCK_BACKGROUND_ALIASES = { aurora: 'godray' };
+// Old ids, kept so a value already sitting in storage.sync resolves to the rebuilt
+// variant instead of silently falling back to the default.
+//   aurora → godray: was a striped light-beam wash before it became god rays.
+//   blob   → mesh:   was four drifting radial stains ("ブラーブロブ"); it is now a
+//                    bottom-anchored mesh gradient, so neither the name nor the id
+//                    described it any more.
+// 'pulse' (パルス／同心円) and 'orbit' (オービット) were REMOVED, not renamed, so they
+// deliberately get no alias — normalizeClockBackground() drops them to the default.
+const CLOCK_BACKGROUND_ALIASES = { aurora: 'godray', blob: 'mesh' };
 
 function normalizeClockBackground(value) {
   const resolved = CLOCK_BACKGROUND_ALIASES[value] || value;
@@ -1551,34 +1563,129 @@ function clockBgNoise(seed) {
   return x / 0x7fffffff;
 }
 
-/**
- * A drifting dot field, shared by the particle, orbit and aurora variants. Every
- * dot carries its own position, size, travel vector and (negative) delay, so the
- * field is already mid-animation on the first frame instead of starting as one
- * synchronised pulse.
- */
-function buildClockBgDots(count, seedBase, options = {}) {
-  const {
-    minSize = 2,
-    maxSize = 6,
-    minDuration = 9,
-    maxDuration = 20,
-    spread = 26
-  } = options;
+/* ---- メッシュグラデーション ------------------------------------------------
+   Ported from a ParticleSystemWeb export (Downloads/particle-export.svg, emitter
+   "Glow", 21 particles). What that file actually is: a wide arc of plain circles
+   sitting BELOW the bottom edge, each one Gaussian-blurred so hard
+   (stdDeviation 120 against a 66–197px shape) that no particle is legible on its
+   own — they only exist as the overlapping wash they add up to. Four properties
+   carry the look, and they are the four this builder reproduces:
+
+   1. EMITTED FROM A BOTTOM ARC, NOT SCATTERED. The export's emitter is a circle
+      of radius 559 with ratio 0.12, i.e. a ~43° arc at the bottom; every particle
+      starts at y 547–710 in a 644-high frame. So the field is dense and bright
+      along the bottom edge and thins out upward, which is why it reads as one
+      gradient rather than as four separate stains (what this variant used to be).
+   2. HUGE SIZE SPREAD. Particle Size 115 with Size Variance 66 → the largest orb
+      is ~3× the smallest. A uniform set of blobs reads as a pattern; this does not.
+   3. LOW, VARIED ALPHA. Max Opacity 50 with Opacity Variance 64 — no single orb
+      is ever more than half-opaque, so the colour everywhere is an accumulation of
+      several. Peak alpha per orb is randomised over roughly that same range.
+   4. COLOUR RAMPS ALONG THE TRAVEL. The export goes #003BFF → #00EAFF over each
+      particle's life (Color Fade Method 2). We must not name colours (see the
+      section head in styles.css), so --mix is the per-orb blend position between
+      --jbe-bg-tint and --jbe-bg-tint-2 — the same two-stop ramp expressed in the
+      state tokens, biased so the higher an orb rides the further along it is.
+
+   Deviations, deliberate:
+   * No `filter: blur()`. The export blurs solid circles because SVG has no other
+     soft edge; a radial-gradient IS the blurred circle, and it costs nothing to
+     move. A real filter on a moving element re-blurs the whole surface per frame.
+   * 4.5s lifetime → 30–60s loops, and the rise is a slow drift rather than a
+     launch. The export is a marketing render; this sits behind the digits. */
+function buildClockBgMesh() {
+  // The export's 21, raised: at 18 the orbs read as separate lobes with white
+  // between them rather than as one gradient. The export gets away with fewer
+  // because its blur radius is larger than its shapes, so every particle's tail
+  // reaches its neighbours; a radial-gradient's tail dies at its own box, so the
+  // coverage has to come from spacing instead. Two rows (below) do most of that
+  // work — this only has to keep each row's own spacing under one orb radius.
+  const COUNT = 15;
+
+  // Two rows, and they are what closes the gaps — raising the count of a single row
+  // does not. One row's orbs share a rise and a scale cycle, so wherever two
+  // neighbours are momentarily apart the hole between them runs the full height of
+  // the field and no amount of crowding along the arc fills it. The back row is
+  // offset half a slot horizontally (`phase`) so it sits over exactly those seams,
+  // and is larger, deeper, fainter and slower, so it also reads as depth rather than
+  // as a second copy.
+  // Back row FIRST: these are painted in document order, so the front row's smaller,
+  // brighter orbs need to come second to sit on top.
+  //
+  // riseMul is what keeps the closed field from flattening into a stripe. Coverage
+  // and structure pull against each other here: enough orbs to leave no holes is
+  // also enough to average out into one even band, which is what the first two-row
+  // pass did. Giving the front row a much longer travel than the back row puts the
+  // two rows at different heights at any moment, so the field keeps a lumpy upper
+  // edge — the lobes — while its base stays solid.
+  const ROWS = [
+    { phase: 0.5, depth: 1, sizeMin: 30, sizeVar: 38, drop: 9,
+      alphaMul: 0.72, durMul: 1.45, riseMul: 0.7 },
+    { phase: 0, depth: 0, sizeMin: 16, sizeVar: 34, drop: 2,
+      alphaMul: 1.15, durMul: 1, riseMul: 1.6 }
+  ];
 
   let html = '';
-  for (let i = 0; i < count; i++) {
-    const noise = (offset) => clockBgNoise(seedBase + i * 11 + offset);
-    const size = (minSize + noise(1) * (maxSize - minSize)).toFixed(1);
-    const x = (3 + noise(2) * 94).toFixed(2);
-    const y = (3 + noise(3) * 94).toFixed(2);
-    const duration = minDuration + noise(4) * (maxDuration - minDuration);
-    const delay = (-noise(5) * duration).toFixed(1);
-    const dx = ((noise(6) - 0.5) * spread * 2).toFixed(1);
-    const dy = (-noise(7) * spread - 4).toFixed(1);
-    html += `<i class="jbe-bg-dot" style="--sz:${size}px;--x:${x}%;--y:${y}%;`
-      + `--dur:${duration.toFixed(1)}s;--delay:${delay}s;--dx:${dx}px;--dy:${dy}px"></i>`;
+
+  for (const row of ROWS) {
+    for (let i = 0; i < COUNT; i++) {
+      const noise = (offset) => clockBgNoise(6101 + row.depth * 733 + i * 17 + offset);
+
+      // Along the arc: -0.5 … 0.5 of the card width, with the ends pushed outward so
+      // the wash bleeds past both edges instead of stopping inside them.
+      //
+      // The jitter is kept to 0.8 of a slot deliberately. Fully random x would clump —
+      // a Poisson gap can be several slots wide, and one such gap is the hole the eye
+      // lands on. Even spacing plus a sub-slot wobble is what a blue-noise scatter
+      // buys you, without needing one.
+      const t = (i + row.phase + noise(1) * 0.8) / COUNT - 0.5;
+      const x = (50 + t * 128).toFixed(1);
+      // Sagitta of the emitter arc — the ends of a shallow arc sit lower than its
+      // middle, which is what keeps the bottom edge from being a straight line.
+      // Measured DOWN from the card's bottom edge (CSS uses it as a negative
+      // `bottom`), so every orb starts outside and only its upper falloff is in shot.
+      const y = (row.drop + t * t * 9 + noise(2) * 4).toFixed(1);
+
+      // 115 ± 66 in the export's units — a 1:3 spread — as a share of the card width.
+      //
+      // The absolute figures are well below the export's, and deliberately so. Its
+      // frame is 938×644; this card is nearer 3:1, and because a container-query unit
+      // can only be cqi here (inline-size container), an orb sized to the export's
+      // proportions is about three times the card's HEIGHT. Every orb then covers the
+      // whole card, the overlaps stop varying, and the mesh flattens into a plain
+      // vertical gradient — measured, that is exactly what the first pass did.
+      const size = (row.sizeMin + noise(3) * row.sizeVar).toFixed(1);
+      // How far up this orb travels over its loop. The small ones go furthest: in the
+      // export the near/large particles barely move within the frame and the far ones
+      // cross it, which is the whole parallax cue.
+      //
+      // cqi, NOT %: a percentage inside translate() resolves against the ELEMENT's own
+      // size, so a big orb and a small orb given the same figure would travel wildly
+      // different distances and the parallax would invert. cqi is a share of the card
+      // width — the same basis --sz above is on, which is why the two stay in step at
+      // any card size. (cqi and not cqh because .flip-clock-container is
+      // `container-type: inline-size`; there is no block-size container here.)
+      const rise = ((6 + (1 - noise(3)) * 14) * row.riseMul).toFixed(1);
+      const sway = ((noise(4) - 0.5) * 10).toFixed(1);
+
+      const duration = (30 + noise(5) * 30) * row.durMul;
+      const delay = (-noise(6) * duration).toFixed(1);
+      // Max Opacity 50, Opacity Variance 64. Trimmed from the single-row figures: two
+      // rows means roughly twice as many orbs stacked over any given pixel, and left
+      // alone the extra coverage reads as the wash getting heavier rather than fuller.
+      const alpha = ((0.16 + noise(7) * 0.28) * row.alphaMul).toFixed(2);
+      // Blue at the source, cyan by the top — the export's colour-over-life ramp,
+      // here as this orb's position between --jbe-bg-tint and --jbe-bg-tint-2. The
+      // arc's centre (t≈0) rides highest and so lands furthest along the ramp; a flat
+      // random mix reads as one colour with noise on it rather than as a gradient.
+      const mix = Math.round(8 + noise(8) * 38 + (1 - t * t) * 44);
+
+      html += `<i class="jbe-bg-orb" style="--sz:${size}cqi;--x:${x}%;--y:${y}cqi;`
+        + `--rise:${rise}cqi;--sway:${sway}cqi;--dur:${duration.toFixed(1)}s;`
+        + `--delay:${delay}s;--o:${alpha};--mix:${mix}%"></i>`;
+    }
   }
+
   return html;
 }
 
@@ -1627,19 +1734,19 @@ function buildClockBgGodRay() {
   // sunburst, not as light: what sells it is that no two are alike. The 6°-50°
   // spread puts the fan across the whole card rather than bunching it in one corner.
   const shafts = [
-    { tilt: 6, hw: 2.2, len: 1.05, alpha: 0.70, ripple: 15, blur: 0.044 },
-    { tilt: 17, hw: 1.4, len: 0.86, alpha: 0.44, ripple: 21, blur: 0.034 },
-    { tilt: 27, hw: 3.4, len: 1.15, alpha: 0.80, ripple: 13, blur: 0.056 },
-    { tilt: 38, hw: 1.1, len: 0.80, alpha: 0.36, ripple: 26, blur: 0.028 },
-    { tilt: 50, hw: 2.6, len: 1.00, alpha: 0.56, ripple: 18, blur: 0.048 }
+    { tilt: 6, hw: 2.8, len: 1.05, alpha: 0.70, ripple: 15, blur: 0.044 },
+    { tilt: 17, hw: 1.8, len: 0.86, alpha: 0.44, ripple: 21, blur: 0.034 },
+    { tilt: 27, hw: 4.2, len: 1.15, alpha: 0.80, ripple: 13, blur: 0.056 },
+    { tilt: 38, hw: 1.4, len: 0.80, alpha: 0.36, ripple: 26, blur: 0.028 },
+    { tilt: 50, hw: 3.3, len: 1.00, alpha: 0.56, ripple: 18, blur: 0.048 }
   ];
 
-  // The shaft's box has to hold its wedge — half-width len*tan(hw) at the far end —
-  // AND the bleed of the core's blur, which is heavy: at 2.6× the wedge, even the
-  // narrowest shaft's blur dies inside its own box instead of being cut off square
-  // at the edge. Raise this whenever the blurs above go up.
+  // The shaft's box only has to hold its wedge — half-width len*tan(hw) at the far
+  // end — plus a little slack for the feathered tail. It does NOT need room for the
+  // core's blur bleed: that bleed lands outside the wedge, where the mask discards it
+  // anyway, so a wide box would just enlarge the surface being blurred for nothing.
   // tan() has no CSS equivalent, which is the one reason this is computed here.
-  const BOX_MARGIN = 2.6;
+  const BOX_MARGIN = 1.35;
   const boxWidthMultiple = (halfAngleDeg) =>
     2 * Math.tan((halfAngleDeg * Math.PI) / 180) * BOX_MARGIN;
   // Lateral spread of the motes, as a fraction of the box width. Solves
@@ -1699,97 +1806,1105 @@ function buildClockBgGodRay() {
     + `<div class="jbe-bg-fan"><i class="jbe-bg-bloom"></i>${shaftHtml}</div>`;
 }
 
-/**
- * One layer of the wave mesh: `lineCount` stroked curves in an SVG drawn 1600
- * units wide and shown 1200 at a time.
- *
- * Every curve has period 400, so translating the wrapper by exactly one period
- * puts an identical curve under the window and the loop is seamless — that is why
- * the SVG is drawn a third wider than it is shown. The wrapper (an HTML div) is
- * what animates, not the <g>: a CSS transform on an HTML element is composited,
- * while animating an SVG transform repaints every path each frame.
- *
- * Two things make this read as a ribbon rather than as a scribble, and both were
- * measured against the mock:
- *
- *   * the phase advances a little per line instead of being random, so the curves
- *     nest and lean together. Random phases (the first attempt) cross each other
- *     everywhere and the whole band turns into a tangle;
- *   * a second harmonic at a third of the amplitude takes the flatness out of a
- *     plain sine while keeping the 400-unit period the seamless loop depends on.
- */
-function buildClockBgWaveSvg(lineCount, seedBase) {
-  const width = 1600;
-  const height = 400;
-  const period = 400;
-  const step = 32;
-  // The one place per layer where the seed is used: which harmonic offset the
-  // whole bundle carries. Everything else is progressive, on purpose.
-  const harmonicPhase = clockBgNoise(seedBase) * Math.PI * 2;
+/* ---- Canvas backdrops: shared runtime -------------------------------------
+   Two of the four variants are a <canvas> rather than a CSS figure, and for the
+   same reason: the effect each one ports is per-point maths CSS has no way to
+   express — the nebula's cursor force field, the wave's perspective-projected lit
+   surface. Everything the two have in common lives here (sizing at a capped DPR, a
+   per-palette asset table built from the state tokens, a 30fps clock, idling while
+   the card is unseen, and tearing all of it down again), so a variant is a
+   `buildAssets`, a `layout`, a `step` and a `paint`.
 
-  let paths = '';
-  for (let i = 0; i < lineCount; i++) {
-    const amplitude = 30 + i * 1.4;
-    const phase = i * 11;
-    const baseline = 150 + i * 11;
-    let d = '';
-    for (let x = 0; x <= width; x += step) {
-      const theta = ((x + phase) / period) * Math.PI * 2;
-      const y = baseline + amplitude * (Math.sin(theta) + 0.32 * Math.sin(theta * 2 + harmonicPhase));
-      d += `${x === 0 ? 'M' : 'L'}${x} ${y.toFixed(1)}`;
-    }
-    paths += `<path d="${d}"/>`;
+   The section's rules still hold across both: no colour is named — the palette is
+   derived from --jbe-bg-tint / --jbe-bg-tint-2, so 勤務中 / 退室中 tint the canvas
+   for free — and nothing outside the canvas is touched, so neither variant can
+   invalidate layout or repaint the digits.
+
+   The budget, and why it has this shape. Both source sketches are full-screen
+   marketing pieces; the card is a wide, short strip behind the digits.
+
+   * NOTHING SOFT IS BUILT INSIDE THE FRAME. Whatever a variant needs per colour is
+     built once, when the palette changes, and looked up after that: the nebula's
+     glows are radial gradients rendered into small offscreen canvases and blitted,
+     the mesh's are rgba strings in a ramp table. This is the single biggest cut
+     from both sources — one rebuilds its blur every frame through `ctx.filter`
+     over three full-canvas layers, the other through a fragment shader.
+   * 30fps, NOT 60. A straight 2× saving, and neither figure has anything in it
+     fast enough to show the seam.
+   * DEVICE PIXEL RATIO CAPPED AT 1.25. Both figures are soft glows; there is
+     nothing in either that a retina backing store would resolve.
+   * COUNTS SCALE WITH THE CARD, and are two orders of magnitude below the sources
+     (800 and 48,000 respectively → a few hundred).
+   * IDLE WHEN UNSEEN. The rAF loop is cancelled outright while the card is
+     scrolled off (IntersectionObserver) or the tab is hidden — the clock card sits
+     at the top of a long attendance list, so this is the common case, not an edge
+     one. */
+const CLOCK_CANVAS = {
+  fps: 30,
+  maxDpr: 1.25,
+  // How often, in frames, the runtime re-checks the card's size and state colour.
+  // 60 frames at 30fps = 2s. Reading the attribute is free; rebuilding the sprite
+  // atlas is not, so that only happens when the value actually changed.
+  recheckFrames: 60
+};
+
+// One live instance at a time — the card only ever has one background layer.
+let clockCanvasRun = null;
+
+function clockCanvasParseColor(value) {
+  const text = String(value || '').trim();
+  const hex = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(text);
+  if (hex) {
+    const digits = hex[1].length === 3
+      ? hex[1].split('').map((c) => c + c).join('')
+      : hex[1];
+    return [
+      parseInt(digits.slice(0, 2), 16),
+      parseInt(digits.slice(2, 4), 16),
+      parseInt(digits.slice(4, 6), 16)
+    ];
+  }
+  const rgb = /^rgba?\(([^)]+)\)$/i.exec(text);
+  if (rgb) {
+    const parts = rgb[1].split(/[\s,/]+/).filter(Boolean).slice(0, 3).map(Number);
+    if (parts.length === 3 && parts.every(Number.isFinite)) return parts;
+  }
+  return null;
+}
+
+const clockCanvasMix = (a, b, t) => a.map((v, i) => Math.round(v + (b[i] - v) * t));
+const clockCanvasLighten = (rgb, t) => clockCanvasMix(rgb, [255, 255, 255], t);
+
+/**
+ * Five points along --jbe-bg-tint-2 → --jbe-bg-tint, the last two lifted toward
+ * white so a field has highlights. Index 0 is the deepest, 4 the brightest. The
+ * nebula picks from it at random; the mesh builds its ramp along it, in whichever
+ * direction the card's own surface calls for (see waveRamp).
+ *
+ * The lift stays modest on purpose: the card is light, and a genuinely white
+ * particle is invisible on it — see the light-mode note in styles.css.
+ */
+function clockCanvasPalette(container) {
+  const style = getComputedStyle(container);
+  const tint = clockCanvasParseColor(style.getPropertyValue('--jbe-bg-tint')) || [0, 150, 220];
+  const tint2 = clockCanvasParseColor(style.getPropertyValue('--jbe-bg-tint-2')) || tint;
+  return [
+    tint2,
+    clockCanvasMix(tint, tint2, 0.55),
+    tint,
+    clockCanvasLighten(tint, 0.3),
+    clockCanvasLighten(clockCanvasMix(tint, tint2, 0.3), 0.55)
+  ];
+}
+
+/**
+ * Is the card itself light? Read off the container's own resolved background
+ * rather than off `body.dark-mode`, so the answer stays right if the card ever
+ * takes a surface of its own; the class is only the fallback for a background
+ * that does not resolve to a plain colour.
+ *
+ * Which way a variant should run its palette depends on this and on nothing else:
+ * over a light card, pigment can only ever DARKEN, so brightness has to be spent
+ * as more colour rather than as more white (see the mesh gradient's light-mode
+ * note in styles.css for the same argument at greater length).
+ */
+function clockCanvasOnLightSurface(container) {
+  const rgb = clockCanvasParseColor(getComputedStyle(container).backgroundColor);
+  if (!rgb) return !document.body.classList.contains('dark-mode');
+  return rgb[0] * 0.299 + rgb[1] * 0.587 + rgb[2] * 0.114 > 140;
+}
+
+/**
+ * Rule 3 of the section — 退室中 should be quieter than 勤務中 — reaches the canvas
+ * variants through the same token the CSS ones use. It is a multiplier on a
+ * duration there, so here it divides the clock: 1.4 means everything takes 1.4×
+ * as long.
+ */
+function clockCanvasSpeed(container) {
+  const raw = parseFloat(getComputedStyle(container).getPropertyValue('--jbe-bg-speed'));
+  return Number.isFinite(raw) && raw > 0 ? raw : 1;
+}
+
+/** `stops` is [[position, alpha], …] — one pre-blurred glow, drawn once. */
+function clockCanvasGlowSprite(rgb, stops, px) {
+  const sprite = document.createElement('canvas');
+  sprite.width = px;
+  sprite.height = px;
+  const ctx = sprite.getContext('2d');
+  const half = px / 2;
+  const gradient = ctx.createRadialGradient(half, half, 0, half, half, half);
+  stops.forEach(([at, alpha]) => {
+    gradient.addColorStop(at, `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${alpha})`);
+  });
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, px, px);
+  return sprite;
+}
+
+function stopClockCanvas() {
+  if (!clockCanvasRun) return;
+  clockCanvasRun.running = false;
+  if (clockCanvasRun.raf) cancelAnimationFrame(clockCanvasRun.raf);
+  clockCanvasRun.teardown();
+  clockCanvasRun = null;
+}
+
+function clockCanvasResize(state) {
+  const rect = state.canvas.getBoundingClientRect();
+  const width = Math.max(1, Math.round(rect.width));
+  const height = Math.max(1, Math.round(rect.height));
+  if (width === state.width && height === state.height) return;
+
+  const dpr = Math.min(window.devicePixelRatio || 1, CLOCK_CANVAS.maxDpr);
+  state.width = width;
+  state.height = height;
+  state.canvas.width = Math.round(width * dpr);
+  state.canvas.height = Math.round(height * dpr);
+  // One transform, set once per resize, so every figure in a variant stays in CSS
+  // pixels and nothing has to know the backing store exists.
+  state.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  state.spec.layout(state);
+}
+
+/**
+ * Idempotent per canvas: ensureClockBackground() calls this on every pass, and the
+ * markup is only rebuilt when the variant actually changed, so the common path is
+ * the identity check on the first line.
+ */
+function startClockCanvas(canvas, container, spec) {
+  if (!canvas || !container || !spec) return;
+  if (clockCanvasRun && clockCanvasRun.canvas === canvas && clockCanvasRun.spec === spec) return;
+  stopClockCanvas();
+
+  const ctx = canvas.getContext('2d', { alpha: true });
+  if (!ctx) return;
+
+  const palette = clockCanvasPalette(container);
+  const state = {
+    canvas,
+    ctx,
+    spec,
+    width: 0,
+    height: 0,
+    palette,
+    assets: spec.buildAssets(palette, container),
+    colorClass: container.dataset.clockColorClass || '',
+    // Both of these can change under a running loop — a punch rewrites the colour
+    // class, the dark-mode toggle flips the surface — and both feed buildAssets, so
+    // the recheck below watches them together.
+    onLight: clockCanvasOnLightSurface(container),
+    speed: clockCanvasSpeed(container),
+    // Pointer position in canvas CSS pixels; x is null whenever the cursor is off
+    // the card.
+    mouse: { x: null, y: null, down: false },
+    // Seconds, advanced by the fixed frame step rather than read from a clock:
+    // the figure is a function of t, and a wall-clock t would make it jump
+    // whenever the loop is paused and resumed.
+    t: 0,
+    frame: 0,
+    data: {},
+    running: true,
+    visible: true,
+    raf: 0,
+    last: 0,
+    teardown: null
+  };
+  clockCanvasResize(state);
+
+  const reduced = window.matchMedia
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // Pointer state comes off the CONTAINER, not the canvas: the background layer is
+  // `pointer-events: none` at z-index -1 under the whole card, so it never sees an
+  // event of its own. Passive throughout — none of this can cancel a scroll or a
+  // click on the PUSH button.
+  const toLocal = (event) => {
+    const rect = canvas.getBoundingClientRect();
+    state.mouse.x = event.clientX - rect.left;
+    state.mouse.y = event.clientY - rect.top;
+  };
+  const onMove = (event) => toLocal(event);
+  const onLeave = () => { state.mouse.x = null; state.mouse.y = null; state.mouse.down = false; };
+  const onDown = (event) => { toLocal(event); state.mouse.down = true; };
+  const onUp = () => { state.mouse.down = false; };
+
+  if (spec.pointer && !reduced) {
+    container.addEventListener('pointermove', onMove, { passive: true });
+    container.addEventListener('pointerleave', onLeave, { passive: true });
+    container.addEventListener('pointerdown', onDown, { passive: true });
+    window.addEventListener('pointerup', onUp, { passive: true });
   }
 
-  return `<svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" focusable="false">`
-    + `<g>${paths}</g></svg>`;
+  const interval = 1000 / CLOCK_CANVAS.fps;
+  const frame = (now) => {
+    if (!state.running) return;
+    if (!canvas.isConnected) { stopClockCanvas(); return; }
+    state.raf = requestAnimationFrame(frame);
+    if (now - state.last < interval) return;
+    state.last = now;
+
+    if ((state.frame % CLOCK_CANVAS.recheckFrames) === 0) {
+      // Both inputs to the asset table can change under us: a 出勤 punch rewrites
+      // [data-clock-color-class], and the dark-mode toggle swaps the card's surface
+      // without touching it. Reading the two is free; rebuilding is not, so that
+      // only happens when one of them actually moved.
+      const colorClass = container.dataset.clockColorClass || '';
+      const onLight = clockCanvasOnLightSurface(container);
+      if (colorClass !== state.colorClass || onLight !== state.onLight) {
+        state.colorClass = colorClass;
+        state.onLight = onLight;
+        state.palette = clockCanvasPalette(container);
+        state.assets = spec.buildAssets(state.palette, container);
+        state.speed = clockCanvasSpeed(container);
+      }
+      clockCanvasResize(state);
+    }
+
+    state.frame++;
+    // Accumulated rather than derived from the frame count, so a change of speed
+    // shifts the rate from here on instead of jumping the whole figure.
+    state.t += 1 / (CLOCK_CANVAS.fps * state.speed);
+    spec.step(state);
+    spec.paint(state);
+  };
+
+  const start = () => {
+    if (!state.running || state.raf) return;
+    state.last = 0;
+    state.raf = requestAnimationFrame(frame);
+  };
+  const pause = () => {
+    if (!state.raf) return;
+    cancelAnimationFrame(state.raf);
+    state.raf = 0;
+  };
+
+  const intersectionObserver = new IntersectionObserver((entries) => {
+    state.visible = entries.some((entry) => entry.isIntersecting);
+    if (state.visible && !document.hidden) start(); else pause();
+  }, { threshold: 0 });
+  intersectionObserver.observe(canvas);
+
+  const onVisibility = () => {
+    if (!document.hidden && state.visible) start(); else pause();
+  };
+  document.addEventListener('visibilitychange', onVisibility);
+
+  state.teardown = () => {
+    intersectionObserver.disconnect();
+    document.removeEventListener('visibilitychange', onVisibility);
+    container.removeEventListener('pointermove', onMove);
+    container.removeEventListener('pointerleave', onLeave);
+    container.removeEventListener('pointerdown', onDown);
+    window.removeEventListener('pointerup', onUp);
+  };
+
+  clockCanvasRun = state;
+
+  if (reduced) {
+    // One frame, then nothing: the figure is still itself, it just is not moving.
+    spec.step(state);
+    spec.paint(state);
+    state.running = false;
+    return;
+  }
+
+  // `watch:` so an SPA navigation tears the whole thing down. The loop would also
+  // notice the detached canvas on its next frame, but this stops it a frame sooner
+  // and releases the sprite atlas with it.
+  if (typeof window.__jbe_registerManagedObserver === 'function') {
+    window.__jbe_registerManagedObserver('watch:clockCanvas', intersectionObserver, () => {
+      stopClockCanvas();
+    });
+  }
+
+  start();
 }
+
+/* ---- 01 ウェーブメッシュ ----------------------------------------------------
+   A wireframe surface: one perspective ground plane drawn AS the mesh — rows
+   running across the card, columns converging on a vanishing point above it — with
+   three superimposed swells rolling through it.
+
+   This is a rebuild, not a retune. The variant used to be a point cloud ported
+   from a Three.js sketch (48,000 glowing sprites on a displaced plane, cut down to
+   a few hundred). It read as a dot field that happened to undulate: at this card's
+   size the dots never joined into the surface the sketch gets for free from sheer
+   density, and the name promised a mesh the figure never drew. Drawing the mesh
+   itself is both truer to the name and cheaper — ~55 stroked paths a frame against
+   ~760 sprite blits.
+
+   What makes it read as a surface rather than as a grid pattern:
+
+   1. THE COLUMNS ARE ANCHORED IN THE WORLD, NOT ON SCREEN. Each column holds a
+      fixed world x and is projected once per row, so the columns converge with
+      depth and the whole figure resolves to one vanishing point. Columns at fixed
+      screen x — the cheap version — read as a curtain, not as ground.
+   2. ROWS ARE EVENLY SPACED ON SCREEN, and their depth is solved back out of the
+      projection. An evenly spaced WORLD grid spends most of its rows crushed into
+      the last few pixels before the horizon; this puts a row wherever there are
+      pixels to draw one with.
+   3. THREE SWELLS at unrelated frequencies and speeds, so the surface never
+      visibly repeats. One sine reads as a mechanism; three read as water.
+   4. SHADING FROM THE SURFACE SLOPE. The swell sum is analytic, so both partial
+      derivatives are too — the same three cosines give the exact normal, with no
+      neighbour sampling at all. Slope drives the brightness and swings a point up
+      or down the palette, which is what makes crests catch the light.
+   5. THE COLOUR TRAVELS WITH DEPTH. The slope from (4) does not index the whole
+      palette — it swings a WINDOW of it, and the window itself slides from the
+      deep tint at the far edge to the bright one at the near edge, plus a little
+      across the width. So the mesh runs a real gradient into the distance rather
+      than being one hue lit unevenly, and crests still catch the light — they
+      catch it in the colour of their own depth. Both ends of that gradient are
+      state tints, so 勤務中 and 退室中 each get their own two-colour ramp for free
+      and no colour is named here (rule 2 of the section).
+   6. A FAINT FILL BETWEEN ADJACENT ROWS. Two percent of the ink, and it is what
+      gives the lattice a front and a back: the bands are laid down far-to-near, so
+      each one veils the lines behind it.
+   7. THE CURSOR IS A TORCH, not a camera. The figure holds still and the pointer
+      lights it: within a soft radius the mesh is pulled toward full alpha and up
+      the palette, so the parts the fades had dissolved come back into view under
+      the cursor and sink again behind it. An earlier pass moved the camera instead
+      (a world-space pan, so near rows swung further than far ones); the parallax
+      was convincing but it slid the whole figure around under the digits, and the
+      reveal says more with less motion. Position and intensity are both eased, so
+      arriving and leaving fade rather than blink.
+
+      THE ONE THING THE TORCH MAY NOT REVEAL IS THE GRID'S OWN BOUNDARY. The side
+      taper and the horizon fade are not only depth cues — they are what stops the
+      sheet from reading as a finite rectangle, and a torch strong enough to lift a
+      point out of its fade is strong enough to draw the last column and the last
+      row as hard lines. So the torch carries a mask that falls to zero over the
+      outermost stretch of each: it can light everything the fades had hidden
+      except the place where the mesh actually stops.
+
+   8. DEPTH OF FIELD, WITHOUT A BLUR. A focal plane sits just in front of the middle
+      of the field; a row's distance outside the sharp band gives it a 0…1 defocus,
+      and that number widens its stroke, drains its core and grows its bloom. That
+      is what a lens does to a line — the same ink spread over a wider band with no
+      hard centre — and it costs nothing, because a row was already drawn as two
+      concentric strokes and this only changes their widths and alphas. All four
+      numbers are solved per row at layout, so a defocused row costs a sharp one.
+      Columns cross every depth and a stroke has one width for its length, so they
+      are cut into bands of quantised blur instead (~3 short strokes each, sharing
+      the one gradient). The real thing — `ctx.filter = 'blur()'`, or an offscreen
+      layer blurred per frame — is precisely the cost the runtime's block comment
+      says was cut from both source sketches, and a two-stroke profile at this size
+      is indistinguishable from it.
+
+   Cost, against the budget in the runtime's block comment above:
+   * ~400 grid points of trigonometry a frame, then ~12 row strokes, ~12 bloom
+     strokes, ~11 band fills and ~100 short column segments. Everything else is a
+     table lookup.
+   * NO COLOUR STRING IS BUILT INSIDE THE LOOP. Lighting travels as gradients — one
+     across each row, one down each column — and every stop comes out of a ramp
+     table (colour level × alpha level) built once per palette, the same trade the
+     nebula makes with its sprite atlas. Quantising to 12 × 18 is invisible:
+     consecutive stops interpolate, so the error never exceeds half a step.
+   * No `shadowBlur` and no `filter` — not for the bloom and not for the depth of
+     field. Both are the same path stroked twice, wide and faint under thin and
+     bright, with only the widths and alphas changing between them.
+
+   Colour is never named here (rule 2 of the section): every stroke comes out of the
+   ramp, and the ramp comes out of the state palette. */
+const WAVE = {
+  // Field placement, as shares of the card height. The far edge stops well short of
+  // the vanishing point — rows packed into the last pixels before it cost points,
+  // add nothing, and sit exactly where the digits are.
+  topOfField: 0.34,
+  bottomOfField: 1.06,
+  /* Depth of the far edge in units of the near edge's. This single number IS the
+     strength of the perspective: the far row is drawn 1/depthRatio as wide as the
+     near one, and the focal length and horizon are solved from it (see
+     waveLayout). Raising it pushes the vanishing point further above the card and
+     makes the taper steeper. */
+  depthRatio: 2.35,
+  camHeight: 1,
+  /* How far past the card's own width the world grid runs at the near edge. Above 1
+     so the bottom of the mesh is full-bleed: at exactly 1 the near row would end on
+     the card's edge and the taper would begin inside it. */
+  worldOverscan: 1.38,
+  // Target on-screen gaps, in CSS px, from which the row and column counts follow —
+  // so density holds and the counts track the card's size instead of being fixed.
+  rowSpacing: 13,
+  colSpacing: 30,
+  minRows: 8,
+  maxRows: 18,
+  minCols: 12,
+  maxCols: 34,
+  /* Where the side fade starts, in grid u (-1…1 across the OVERSCANNED width).
+     Being in u rather than in screen x is what shapes the figure: u is anchored in
+     the world, so the same fade sits off the card at the near rows — which
+     therefore run edge to edge — and well inside it at the far ones. The mesh
+     tapers into a soft wedge instead of ending on two vertical lines. */
+  edgeStart: 0.5,
+  /* The spatial colour ramp (point 5 above): where the far edge and the near edge
+     sit in the palette, how much further the right-hand side gets than the left,
+     and how wide a window around that the point's own lighting may swing. The two
+     depth figures are deliberately more than a window apart, so the far half of the
+     mesh works the deep end of the palette and the near half the bright end. */
+  tintFar: 0.1,
+  tintNear: 0.92,
+  tintSide: 0.34,
+  tintSwing: 0.44,
+  lineWidth: 1.7,
+  minLine: 0.5,
+  maxLine: 2.2,
+  /* Depth of field (point 8 below). `focus` is the depth the mesh is sharp at — 1
+     is the near edge, depthRatio the far one — `focusRange` how deep the sharp band
+     runs, and `focusFalloff` how much further a row has to be before it is fully
+     soft. Sitting the plane just in front of the middle puts the crisp band where
+     the figure has the most ink, and leaves BOTH ends soft: distance melting away
+     at the top, a foreground blur along the bottom edge. */
+  focus: 1.6,
+  focusRange: 0.52,
+  focusFalloff: 0.68,
+  /* What a fully defocused line does. Widen and soften are the whole effect: the
+     same ink spread over a wider band with no hard centre left, which is what a
+     lens does to a line. Glow lets the bloom grow with it, since the light that
+     leaves the core has to land somewhere. */
+  dofWiden: 2.2,
+  dofSoften: 0.62,
+  dofGlow: 0.9,
+  // Ceiling for the whole figure. Every other alpha below is a share of this one,
+  // and the per-point fades ride in the ramp rather than here — which is what lets
+  // the torch overcome them (a globalAlpha could only scale a whole path at once).
+  peakAlpha: 0.72,
+  // The bloom pass: the same path, this much wider, at this share of the ink.
+  haloWidth: 4.5,
+  haloAlpha: 0.16,
+  // The columns are the cross-hatch, not the subject: a third of the ink, so the
+  // rows stay the figure even though both carry the same lighting.
+  colAlpha: 0.34,
+  bandAlpha: 0.075,
+  /* The cursor torch. `radius` is in card heights and clamped, so the lit pool is
+     the same size relative to the card whatever the clock size is. `lift` and `lum`
+     are how far a fully lit point is pulled toward opaque and toward the crest end
+     of the ramp — both expressed as a share of the distance REMAINING, so the torch
+     can only ever add. `smoothing` eases both the pool's position and its
+     intensity, at half the source sketch's rate because we run at half its fps.
+
+     `edgeGuard` and `depthGuard` are the boundary mask from point 7: the share of
+     the grid's half-width and of its depth over which the torch ramps away to
+     nothing at the outer end. They are wide enough that the mask is already zero
+     well before the last column and the last row, and narrow enough that the
+     reveal still reaches deep into the tapered part. */
+  torchRadius: 1.1,
+  torchMin: 150,
+  torchMax: 420,
+  torchLift: 0.85,
+  torchLum: 0.8,
+  edgeGuard: 0.36,
+  depthGuard: 0.3,
+  smoothing: 0.1
+};
+
+/* [amplitude in world units, cycles across the grid, cycles into its depth, speed
+   in radians/second]. The two cycle counts are resolved against the grid's actual
+   world size at layout, so the figure holds its shape on a narrow card instead of
+   flattening into a single tilt. Amplitudes sum to 0.1 of the eye height — about
+   26px of travel at the near edge and 11px at the far one, against rows ~13px
+   apart; the depth cycle counts are kept low for the same reason, so neighbouring
+   rows stay close to in phase and never cross. */
+const WAVE_SWELLS = [
+  [0.052, 1.15, 0.55, 0.4],
+  [0.03, 2.05, -0.95, 0.62],
+  [0.018, 0.6, 1.15, 0.27]
+];
+
+/* Ramp resolution: colour levels × alpha levels of pre-built rgba strings. The
+   alpha axis is the finer of the two because it carries the depth fade as well as
+   the lighting — the far rows sit at a twentieth of the ink, and quantising that
+   with a coarse step would band the horizon. */
+const WAVE_RAMP_LEVELS = 12;
+const WAVE_RAMP_ALPHAS = 18;
+
+/**
+ * The mesh's answer to the nebula's sprite atlas: every colour a stroke can take,
+ * built once per palette so the frame loop never concatenates a string. Level 0 is
+ * a trough, the last level a lit crest; alpha 0 is fully transparent, which is what
+ * the side fade resolves to.
+ *
+ * WHICH END OF THE PALETTE A CREST TAKES DEPENDS ON THE CARD. On a dark card a lit
+ * face is the palette's own bright end, as everywhere else. On a light one that end
+ * is nearly white and therefore invisible — a line only exists on white by being
+ * pigment — so the ramp is walked backwards and a crest becomes the deepest, most
+ * saturated tint while the troughs are what dissolve. The figure is the same
+ * either way: the eye reads the high-contrast points as the lit ones. The gamma
+ * does the matching job for alpha, since a hairline needs more of it on white than
+ * a glow needs on black.
+ */
+function waveRamp(palette, container) {
+  const onLight = clockCanvasOnLightSurface(container);
+  const ordered = onLight ? palette.slice().reverse() : palette;
+  const alphaGamma = onLight ? 0.62 : 1;
+  const last = ordered.length - 1;
+  const ramp = [];
+  for (let i = 0; i < WAVE_RAMP_LEVELS; i++) {
+    const at = (i / (WAVE_RAMP_LEVELS - 1)) * last;
+    const lo = Math.min(last, Math.floor(at));
+    const rgb = clockCanvasMix(ordered[lo], ordered[Math.min(last, lo + 1)], at - lo);
+    const levels = [];
+    for (let a = 0; a < WAVE_RAMP_ALPHAS; a++) {
+      const alpha = ((a / (WAVE_RAMP_ALPHAS - 1)) ** alphaGamma).toFixed(3);
+      levels.push(`rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${alpha})`);
+    }
+    ramp.push(levels);
+  }
+  return ramp;
+}
+
+/**
+ * Rebuild the grid. Everything here depends only on the card's size, so it is
+ * computed once per resize and never per frame — the per-frame pass reads `rows`,
+ * `cols` and `swells` and writes into the typed arrays allocated at the end.
+ */
+function waveLayout(state) {
+  const { width, height } = state;
+  const topY = height * WAVE.topOfField;
+  const bottomY = height * WAVE.bottomOfField;
+  const far = WAVE.depthRatio;
+
+  // Solve the camera from the two edges of the field: py(depth) = horizonY +
+  // camHeight * focal / depth, with the near edge (depth 1) landing on bottomY and
+  // the far edge (depth `far`) on topY. The horizon usually falls above the card,
+  // which is correct — the vanishing point is where the mesh WOULD converge.
+  const focal = (bottomY - topY) / (WAVE.camHeight * (1 - 1 / far));
+  const horizonY = bottomY - WAVE.camHeight * focal;
+  const halfW = width / 2;
+  const halfWorld = (halfW / focal) * WAVE.worldOverscan;
+
+  const rowCount = Math.max(WAVE.minRows, Math.min(WAVE.maxRows,
+    Math.round((bottomY - topY) / WAVE.rowSpacing)));
+  const colCount = Math.max(WAVE.minCols, Math.min(WAVE.maxCols,
+    Math.round((width * WAVE.worldOverscan) / WAVE.colSpacing)));
+
+  const rows = [];
+  for (let r = 0; r < rowCount; r++) {
+    // 0 at the far edge, 1 at the near one — which is also the painter's order, so
+    // no depth sort is needed anywhere below.
+    const t = rowCount === 1 ? 1 : r / (rowCount - 1);
+    const restY = topY + t * (bottomY - topY);
+    const depth = (WAVE.camHeight * focal) / Math.max(1, restY - horizonY);
+    const scale = focal / depth;
+    // How far outside the sharp band this row's depth falls, 0…1. Solved here and
+    // never again: every DoF term below is a function of it alone.
+    const blur = Math.max(0, Math.min(1,
+      (Math.abs(depth - WAVE.focus) - WAVE.focusRange / 2) / WAVE.focusFalloff));
+    const sharpWidth = Math.max(WAVE.minLine,
+      Math.min(WAVE.maxLine, WAVE.lineWidth * (scale / focal)));
+    const coreWidth = sharpWidth * (1 + blur * WAVE.dofWiden);
+    rows.push({
+      depth,
+      scale,
+      // Dissolve into the card toward the horizon instead of ending on a line. A
+      // share of the ink, not an alpha: it is multiplied into the per-point value
+      // the ramp is indexed with, so the torch can lift a far row out of it.
+      fade: 0.06 + 0.94 * t ** 1.4,
+      // Where this row's colour window sits in the palette.
+      tint: WAVE.tintFar + (WAVE.tintNear - WAVE.tintFar) * t,
+      // …and how much of the torch it may receive: nothing at the far edge, so the
+      // last row can never be drawn as the boundary it is.
+      reveal: Math.min(1, t / WAVE.depthGuard),
+      blur,
+      // The two strokes a row is made of, already defocused. Alphas are shares of
+      // peakAlpha; widths are absolute. Nothing per-frame touches any of this.
+      coreWidth,
+      coreAlpha: 1 - blur * WAVE.dofSoften,
+      bloomWidth: coreWidth * WAVE.haloWidth,
+      bloomAlpha: WAVE.haloAlpha * (1 + blur * WAVE.dofGlow)
+    });
+  }
+
+  /* Columns cross every depth, and a stroke has one width for its whole length, so
+     a column cannot be defocused the way a row can. It is cut into bands instead:
+     runs of rows that share a quantised blur, each stroked at its own width. Four
+     buckets keeps a band's own spread narrow enough that averaging its rows does
+     not smear the effect back out, and still costs only ~5 short strokes per column
+     instead of one long one. Each band starts a row early so the segments overlap
+     and the line has no seam. */
+  const bands = [];
+  for (let r = 0; r < rowCount; r++) {
+    const bucket = Math.min(3, Math.floor(rows[r].blur * 4));
+    const open = bands[bands.length - 1];
+    if (open && open.bucket === bucket) {
+      open.end = r;
+      open.sum += rows[r].blur;
+      open.n++;
+    } else {
+      bands.push({ bucket, start: Math.max(0, r - 1), end: r, sum: rows[r].blur, n: 1 });
+    }
+  }
+  const colSharp = Math.max(WAVE.minLine, WAVE.lineWidth * 0.6);
+  for (const band of bands) {
+    const blur = band.sum / band.n;
+    band.width = colSharp * (1 + blur * WAVE.dofWiden);
+    band.alpha = WAVE.colAlpha * (1 - blur * WAVE.dofSoften);
+  }
+
+  const cols = [];
+  for (let c = 0; c < colCount; c++) {
+    const u = colCount === 1 ? 0 : (c / (colCount - 1)) * 2 - 1;
+    const over = Math.max(0, (Math.abs(u) - WAVE.edgeStart) / (1 - WAVE.edgeStart));
+    cols.push({
+      worldX: u * halfWorld,
+      edge: Math.max(0, 1 - over * over),
+      // This column's contribution to the colour window: the right-hand side of the
+      // grid sits a little further along the palette than the left.
+      tint: WAVE.tintSide * u * 0.5,
+      // Torch mask — zero at the outermost column, so lighting the taper can never
+      // draw the sheet's own edge.
+      reveal: Math.min(1, (1 - Math.abs(u)) / WAVE.edgeGuard),
+      // Where this column sits in a row's gradient. The projection is affine along
+      // a row, so the stop is just the column's share of the span — the camera pan
+      // shifts a whole row by one constant and cannot bend it.
+      stop: colCount === 1 ? 0 : c / (colCount - 1)
+    });
+  }
+
+  const depthSpan = Math.max(0.001, far - 1);
+  const swells = WAVE_SWELLS.map(([amp, cyclesX, cyclesZ, speed]) => ({
+    amp,
+    fx: (cyclesX * Math.PI * 2) / (halfWorld * 2),
+    fz: (cyclesZ * Math.PI * 2) / depthSpan,
+    speed
+  }));
+
+  const points = rowCount * colCount;
+  state.data = {
+    horizonY,
+    halfW,
+    rows,
+    cols,
+    bands,
+    swells,
+    maxAmp: swells.reduce((sum, s) => sum + s.amp, 0),
+    // The largest either analytic slope can reach, so the shading can be normalised
+    // against it. Without this the lighting silently flattens whenever the swells
+    // are retuned — the raw slope of a long gentle wave is a few hundredths, which
+    // is no contrast at all.
+    maxSlopeX: swells.reduce((sum, s) => sum + s.amp * Math.abs(s.fx), 0),
+    maxSlopeZ: swells.reduce((sum, s) => sum + s.amp * Math.abs(s.fz), 0),
+    // One pass solves the surface into these four; the two draw passes only read
+    // them. Allocated per resize, never per frame.
+    px: new Float32Array(points),
+    py: new Float32Array(points),
+    level: new Uint8Array(points),
+    alpha: new Uint8Array(points),
+    // The torch: where the lit pool is, how strong it is, and how big. Position and
+    // intensity are carried across a resize so a card that reflows under the
+    // pointer does not go dark for a moment.
+    torchX: state.data?.torchX || 0,
+    torchY: state.data?.torchY || 0,
+    glow: state.data?.glow || 0,
+    // Squared, because the falloff below compares squared distances and never needs
+    // the root.
+    torchR2: Math.max(WAVE.torchMin,
+      Math.min(WAVE.torchMax, height * WAVE.torchRadius)) ** 2
+  };
+}
+
+function waveStep(state) {
+  const data = state.data;
+  const { mouse } = state;
+  const lit = mouse.x === null ? 0 : 1;
+  if (lit) {
+    if (data.glow < 0.02) {
+      // Arriving cold: light up under the cursor rather than sweeping across the
+      // card from wherever the pointer last left it.
+      data.torchX = mouse.x;
+      data.torchY = mouse.y;
+    } else {
+      data.torchX += (mouse.x - data.torchX) * WAVE.smoothing;
+      data.torchY += (mouse.y - data.torchY) * WAVE.smoothing;
+    }
+  }
+  // Intensity eases both ways, so leaving the card dims the pool out instead of
+  // snapping it off.
+  data.glow += (lit - data.glow) * WAVE.smoothing;
+}
+
+function wavePaint(state) {
+  const ctx = state.ctx;
+  const { width, height, t, data, assets } = state;
+  const { rows, cols, swells, px, py, level, alpha } = data;
+  const rowCount = rows.length;
+  const colCount = cols.length;
+
+  ctx.clearRect(0, 0, width, height);
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+
+  // ---- Pass 1: solve the surface. Projection, lighting and the two table indices
+  // for every grid point, so neither draw pass has to do any maths.
+  for (let r = 0; r < rowCount; r++) {
+    const row = rows[r];
+    const base = r * colCount;
+    for (let c = 0; c < colCount; c++) {
+      const col = cols[c];
+      let y = 0;
+      let slopeX = 0;
+      let slopeZ = 0;
+      for (let i = 0; i < swells.length; i++) {
+        const s = swells[i];
+        const theta = col.worldX * s.fx + row.depth * s.fz + t * s.speed;
+        const cos = Math.cos(theta);
+        y += s.amp * Math.sin(theta);
+        // The analytic partials — the surface normal, without sampling a neighbour.
+        slopeX += s.amp * s.fx * cos;
+        slopeZ += s.amp * s.fz * cos;
+      }
+
+      const at = base + c;
+      px[at] = data.halfW + col.worldX * row.scale;
+      py[at] = data.horizonY + (WAVE.camHeight - y) * row.scale;
+
+      // Light from one side and a little from the front: a face tilted toward it is
+      // brighter. Both terms are normalised against the slope maxima above.
+      const light = Math.max(0, Math.min(1, 0.5
+        + (data.maxSlopeX === 0 ? 0 : (slopeX / data.maxSlopeX) * 0.34)
+        + (data.maxSlopeZ === 0 ? 0 : (slopeZ / data.maxSlopeZ) * 0.18)));
+      const elevation = data.maxAmp === 0 ? 0.5 : (y / data.maxAmp) * 0.5 + 0.5;
+      // Where this point sits in the palette: its depth and side decide the window,
+      // its own lighting swings it within that window (point 5 of the note above).
+      // Clamped here and not at the lookup: the torch below lerps toward 1, which
+      // only stays a lift while this is already inside the range.
+      let lum = Math.max(0, Math.min(1, row.tint + col.tint
+        + (0.3 * elevation + 0.7 * light - 0.5) * WAVE.tintSwing));
+      // Everything that dims a point, multiplied together: how far into the
+      // distance it is, how far out to the side, and which way it faces.
+      let ink = row.fade * col.edge * (0.34 + 0.66 * light);
+
+      // The torch. Squared falloff on the squared distance, so the pool has a soft
+      // shoulder and no root is needed; both lifts are toward what is LEFT, so the
+      // cursor can only ever add — a point already at full ink stays there. The
+      // reveal masks keep it off the grid's last column and last row.
+      if (data.glow > 0.002) {
+        const dx = px[at] - data.torchX;
+        const dy = py[at] - data.torchY;
+        const reach = 1 - Math.min(1, (dx * dx + dy * dy) / data.torchR2);
+        if (reach > 0) {
+          const torch = data.glow * reach * reach * row.reveal * col.reveal;
+          ink += torch * (1 - ink) * WAVE.torchLift;
+          lum += torch * (1 - lum) * WAVE.torchLum;
+        }
+      }
+
+      level[at] = Math.round(lum * (WAVE_RAMP_LEVELS - 1));
+      alpha[at] = Math.round(ink * (WAVE_RAMP_ALPHAS - 1));
+    }
+  }
+
+  // ---- Pass 2: the columns, under everything else. A gradient down each one, from
+  // the same tables the rows use: the cross-hatch has to light up with the surface
+  // it belongs to, and one flat colour per column could not follow the torch. The
+  // gradient is positional, so every band of the column can share the one object.
+  const bands = data.bands;
+  const lastRow = (rowCount - 1) * colCount;
+  for (let c = 0; c < colCount; c++) {
+    const top = py[c];
+    const span = py[lastRow + c] - top;
+    const gradient = ctx.createLinearGradient(0, top, 0, top + (span || 1));
+    for (let r = 0; r < rowCount; r++) {
+      const at = r * colCount + c;
+      const stop = span > 0 ? (py[at] - top) / span : r / Math.max(1, rowCount - 1);
+      gradient.addColorStop(Math.max(0, Math.min(1, stop)), assets[level[at]][alpha[at]]);
+    }
+    ctx.strokeStyle = gradient;
+    for (const band of bands) {
+      ctx.globalAlpha = WAVE.peakAlpha * band.alpha;
+      ctx.lineWidth = band.width;
+      ctx.beginPath();
+      ctx.moveTo(px[band.start * colCount + c], py[band.start * colCount + c]);
+      for (let r = band.start + 1; r <= band.end; r++) {
+        const at = r * colCount + c;
+        ctx.lineTo(px[at], py[at]);
+      }
+      ctx.stroke();
+    }
+  }
+
+  // ---- Pass 3: the rows, far to near. Each one lays its band down before its own
+  // line, so the fill veils what is already behind it (point 5 of the note above).
+  // Every fade is already inside the gradient, so globalAlpha only ever carries the
+  // figure's ceiling and which pass this is.
+  for (let r = 0; r < rowCount; r++) {
+    const row = rows[r];
+    const base = r * colCount;
+    const gradient = ctx.createLinearGradient(px[base], 0, px[base + colCount - 1], 0);
+    for (let c = 0; c < colCount; c++) {
+      gradient.addColorStop(cols[c].stop, assets[level[base + c]][alpha[base + c]]);
+    }
+
+    if (r > 0) {
+      const prev = base - colCount;
+      ctx.globalAlpha = WAVE.peakAlpha * WAVE.bandAlpha;
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.moveTo(px[prev], py[prev]);
+      for (let c = 1; c < colCount; c++) ctx.lineTo(px[prev + c], py[prev + c]);
+      for (let c = colCount - 1; c >= 0; c--) ctx.lineTo(px[base + c], py[base + c]);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    ctx.beginPath();
+    ctx.moveTo(px[base], py[base]);
+    for (let c = 1; c < colCount; c++) ctx.lineTo(px[base + c], py[base + c]);
+    ctx.strokeStyle = gradient;
+    // Bloom first — wide and faint — then the core over it. Same path either way,
+    // which is why this is cheaper than a shadowBlur as well as softer, and it is
+    // also where the depth of field lands: all four numbers were solved per row at
+    // layout, so a defocused row costs exactly what a sharp one does.
+    ctx.globalAlpha = WAVE.peakAlpha * row.bloomAlpha;
+    ctx.lineWidth = row.bloomWidth;
+    ctx.stroke();
+    ctx.globalAlpha = WAVE.peakAlpha * row.coreAlpha;
+    ctx.lineWidth = row.coreWidth;
+    ctx.stroke();
+  }
+
+  ctx.globalAlpha = 1;
+}
+
+const WAVE_SPEC = {
+  pointer: true,
+  buildAssets: waveRamp,
+  layout: waveLayout,
+  step: waveStep,
+  paint: wavePaint
+};
+
+/* ---- 02 パーティクル（ネビュラ） -------------------------------------------
+   Ported from the "Short Trail Attracting Blue Nebula" canvas sketch
+   (~/Documents/案件以外/AI/html/Dynamic bg_shader/HTML Interactive Nebula
+   Simulation.html).
+
+   What carries over: perspective depth (z shrinking toward the viewer, x/y
+   projected through it), gravity toward the centre, depth-of-field by distance
+   from a focal plane, a short motion trail, cursor repulsion and press-to-attract,
+   and the fade-in / lifespan / fade-out cycle.
+
+   Beyond the shared cuts listed above the runtime, one deviation is specific to
+   this variant: the sketch paints its trail by flooding the canvas with an
+   opaque-ish background colour every frame, which works because it owns the whole
+   page background. Here the canvas sits over the card, so a flood fill would paint
+   a rectangle across it. The fade is `destination-out` instead — it decays the
+   alpha of what is already there and leaves the canvas transparent. */
+const NEBULA = {
+  maxDepth: 5,
+  focalDepth: 1.8,
+  focusRange: 2,
+  spritePx: 64,
+  // Per-frame alpha decay of the existing image. Higher = shorter trail. The
+  // sketch's 0.6 at 60fps is roughly this at 30.
+  trailFade: 0.34,
+  peakOpacity: 0.55,
+  mouseRadius: 90,
+  repelForce: 1.0,
+  attractRadius: 220,
+  attractForce: 0.14,
+  minAttractDist: 14,
+  // Everything here that is a per-frame delta is the sketch's 60fps figure ×2.
+  zStep: 0.02,
+  gravity: 0.004
+};
+
+/* The three depth-of-field tiers, as gradient stop tables. `spread` is how far the
+   sprite is drawn beyond the particle's nominal radius: a blurred particle is not
+   just softer, it covers more ground, and scaling the draw is how that happens for
+   free. Tier 0 keeps a near-solid core so an in-focus particle still reads as a
+   point rather than as a small smudge. */
+const NEBULA_TIERS = [
+  { spread: 1.2, stops: [[0, 1], [0.34, 0.95], [0.47, 0.38], [1, 0]] },
+  { spread: 2.1, stops: [[0, 0.9], [0.18, 0.55], [1, 0]] },
+  { spread: 3.4, stops: [[0, 0.58], [0.12, 0.36], [1, 0]] }
+];
+
+// Distance from the focal plane that one blur tier covers. The sketch's formula:
+// the depth outside the in-focus band, split over the tiers in both directions.
+const NEBULA_DEPTH_STEP =
+  Math.max(0, NEBULA.maxDepth - NEBULA.focusRange) / (NEBULA_TIERS.length * 2);
+
+/**
+ * (Re)seat a particle. `seed` is non-null only for the initial fill, where
+ * clockBgNoise keeps the opening layout identical across SPA rebuilds — same
+ * reasoning as the CSS variants. Respawns during the run use Math.random: by then
+ * the field is in motion and there is nothing for a fixed layout to stabilise.
+ */
+function nebulaReset(p, state, seed) {
+  const rnd = seed === null
+    ? Math.random
+    : (() => { let i = 0; return () => clockBgNoise(seed + (i++) * 13); })();
+
+  p.lifespan = 200 + rnd() * 300;
+  p.fadeIn = 30;
+  p.fadeOut = 40;
+  p.age = seed === null ? 0 : Math.floor(rnd() * p.lifespan * 0.8);
+  p.opacity = 0;
+  // A fresh particle enters at the back; the initial fill is spread through the
+  // volume so the field does not have to rush in from the horizon on first paint.
+  p.z = seed === null ? NEBULA.maxDepth : rnd() * NEBULA.maxDepth;
+  const safeZ = Math.max(0.1, p.z);
+  p.x = (rnd() - 0.5) * state.width * (NEBULA.maxDepth / safeZ);
+  p.y = (rnd() - 0.5) * state.height * (NEBULA.maxDepth / safeZ);
+  p.vx = (rnd() - 0.5) * 0.2;
+  p.vy = (rnd() - 0.5) * 0.2;
+  p.baseRadius = 1.2 + rnd() * 1.6;
+  p.color = Math.floor(rnd() * state.assets.length) % state.assets.length;
+  p.tier = 0;
+  p.px = 0;
+  p.py = 0;
+  p.radius = 0;
+}
+
+function nebulaLayout(state) {
+  if (!state.data.particles) state.data.particles = [];
+  const particles = state.data.particles;
+  const target = Math.max(36, Math.min(80, Math.round((state.width * state.height) / 3500)));
+  while (particles.length > target) particles.pop();
+  while (particles.length < target) {
+    const p = {};
+    nebulaReset(p, state, 9011 + particles.length * 97);
+    particles.push(p);
+  }
+}
+
+function nebulaStep(state) {
+  const { width, height, mouse } = state;
+  // 退室中 slows the whole field (see clockCanvasSpeed): ages advance more slowly,
+  // so lifespans stretch and the drift settles down with them.
+  const rate = 1 / state.speed;
+  const halfW = width / 2;
+  const halfH = height / 2;
+  const margin = 30;
+
+  for (const p of state.data.particles) {
+    p.age += rate;
+
+    if (p.age >= p.lifespan) {
+      nebulaReset(p, state, null);
+      continue;
+    }
+
+    if (p.age < p.fadeIn) {
+      p.opacity = (p.age / p.fadeIn) * NEBULA.peakOpacity;
+    } else if (p.age > p.lifespan - p.fadeOut) {
+      p.opacity = NEBULA.peakOpacity * ((p.lifespan - p.age) / p.fadeOut);
+    } else {
+      p.opacity = NEBULA.peakOpacity;
+    }
+
+    // Toward the viewer. A particle that reaches the near plane is pushed into its
+    // fade-out rather than popped, so nothing ever vanishes mid-brightness.
+    p.z -= NEBULA.zStep / state.speed;
+    if (p.z <= 0.2) {
+      p.z = 0.2;
+      p.age = Math.max(p.age, p.lifespan - p.fadeOut);
+    }
+
+    const scale = NEBULA.maxDepth / (p.z + NEBULA.maxDepth * 0.2);
+    p.px = p.x * scale + halfW;
+    p.py = p.y * scale + halfH;
+    p.x += p.vx * rate;
+    p.y += p.vy * rate;
+
+    // Gravity toward the world origin — what makes the field a nebula rather than
+    // a snowfall.
+    const distSq = p.x * p.x + p.y * p.y;
+    if (distSq > 1) {
+      const dist = Math.sqrt(distSq);
+      const pull = (NEBULA.gravity * rate) / (dist * 0.5);
+      p.vx += (p.x / dist) * -pull;
+      p.vy += (p.y / dist) * -pull;
+    }
+
+    if (mouse.x !== null) {
+      const dx = p.px - mouse.x;
+      const dy = p.py - mouse.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (mouse.down && dist < NEBULA.attractRadius && dist > NEBULA.minAttractDist) {
+        // Force divided by scale: a near particle covers more screen per world
+        // unit, so an equal world force would fling it far faster than a distant
+        // one and the swarm would come apart.
+        const force = NEBULA.attractForce * (1 - dist / NEBULA.attractRadius)
+          / Math.max(0.05, scale);
+        p.vx -= (dx / dist) * force;
+        p.vy -= (dy / dist) * force;
+      } else if (!mouse.down && dist < NEBULA.mouseRadius && dist > 0
+        && p.tier !== NEBULA_TIERS.length - 1) {
+        // The furthest-out-of-focus tier ignores the cursor, as in the sketch:
+        // background haze reacting to the pointer breaks the depth read.
+        const force = ((NEBULA.mouseRadius - dist) / NEBULA.mouseRadius)
+          * NEBULA.repelForce / Math.max(0.1, scale);
+        p.vx += (dx / dist) * force;
+        p.vy += (dy / dist) * force;
+      }
+    }
+
+    // Off the card: fade rather than clip, so the edge is not a visible boundary.
+    if (p.px < -margin || p.px > width + margin
+      || p.py < -margin || p.py > height + margin) {
+      p.age = Math.max(p.age, p.lifespan - p.fadeOut);
+    }
+
+    p.radius = p.baseRadius * scale;
+    const depthDiff = Math.abs(p.z - NEBULA.focalDepth) - NEBULA.focusRange / 2;
+    p.tier = depthDiff <= 0
+      ? 0
+      : Math.min(NEBULA_TIERS.length - 1,
+        NEBULA_DEPTH_STEP > 0 ? Math.floor(depthDiff / NEBULA_DEPTH_STEP) : NEBULA_TIERS.length - 1);
+  }
+}
+
+function nebulaPaint(state) {
+  const ctx = state.ctx;
+  const { width, height } = state;
+
+  // Trail. destination-out decays the alpha of what is already on the canvas and
+  // leaves it transparent — see the deviation note above.
+  ctx.globalCompositeOperation = 'destination-out';
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = `rgba(0, 0, 0, ${NEBULA.trailFade})`;
+  ctx.fillRect(0, 0, width, height);
+
+  ctx.globalCompositeOperation = 'source-over';
+  for (const p of state.data.particles) {
+    if (p.opacity <= 0.01 || p.radius <= 0.1) continue;
+    const r = p.radius * NEBULA_TIERS[p.tier].spread;
+    if (p.px < -r || p.px > width + r || p.py < -r || p.py > height + r) continue;
+    ctx.globalAlpha = p.opacity;
+    ctx.drawImage(state.assets[p.color][p.tier], p.px - r, p.py - r, r * 2, r * 2);
+  }
+  ctx.globalAlpha = 1;
+}
+
+const NEBULA_SPEC = {
+  pointer: true,
+  buildAssets: (palette) => palette.map((rgb) =>
+    NEBULA_TIERS.map((tier) => clockCanvasGlowSprite(rgb, tier.stops, NEBULA.spritePx))),
+  layout: nebulaLayout,
+  step: nebulaStep,
+  paint: nebulaPaint
+};
+
+/** Which canvas runtime a variant needs, or null for the CSS-only ones. */
+const CLOCK_CANVAS_SPECS = { wave: WAVE_SPEC, particles: NEBULA_SPEC };
 
 function buildClockBackgroundMarkup(variant) {
   switch (variant) {
-    case 'pulse':
-      // Negative, staggered delays (CSS) mean the four rings are already spread
-      // across the card on the first frame rather than expanding in single file.
-      return [0, 1, 2, 3].map((i) => `<i class="jbe-bg-ring" style="--i:${i}"></i>`).join('')
-        + buildClockBgDots(12, 401, { minSize: 3, maxSize: 8, spread: 18 });
-
     case 'wave':
-      // Two layers, different speed and direction — the slower, fainter one that
-      // rides 6% higher reads as depth.
-      return '<div class="jbe-bg-wave" style="--dur:30s;--depth:0;--bottom:0;--dir:normal">'
-        + `${buildClockBgWaveSvg(16, 11)}</div>`
-        + '<div class="jbe-bg-wave" style="--dur:46s;--depth:1;--bottom:6%;--dir:reverse">'
-        + `${buildClockBgWaveSvg(13, 53)}</div>`;
-
     case 'particles':
-      return '<i class="jbe-bg-glow"></i>'
-        + buildClockBgDots(30, 907, { minSize: 2, maxSize: 7, spread: 30 });
+      // The two canvas variants. See the block comment above the shared runtime
+      // (startClockCanvas) for why they are canvases and what that costs; the
+      // glow behind the nebula is a plain CSS element, as it does not move with
+      // anything in the simulation.
+      return (variant === 'particles' ? '<i class="jbe-bg-glow"></i>' : '')
+        + '<canvas class="jbe-bg-canvas"></canvas>';
 
-    case 'blob':
-      // Radial gradients, not `filter: blur()` on solid shapes: the soft edge is
-      // free this way, and the blobs stay cheap to move because nothing has to be
-      // re-blurred per frame.
-      return [
-        '--w:62%;--h:46%;--x:-14%;--y:38%;--dur:26s;--delay:0s;--o:0.9',
-        '--w:44%;--h:34%;--x:58%;--y:-8%;--dur:32s;--delay:-8s;--o:0.75',
-        '--w:26%;--h:20%;--x:70%;--y:62%;--dur:22s;--delay:-14s;--o:0.85',
-        '--w:36%;--h:30%;--x:24%;--y:74%;--dur:38s;--delay:-5s;--o:0.55'
-      ].map((style) => `<i class="jbe-bg-blob" style="${style}"></i>`).join('');
-
-    case 'orbit':
-      // Three ellipses (border-radius on a non-square box) spun as HTML elements,
-      // each carrying one satellite. The rotation is composited, so this stays a
-      // transform-only animation despite looking like an SVG figure.
-      return '<i class="jbe-bg-halo"></i>'
-        + [
-          // --offset is a negative-delay fraction of the orbit's own period: without
-          // it all three satellites start on their ellipse's top vertex and set off
-          // as one clump.
-          '--tilt:-18deg;--w:78%;--ratio:2.5;--dur:34s;--dir:normal;--dash:solid;--offset:0',
-          '--tilt:22deg;--w:66%;--ratio:2.2;--dur:44s;--dir:reverse;--dash:solid;--offset:0.38',
-          '--tilt:6deg;--w:52%;--ratio:1.9;--dur:52s;--dir:normal;--dash:dashed;--offset:0.71'
-        ].map((style) => `<i class="jbe-bg-orbit" style="${style}"><i class="jbe-bg-satellite"></i></i>`).join('')
-        + buildClockBgDots(6, 1301, { minSize: 2, maxSize: 4, spread: 10 });
+    case 'mesh':
+      return buildClockBgMesh();
 
     case 'godray':
       return buildClockBgGodRay();
@@ -1809,14 +2924,23 @@ function ensureClockBackground(container, requestedVariant) {
   const variant = normalizeClockBackground(requestedVariant);
   const existing = container.querySelector(':scope > .jbe-clock-bg');
 
+  const spec = CLOCK_CANVAS_SPECS[variant] || null;
+
   if (variant === 'none') {
     if (existing) existing.remove();
+    stopClockCanvas();
     container.removeAttribute('data-clock-bg');
     return;
   }
 
   container.dataset.clockBg = variant;
-  if (existing && existing.dataset.variant === variant) return;
+  if (existing && existing.dataset.variant === variant) {
+    // The layer survived, but the clock around it may not have: a rebuild leaves a
+    // detached canvas whose loop has already stopped itself, and startClockCanvas
+    // is a no-op when it is still the live one.
+    if (spec) startClockCanvas(existing.querySelector('.jbe-bg-canvas'), container, spec);
+    return;
+  }
 
   const layer = existing || document.createElement('div');
   layer.className = 'jbe-clock-bg';
@@ -1826,6 +2950,12 @@ function ensureClockBackground(container, requestedVariant) {
   layer.setAttribute('aria-hidden', 'true');
   layer.innerHTML = buildClockBackgroundMarkup(variant);
   if (!existing) container.prepend(layer);
+
+  if (spec) {
+    startClockCanvas(layer.querySelector('.jbe-bg-canvas'), container, spec);
+  } else {
+    stopClockCanvas();
+  }
 }
 
 function applyClockSettingsToContainer(container, settings) {
