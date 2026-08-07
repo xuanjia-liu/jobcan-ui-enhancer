@@ -1928,6 +1928,15 @@
     border-radius: var(--border-radius-xl);
     box-shadow: var(--shadow-sm);
     position: relative;
+    /* The ambient background layer sits at z-index: -1 — above this card's own
+       background, below every in-flow child — which needs the card to be a stacking
+       context. `container-type: inline-size` (below) applies layout containment and
+       therefore ALREADY makes it one, so this declaration changes no stacking today;
+       it is here to state the dependency, because deleting container-type would
+       otherwise send the layer behind the opaque card background and make it vanish
+       with nothing to point at. Note it is deliberately not `overflow: hidden` — that
+       would clip the 打刻詳細設定 popover; the layer clips itself instead. */
+    isolation: isolate;
     /* Remove will-change from container - only apply to animating elements */
     transition: transform 0.3s ease, box-shadow 0.3s ease;
     /* Fluid layout: shrink inside flexparents; enable container units for digits/track */
@@ -2307,10 +2316,609 @@
     color: var(--color-clock-colon-working);
   }
   
-  .jobcan-enhanced .colon.colon-not-working {
-    color: var(--color-clock-colon-not-working);
+  /* ==========================================================================
+     Ambient status background
+     ==========================================================================
+     Six selectable backdrops for the clock card, chosen in the popup
+     (表示設定 → 背景アニメーション) and written onto the container as
+     [data-clock-bg]. ensureClockBackground() in scripts/clock.js builds the one
+     layer each variant needs; everything below is what paints and moves it.
+
+     Three rules the whole section obeys:
+
+     1. ONE composited layer. `.jbe-clock-bg` carries the state opacity, so the
+        browser can rasterise the whole backdrop once and then only re-composite
+        it. Every animation inside is `transform` or `opacity` — no width/left/
+        filter/background-position animation anywhere, so none of this can
+        invalidate layout or repaint the digits sitting above it. Deliberately no
+        `will-change`: Chrome already promotes an element with a running
+        transform/opacity animation, and the particle field is 30 elements — 30
+        permanently hinted layers would be pure cost for no gain.
+     2. Colour comes from the state, not from the variant. The tints below are
+        derived from [data-clock-color-class], which updateFlipClockColors()
+        maintains off #working_status — so 勤務中 is blue, 退室中 is grey, and the
+        pending state is the same neutral the tiles use, all from the existing
+        --color-clock-* tokens. A variant never names a colour.
+     3. Motion is slow and low-contrast on purpose. The mockups are full-strength
+        marketing renders; at that intensity the field competes with the digits,
+        which are the reason the card exists. Loops run 22–52s, and 退室中 is
+        further dimmed and slowed — an away card should be quieter than a working
+        one, not equally busy. */
+
+  .jobcan-enhanced .flip-clock-container {
+    /* Neutral until #working_status resolves — same reasoning as the tiles'
+       pending face, so nothing flashes blue on a hard reload. */
+    --jbe-bg-tint: var(--color-clock-pending-start);
+    --jbe-bg-tint-2: var(--color-clock-pending-end);
+    --jbe-bg-strength: 0.45;
+    /* Multiplier on every duration in this section. */
+    --jbe-bg-speed: 1.15;
   }
-  
+
+  .jobcan-enhanced .flip-clock-container[data-clock-color-class='style-working'] {
+    --jbe-bg-tint: var(--color-clock-working-start);
+    --jbe-bg-tint-2: var(--color-clock-working-end);
+    --jbe-bg-strength: 1;
+    --jbe-bg-speed: 1;
+  }
+
+  .jobcan-enhanced .flip-clock-container[data-clock-color-class='style-not-working'] {
+    --jbe-bg-tint: var(--color-clock-not-working-end);
+    --jbe-bg-tint-2: var(--color-clock-not-working-start);
+    --jbe-bg-strength: 0.6;
+    --jbe-bg-speed: 1.4;
+  }
+
+  .jobcan-enhanced .jbe-clock-bg {
+    position: absolute;
+    inset: 0;
+    /* Negative z-index inside the card's stacking context: paints after the card's
+       own background, before the digits/timeline — so no z-index is needed on any of
+       the content. */
+    z-index: -1;
+    /* The layer clips itself, so the card keeps its own `overflow: visible`. */
+    overflow: hidden;
+    border-radius: inherit;
+    pointer-events: none;
+    opacity: var(--jbe-bg-strength);
+    /* 0.9s, not instant: the fade rides along with a 出勤/退勤 punch so the card
+       brightens into the working state instead of snapping. */
+    transition: opacity 0.9s ease;
+  }
+
+  /* Shared drifting dot, used by the particle field and the orbit specks. Each dot's
+     placement, size, travel and negative delay arrive as inline custom properties
+     from clock.js. (The god-ray dust is NOT this — it is .jbe-bg-mote, which travels
+     a ray rather than drifting in place.) */
+  .jobcan-enhanced .jbe-bg-dot {
+    position: absolute;
+    left: var(--x);
+    top: var(--y);
+    width: var(--sz);
+    height: var(--sz);
+    border-radius: 50%;
+    background-color: var(--jbe-bg-tint);
+  }
+
+  .jobcan-enhanced .jbe-bg-dot {
+    /* box-shadow rather than `filter: blur()`: the glow is baked into the same
+       paint as the dot, where a filter would put every dot on its own layer. */
+    box-shadow: 0 0 calc(var(--sz) * 2) calc(var(--sz) * 0.5) var(--jbe-bg-tint);
+    animation: jbeBgDrift calc(var(--dur) * var(--jbe-bg-speed)) ease-in-out var(--delay) infinite;
+  }
+
+  @keyframes jbeBgDrift {
+    0%, 100% { transform: translate3d(0, 0, 0) scale(0.75); opacity: 0.16; }
+    50% { transform: translate3d(var(--dx), var(--dy), 0) scale(1.15); opacity: 0.5; }
+  }
+
+  /* ---- 01 パルス（同心円） -------------------------------------------------- */
+
+  .jobcan-enhanced .jbe-bg-ring {
+    /* One local size var: the ring is centred by a negative margin of half its own
+       size, and repeating the clamp() in `margin` would be two clamps to keep in
+       step. cqi resolves against .flip-clock-container (container-type above). */
+    --jbe-ring-size: clamp(240px, 52cqi, 620px);
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: var(--jbe-ring-size);
+    aspect-ratio: 1;
+    margin: calc(var(--jbe-ring-size) / -2);
+    border-radius: 50%;
+    background: radial-gradient(
+      circle,
+      color-mix(in srgb, var(--jbe-bg-tint) 20%, transparent) 0%,
+      color-mix(in srgb, var(--jbe-bg-tint) 12%, transparent) 62%,
+      transparent 72%
+    );
+    /* Negative, staggered delay: four rings mid-flight on the first frame. */
+    animation: jbeBgPulse calc(11s * var(--jbe-bg-speed)) ease-out
+               calc(var(--i) * -2.75s * var(--jbe-bg-speed)) infinite;
+  }
+
+  @keyframes jbeBgPulse {
+    0% { transform: scale(0.3); opacity: 0; }
+    18% { opacity: 1; }
+    100% { transform: scale(1.75); opacity: 0; }
+  }
+
+  /* ---- 02 ウェーブメッシュ -------------------------------------------------- */
+
+  /* The scroll wrapper is 133.33% wide because the SVG inside draws 1600 units in
+     a 1200-unit window; one sine period is 400 units, which is exactly 25% of the
+     wrapper — so the -25% travel below loops with no visible seam. The wrapper is
+     an HTML element on purpose: a CSS transform here is composited, whereas
+     animating the <g>'s own transform repaints all 16 paths every frame. */
+  .jobcan-enhanced .jbe-bg-wave {
+    position: absolute;
+    left: 0;
+    /* --bottom / --dir come from clock.js, one value per layer: the second layer
+       rides higher and scrolls the other way, so the two crest patterns never
+       travel locked together. (Not `:nth-of-type()`: that counts by element type
+       among ALL the layer's children, which silently picks the wrong element in
+       the variants that mix <div> and <i>.) */
+    bottom: var(--bottom, 0);
+    width: 133.3334%;
+    height: 62%;
+    opacity: calc(0.85 - var(--depth) * 0.4);
+    animation: jbeBgWaveScroll calc(var(--dur) * var(--jbe-bg-speed)) linear infinite;
+    animation-direction: var(--dir, normal);
+    /* Dissolve into the card at the top instead of ending on a hard line. */
+    -webkit-mask-image: linear-gradient(to top, #000 8%, rgba(0, 0, 0, 0.35) 55%, transparent 100%);
+    mask-image: linear-gradient(to top, #000 8%, rgba(0, 0, 0, 0.35) 55%, transparent 100%);
+  }
+
+  .jobcan-enhanced .jbe-bg-wave svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  .jobcan-enhanced .jbe-bg-wave path {
+    fill: none;
+    stroke: var(--jbe-bg-tint);
+    stroke-width: 1;
+    stroke-opacity: 0.4;
+    vector-effect: non-scaling-stroke;
+  }
+
+  @keyframes jbeBgWaveScroll {
+    from { transform: translate3d(0, 0, 0); }
+    to { transform: translate3d(-25%, 0, 0); }
+  }
+
+  /* ---- 03 パーティクル ------------------------------------------------------ */
+
+  .jobcan-enhanced .jbe-bg-glow {
+    --jbe-glow-size: clamp(300px, 78cqi, 900px);
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: var(--jbe-glow-size);
+    aspect-ratio: 1;
+    margin: calc(var(--jbe-glow-size) / -2);
+    border-radius: 50%;
+    background: radial-gradient(
+      circle,
+      color-mix(in srgb, var(--jbe-bg-tint) 16%, transparent) 0%,
+      transparent 68%
+    );
+    animation: jbeBgBreathe calc(16s * var(--jbe-bg-speed)) ease-in-out infinite;
+  }
+
+  @keyframes jbeBgBreathe {
+    0%, 100% { transform: scale(0.9); opacity: 0.7; }
+    50% { transform: scale(1.08); opacity: 1; }
+  }
+
+  /* ---- 04 ブラーブロブ ------------------------------------------------------ */
+
+  /* Soft-edged radial gradients rather than solid shapes behind `filter: blur()`:
+     the edge costs nothing this way, and moving a blob is a plain composited
+     transform instead of a per-frame re-blur of a large surface. */
+  .jobcan-enhanced .jbe-bg-blob {
+    position: absolute;
+    left: var(--x);
+    top: var(--y);
+    width: var(--w);
+    height: var(--h);
+    opacity: var(--o);
+    background: radial-gradient(
+      closest-side ellipse,
+      color-mix(in srgb, var(--jbe-bg-tint) 42%, transparent) 0%,
+      color-mix(in srgb, var(--jbe-bg-tint-2) 22%, transparent) 55%,
+      transparent 100%
+    );
+    animation: jbeBgBlobDrift calc(var(--dur) * var(--jbe-bg-speed)) ease-in-out
+               var(--delay) infinite alternate;
+  }
+
+  @keyframes jbeBgBlobDrift {
+    from { transform: translate3d(-3%, 2%, 0) scale(1); }
+    to { transform: translate3d(4%, -3%, 0) scale(1.14); }
+  }
+
+  /* ---- 05 オービットライン / ハロー ---------------------------------------- */
+
+  .jobcan-enhanced .jbe-bg-halo {
+    --jbe-halo-size: clamp(200px, 46cqi, 520px);
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: var(--jbe-halo-size);
+    aspect-ratio: 1;
+    margin: calc(var(--jbe-halo-size) / -2);
+    border-radius: 50%;
+    background: radial-gradient(
+      circle,
+      color-mix(in srgb, var(--jbe-bg-tint) 30%, transparent) 0%,
+      color-mix(in srgb, var(--jbe-bg-tint) 8%, transparent) 38%,
+      transparent 66%
+    );
+    animation: jbeBgBreathe calc(13s * var(--jbe-bg-speed)) ease-in-out infinite;
+  }
+
+  /* An ellipse drawn as a border-radius on a non-square box, tilted by --tilt and
+     spun about its own centre. Cheaper than an SVG figure and, being an HTML
+     element, the rotation is composited. */
+  .jobcan-enhanced .jbe-bg-orbit {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: var(--w);
+    aspect-ratio: var(--ratio);
+    translate: -50% -50%;
+    /* --dash is `solid` or `dashed`, straight from clock.js — the mock's third
+       orbit is the dashed one. */
+    border: 1px var(--dash, solid) color-mix(in srgb, var(--jbe-bg-tint) 46%, transparent);
+    border-radius: 50%;
+    rotate: var(--tilt);
+    animation: jbeBgOrbitSpin calc(var(--dur) * var(--jbe-bg-speed)) linear infinite;
+    animation-direction: var(--dir, normal);
+    /* Negative delay = start part-way round, so the three satellites are spread
+       across their orbits on the first frame instead of leaving as a clump. */
+    animation-delay: calc(var(--dur) * var(--jbe-bg-speed) * var(--offset, 0) * -1);
+  }
+
+  /* Sits on the ellipse's top vertex, so the parent's spin carries it round the
+     path — no keyframed position of its own. */
+  .jobcan-enhanced .jbe-bg-satellite {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    width: 7px;
+    height: 7px;
+    margin: -3.5px 0 0 -3.5px;
+    border-radius: 50%;
+    background-color: var(--jbe-bg-tint);
+    box-shadow: 0 0 10px 2px color-mix(in srgb, var(--jbe-bg-tint) 55%, transparent);
+  }
+
+  @keyframes jbeBgOrbitSpin {
+    /* `rotate` (not `transform`) so the --tilt above composes with the spin
+       instead of being overwritten by it. */
+    from { rotate: var(--tilt); }
+    to { rotate: calc(var(--tilt) + 360deg); }
+  }
+
+  /* ---- 06 ゴッドレイ（光の柱） ---------------------------------------------
+     Ported from the God Ray mode of the Shadow Studio Figma plugin; see the long
+     note above buildClockBgGodRay() in scripts/clock.js for what carries over and
+     the one deliberate deviation (its ripple is subtractive because it composites
+     with SCREEN over dark art; ours is additive because this card is light).
+
+     EVERY dimension of the figure derives from --jbe-ray-scale, and the apex from
+     --jbe-ray-apex / --jbe-ray-x. Nothing is sized in card percentages except the
+     apex's horizontal placement, which genuinely is "somewhere along the top edge".
+     That is deliberate: % of height and cqi (% of width) move independently when
+     the window is resized, so a figure that mixes them comes apart — the bloom
+     slides off the apex and the ramp's bright half drifts outside the card. */
+  .jobcan-enhanced .jbe-clock-bg[data-variant='godray'] {
+    --jbe-ray-scale: clamp(430px, 150cqi, 1250px);
+    /* Apex height above the card, as a share of the ray scale. Read here and as
+       each shaft's --p0 (where its ray crosses into the card), so the motes start
+       life exactly at the top edge. */
+    --jbe-ray-apex: 0.42;
+    /* Apex position along the top edge. Slightly off-card to the left, so the fan
+       enters at the corner rather than radiating from a point you can see. */
+    --jbe-ray-x: -6%;
+    /* Mean shaft direction, clockwise from straight down. The haze reads it so its
+       wash cannot end up lit from a different side than the beams. */
+    --jbe-ray-aim: 27deg;
+  }
+
+  /* Flat volumetric lift filling the beam volume — the plugin's Haze. Without it
+     the shafts look drawn on rather than cut out of lit air. Angled from the shared
+     aim, hence the 180deg complement: a CSS gradient angle is measured from "to
+     top" while --jbe-ray-aim is measured from straight down. */
+  .jobcan-enhanced .jbe-bg-haze {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      calc(180deg - var(--jbe-ray-aim)),
+      color-mix(in srgb, var(--jbe-bg-tint) 9%, transparent) 0%,
+      color-mix(in srgb, var(--jbe-bg-tint-2) 4%, transparent) 46%,
+      transparent 74%
+    );
+  }
+
+  /* THE APEX. A 0×0 box at the (off-card) light source: every shaft is positioned
+     and rotated against this one point, so the fan converges by construction rather
+     than by arithmetic that could fall out of step. Swaying it rotates the whole
+     pencil of rays about the source — which is what moving a light does. */
+  .jobcan-enhanced .jbe-bg-fan {
+    position: absolute;
+    left: var(--jbe-ray-x);
+    top: calc(var(--jbe-ray-scale) * var(--jbe-ray-apex) * -1);
+    width: 0;
+    height: 0;
+    transform-origin: 0 0;
+    animation: jbeBgFanSway calc(54s * var(--jbe-bg-speed)) ease-in-out infinite alternate;
+  }
+
+  @keyframes jbeBgFanSway {
+    from { rotate: -1.7deg; }
+    to { rotate: 1.7deg; }
+  }
+
+  /* The plugin's Bloom: one wide halo of glare at the source. A child of the fan, so
+     it is pinned to the apex at every card size; circular, so the fan's sway cannot
+     make it wobble. Most of it is off-card — what reaches the card is the flare
+     around where the beams enter. */
+  .jobcan-enhanced .jbe-bg-bloom {
+    --bloom-size: calc(var(--jbe-ray-scale) * 1.7);
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: var(--bloom-size);
+    height: var(--bloom-size);
+    margin: calc(var(--bloom-size) / -2);
+    border-radius: 50%;
+    background: radial-gradient(
+      circle,
+      color-mix(in srgb, #fff 30%, transparent) 0%,
+      color-mix(in srgb, var(--jbe-bg-tint) 11%, transparent) 34%,
+      transparent 66%
+    );
+    animation: jbeBgBreathe calc(19s * var(--jbe-bg-speed)) ease-in-out infinite;
+  }
+
+  /* One shaft. The box holds the wedge; the wedge itself is cut by the mask below,
+     which is what gives it soft edges — see the note there for why this is not a
+     clip-path. `left: -w/2` with `transform-origin: top center` puts the wedge's
+     vertex exactly on the apex. */
+  .jobcan-enhanced .jbe-bg-shaft {
+    /* Read by the mote keyframes as well, so the travel distance and the beam
+       geometry are the same two numbers — they cannot disagree. */
+    --shaft-len: calc(var(--jbe-ray-scale) * var(--len));
+    --shaft-w: calc(var(--shaft-len) * var(--wmul));
+    /* Progress along THIS shaft at which its ray enters the card. A short shaft
+       crosses the top edge later in its own run than a long one, hence the division
+       rather than one shared constant. */
+    --p0: calc(var(--jbe-ray-apex) / var(--len));
+    position: absolute;
+    top: 0;
+    left: calc(var(--shaft-w) / -2);
+    width: var(--shaft-w);
+    height: var(--shaft-len);
+    transform-origin: top center;
+    /* NEGATIVE: the page's y axis points down, so a positive CSS rotation carries
+       the shaft's own down-axis to the LEFT. --tilt reads as "degrees clockwise
+       from straight down" — the plugin's convention — and the sign lives here. */
+    rotate: calc(var(--tilt) * -1deg);
+    /* THE WEDGE, and the reason there is no clip-path anywhere in this variant.
+       A conic gradient centred on the box's top-centre — the apex — is a wedge that
+       narrows to nothing exactly where the rays converge, and being a gradient its
+       edges are FEATHERED rather than cut. That matters twice over: a hard edge does
+       not read as light, and `clip-path` is applied AFTER `filter`, so clipping a
+       triangle would have re-cut the blurred core with a hard edge and thrown the
+       blur away. A soft mask composes with blur instead of undoing it.
+
+       `from 180deg - --hw` puts gradient angle 0 at --hw counter-clockwise of
+       straight down, so the stops from 0 to 2×--hw span the wedge symmetrically
+       about the aim axis. The plateau covers its middle 40%; the rest is falloff. */
+    --jbe-wedge: conic-gradient(
+      from calc(180deg - var(--hw)) at 50% 0%,
+      transparent 0deg,
+      #000 calc(var(--hw) * 0.6),
+      #000 calc(var(--hw) * 1.4),
+      transparent calc(var(--hw) * 2)
+    );
+    -webkit-mask-image: var(--jbe-wedge);
+    mask-image: var(--jbe-wedge);
+    /* no-repeat, or the default `repeat` tiles the wedge outside the box and the
+       blurred core's bleed comes back as ghost wedges beside the beam. */
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    opacity: var(--alpha);
+    animation: jbeBgShaftBreathe calc(var(--dur) * var(--jbe-bg-speed)) ease-in-out
+               var(--delay) infinite;
+  }
+
+  @keyframes jbeBgShaftBreathe {
+    0%, 100% { opacity: calc(var(--alpha) * 0.72); }
+    50% { opacity: var(--alpha); }
+  }
+
+  /* The beam itself: white core → tint → deep tint, alpha falling off along the
+     axis. This is godRayStopsFor()'s ramp, and the white is what makes a shaft read
+     as light rather than as a coloured wedge. Positions are pulled later than the
+     plugin's because the apex is --jbe-ray-apex of the way up the shaft and that
+     first stretch is never on screen — a white core at 0-14% would be spent
+     off-card and the beams would enter already dull.
+
+     It is a separate element purely so the blur has something STATIC to sit on: the
+     ripple and the motes are siblings, so nothing they do can force a re-blur. */
+  .jobcan-enhanced .jbe-bg-core {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      to bottom,
+      color-mix(in srgb, #fff 62%, transparent) 0%,
+      color-mix(in srgb, #fff 40%, transparent) 22%,
+      color-mix(in srgb, var(--jbe-bg-tint) 40%, transparent) 40%,
+      color-mix(in srgb, var(--jbe-bg-tint) 22%, transparent) 62%,
+      color-mix(in srgb, var(--jbe-bg-tint-2) 8%, transparent) 80%,
+      /* Fully out at 94%, not 100%: the mask ends at the box, so anything still
+         painted at the bottom edge has its blur bleed cut off square there. The last
+         6% is deliberately empty to give the blur somewhere to die. */
+      transparent 94%
+    );
+    /* The plugin's per-shaft blur, as a share of the ray scale so it tracks the
+       figure instead of getting relatively sharper as the card grows. Wide shafts
+       carry more of it, which is its progressive-blur ramp in miniature. Heavy on
+       purpose — this is volumetric light, and anything crisp enough to have an edge
+       reads as a painted stripe. The shaft's box carries 1.7× the wedge's width
+       (boxWidthMultiple in clock.js) precisely so this bleed has somewhere to go. */
+    filter: blur(calc(var(--jbe-ray-scale) * var(--blur)));
+  }
+
+  /* The axial ripple, travelling. Outside the blurred core on purpose — its bands
+     are soft gradients already, and putting an animation inside a filter would make
+     every frame re-blur the whole beam.
+
+     This is a STATIC frame carrying the axial fade, with the moving bands inside it.
+     The split is what keeps the shaft's far end soft: the bands are a repeating
+     gradient at full strength for their whole length, so masking them with the
+     shaft's wedge alone cut them off square at the box's bottom edge — a hard
+     straight line across the end of the beam, and the one thing in the figure that
+     was not blurred. A fade that travels with the bands cannot fix that; it has to
+     sit still in the shaft's frame, which means its own element. */
+  .jobcan-enhanced .jbe-bg-ripple {
+    position: absolute;
+    inset: 0;
+    --jbe-rip-fade: linear-gradient(
+      to bottom,
+      transparent 0,
+      #000 14%,
+      #000 66%,
+      transparent 93%
+    );
+    -webkit-mask-image: var(--jbe-rip-fade);
+    mask-image: var(--jbe-rip-fade);
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+  }
+
+  /* The bands themselves. Outside the blurred core on purpose — their edges are soft
+     gradients already, and putting an animation inside a filter would make every
+     frame re-blur the whole beam.
+
+     THE PERIOD MUST DIVIDE THE TRAVEL. This is 200% of the shaft's height and slides
+     -50% of itself, i.e. exactly one shaft height; percentage colour stops resolve
+     against that same 200%, so a 12.5% period is 4 periods per travel and the wrap
+     lands the pattern back on itself invisibly. The first version used a 30% period —
+     1.67 periods per travel — and the bands jumped back two thirds of a period at the
+     end of every cycle. Change --jbe-rip-period only to another exact divisor of 50%
+     (25%, 12.5%, 10%…). */
+  .jobcan-enhanced .jbe-bg-ripple-band {
+    --jbe-rip-period: 12.5%;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 200%;
+    background: repeating-linear-gradient(
+      to bottom,
+      transparent 0 calc(var(--jbe-rip-period) * 0.2),
+      color-mix(in srgb, #fff 26%, transparent) calc(var(--jbe-rip-period) * 0.38),
+      color-mix(in srgb, var(--jbe-bg-tint) 18%, transparent) calc(var(--jbe-rip-period) * 0.5),
+      transparent calc(var(--jbe-rip-period) * 0.74),
+      transparent var(--jbe-rip-period)
+    );
+    animation: jbeBgRipple calc(var(--ripple) * var(--jbe-bg-speed)) linear
+               var(--ripple-delay) infinite;
+  }
+
+  @keyframes jbeBgRipple {
+    from { transform: translate3d(0, -50%, 0); }
+    to { transform: translate3d(0, 0, 0); }
+  }
+
+  /* Lit dust. Interpolating translate() from --p0 out to (lateral, length) IS the
+     plugin's `lateral = offset * scale(s)` — both are linear in distance from the
+     apex — so a mote rides the widening wedge instead of crossing out through its
+     edge. Growing scale is its "motes grow with distance: further ones are further
+     out of focus". Unblurred, like the plugin's ("motes never share a node with a
+     large blur"), so they stay as the one crisp thing in a soft image. */
+  .jobcan-enhanced .jbe-bg-mote {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    width: var(--sz);
+    height: var(--sz);
+    margin-left: calc(var(--sz) / -2);
+    border-radius: 50%;
+    /* SATURATED tint, not the plugin's white, and no glow or blur of any kind: it
+       composites with SCREEN over dark artwork, where a soft white mote glows, but
+       this card is light — there a white halo is invisible and the dust has to be
+       the one crisp, darker-than-the-beam thing in the frame to read at all. The
+       shafts carry all the softness; the motes carry all the definition. */
+    background-color: color-mix(in srgb, var(--jbe-bg-tint) 55%, var(--jbe-bg-tint-2));
+    opacity: 0;
+    animation: jbeBgMote calc(var(--dur) * var(--jbe-bg-speed)) linear
+               var(--delay) infinite;
+  }
+
+  /* On a dark card the logic inverts and the plugin's own choice becomes the right
+     one: there, dust reads by being LIGHTER than the beam. Still no glow — the
+     brief is that the motes stay the crisp element. */
+  .jobcan-enhanced body.dark-mode .jbe-bg-mote {
+    background-color: color-mix(in srgb, #fff 55%, var(--jbe-bg-tint));
+  }
+
+  @keyframes jbeBgMote {
+    /* transform is set only at the ends, so it interpolates straight down the ray
+       across the whole run; the middle keyframes shape brightness only.
+
+       It starts at --p0, not at the apex: a mote's whole cycle is then spent inside
+       the card. Starting at 0 sent a third of every mote's life through the region
+       above the card, and what did emerge came in at a third of its size — a stream
+       that was both sparse and too small to see. */
+    0% {
+      transform: translate3d(calc(var(--shaft-w) * var(--f) * var(--p0)),
+                             calc(var(--shaft-len) * var(--p0)), 0) scale(0.55);
+      opacity: 0;
+    }
+    14% { opacity: var(--op); }
+    72% { opacity: calc(var(--op) * 0.45); }
+    100% {
+      transform: translate3d(calc(var(--shaft-w) * var(--f)), var(--shaft-len), 0) scale(1.5);
+      opacity: 0;
+    }
+  }
+
+  /* ---- Reduced motion ------------------------------------------------------
+     The composition is the point, the motion is the garnish: every variant still
+     reads as itself standing still, so the layer stays and only the animations
+     stop. The rings would be invisible frozen at their `0%` keyframe (scale 0.3,
+     opacity 0), so they are placed by hand instead. */
+  @media (prefers-reduced-motion: reduce) {
+    .jobcan-enhanced .jbe-clock-bg *,
+    .jobcan-enhanced .jbe-clock-bg {
+      animation: none !important;
+      transition: none !important;
+    }
+
+    .jobcan-enhanced .jbe-bg-ring {
+      opacity: calc(0.5 - var(--i) * 0.1);
+      transform: scale(calc(0.5 + var(--i) * 0.35));
+    }
+
+    .jobcan-enhanced .jbe-bg-dot {
+      opacity: 0.35;
+    }
+
+    /* A stopped mote sits at its 0% keyframe, where opacity is 0. Park them two
+       thirds down their ray instead, lit. */
+    .jobcan-enhanced .jbe-bg-mote {
+      transform: translate3d(calc(var(--shaft-w) * var(--f) * 0.66),
+                             calc(var(--shaft-len) * 0.66), 0) scale(1.1);
+      opacity: calc(var(--op) * 0.8);
+    }
+  }
+
   /* Settings menu styles */
   .jobcan-enhanced .flip-clock-settings-menu {
     font-size: 14px;
@@ -2579,14 +3187,25 @@
     position: absolute;
     top: 50%;
     transform: translate(-50%, -50%);
-    width: 4px;
+    width: 5px;
     height: 14px;
     border-radius: 999px;
     /* Red, matching the 現在時刻 legend entry — blue-on-blue disappeared into the
-       working segments it usually sits on. */
+       working segments it usually sits on.
+
+       The light ring that separates the marker from the band underneath is a
+       box-shadow, NOT a border. As a 2px border it ate the whole marker: with
+       `box-sizing: border-box` inherited from the reset, a 4px-wide box has 4px of
+       border and no interior left, so the "red" indicator painted solid white on
+       the bar while the legend swatch beside it stayed red (measured live — the
+       rendered core was 0px). A shadow ring draws outside the box, so all 5px of
+       width stay red. */
     background: linear-gradient(180deg, var(--color-danger) 0%, color-mix(in srgb, var(--color-danger) 72%, var(--color-black-85) 28%) 100%);
-    border: 2px solid var(--color-work-progress-marker-border);
-    box-shadow: 0 0 0 2px var(--color-work-progress-indicator-ring), 0 2px 8px var(--color-work-progress-indicator-shadow);
+    border: 0;
+    box-shadow:
+      0 0 0 1.5px var(--color-work-progress-marker-border),
+      0 0 0 3.5px var(--color-work-progress-indicator-ring),
+      0 2px 8px var(--color-work-progress-indicator-shadow);
     z-index: 9;
     transition:
       left 800ms cubic-bezier(0.34, 1.56, 0.64, 1),

@@ -316,6 +316,18 @@ async function captureScreenshot(area) {
   };
   settleFlipDigits(document);
 
+  // Drop the clock card's ambient background from the capture (it is purely
+  // decorative — see the "Ambient status background" section in css/styles.css).
+  // Two reasons: a single frozen frame of a 30s loop is noise in a screenshot, and
+  // the layer leans on color-mix() and mask-image, which html2canvas parses itself
+  // rather than handing to the browser. Only the clone is touched, so the live page
+  // keeps its background while the capture runs.
+  const dropAmbientBackground = (root) => {
+    root.querySelectorAll('.jbe-clock-bg').forEach((layer) => {
+      layer.style.display = 'none';
+    });
+  };
+
   // Use html2canvas without window prefix
   html2canvas(document.body, {
     useCORS: true,
@@ -329,6 +341,7 @@ async function captureScreenshot(area) {
     onclone: function(clonedDoc) {
       // A flip can start between the settle above and the clone being taken.
       settleFlipDigits(clonedDoc);
+      dropAmbientBackground(clonedDoc);
     }
   }).then(canvas => {
     // Remove the selection overlay — before capture it was only hidden

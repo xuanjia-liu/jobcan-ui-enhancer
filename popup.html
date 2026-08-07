@@ -165,6 +165,52 @@
       margin-top: var(--space-xs);
     }
     
+    /* Select control (背景アニメーション). `appearance: none` + our own caret, so the
+       row matches the pill radios and the toggles instead of dropping a native
+       platform widget between them. */
+    .setting-select {
+      flex: 0 0 auto;
+      max-width: 158px;
+      padding: 5px 26px 5px 10px;
+      font-family: inherit;
+      font-size: 0.75rem;
+      color: var(--color-text-primary);
+      background-color: var(--color-card);
+      border: 1px solid rgba(0,0,0,0.08);
+      border-radius: var(--radius-full);
+      cursor: pointer;
+      appearance: none;
+      -webkit-appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='%236b7280' stroke-width='1.6' stroke-linecap='round'%3E%3Cpath d='M3 4.75 6 7.75l3-3'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 8px center;
+      background-size: 12px 12px;
+      transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+    }
+
+    .setting-select:hover {
+      border-color: var(--color-primary);
+    }
+
+    .setting-select:focus-visible {
+      outline: none;
+      border-color: var(--color-primary);
+      box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.15);
+    }
+
+    body.dark-mode .setting-select {
+      color: #e4e6eb;
+      background-color: #2a2a3c;
+      border-color: #3a3a4c;
+    }
+
+    /* The <option> list is painted by the OS, so it needs its own colours or it
+       renders as light-on-light inside a dark popup. */
+    body.dark-mode .setting-select option {
+      color: #e4e6eb;
+      background-color: #272736;
+    }
+
     /* Modern Toggle Switch */
     .toggle-switch {
       position: relative;
@@ -1043,6 +1089,27 @@
       </div>
     </div>
     
+    <div class="setting-item">
+      <div class="setting-info">
+        <div class="setting-item-label">背景アニメーション</div>
+        <div class="setting-item-description">勤務中／退室中の色に追従</div>
+      </div>
+      <div class="setting-control">
+        <select id="clockBackground" class="setting-select">
+          <option value="none">なし</option>
+          <!-- `selected` mirrors DEFAULT_CLOCK_BACKGROUND in scripts/clock.js, so the
+               markup shows the same thing the content script applies even before the
+               storage read comes back. -->
+          <option value="pulse" selected>パルス（同心円）</option>
+          <option value="wave">ウェーブメッシュ</option>
+          <option value="particles">パーティクル</option>
+          <option value="blob">ブラーブロブ</option>
+          <option value="orbit">オービット</option>
+          <option value="godray">ゴッドレイ（光の柱）</option>
+        </select>
+      </div>
+    </div>
+
     <div class="setting-item">
       <div class="setting-info">
         <div class="setting-item-label">勤務進捗バー</div>

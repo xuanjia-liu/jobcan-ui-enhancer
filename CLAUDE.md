@@ -101,6 +101,22 @@ specificity does not let you drop it. Measured: ~89% of the `!important` in `css
 is load-bearing. Only SVG `fill`/`stroke`, `z-index`, `opacity`, `font-size` and a
 few one-offs are genuinely removable, and each needs checking on the live page.
 
+**The clock card's ambient background is one `z-index: -1` layer.**
+`ensureClockBackground()` (clock.js) prepends a single `.jbe-clock-bg` to
+`.flip-clock-container`; the six variants are all CSS keyed on `[data-variant]`.
+Two couplings to know about:
+
+* it colours itself from `--jbe-bg-tint` / `--jbe-bg-strength`, which CSS derives
+  from the container's `[data-clock-color-class]` — the attribute
+  `updateFlipClockColors()` writes from `#working_status`. Never hardcode a state
+  colour in a variant.
+* `z-index: -1` only paints above the card background because the card is a
+  stacking context. Do not add `overflow: hidden` to the container to clip it —
+  that clips the 打刻詳細設定 popover; the layer clips itself.
+
+`screenshot.js` hides the layer in html2canvas's clone (`color-mix()` and
+`mask-image` are past what it parses reliably). A new variant needs nothing there.
+
 Dark mode is driven by `body.dark-mode`. Jobcan's Bootstrap/jQuery-UI widgets
 (e.g. the autocomplete dropdown's `bg-white`) need `!important` overrides and must
 be verified on the real page.

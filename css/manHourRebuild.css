@@ -1045,38 +1045,76 @@
 
 /* Keep the checkbox / 実績 / 差分 columns compact so the spare table width flows
    into the text columns (project/task/note) instead of pooling as empty space on
-   the right (the "large gap" on wide screens). Edit table only, via :has(). */
-.jobcan-enhanced table.jbc-table:has(input.manhour) th:first-child,
-.jobcan-enhanced table.jbc-table:has(input.manhour) td:first-child {
+   the right (the "large gap" on wide screens).
+
+   `:has(input.manhour)` alone is NOT specific enough: the デフォルト row on the
+   工数入力設定 page (/man-hour-manage/setting) is the same .jbc-table with the same
+   cell classes, but it has no checkbox and no 差分 column, so every rule below
+   landed one column to the left there — プロジェクト got the 40px checkbox width
+   and wrapped to one character per line. The two tables differ in their header:
+   only the setting one splits 実績 across the input + 時間/% radios, so its 実績 th
+   carries a colspan. Hence the `:not(:has(thead th[colspan]))` guard here, and the
+   matching `:has(...)` block further down for the setting table. */
+.jobcan-enhanced table.jbc-table:has(input.manhour):not(:has(thead th[colspan])) th:first-child,
+.jobcan-enhanced table.jbc-table:has(input.manhour):not(:has(thead th[colspan])) td:first-child {
   width: 40px;
 }
 
+/* 実績 is the same width on both tables, so this one stays unguarded. */
 .jobcan-enhanced table.jbc-table:has(input.manhour) td.manhour {
   width: 96px;
 }
 
-.jobcan-enhanced table.jbc-table:has(input.manhour) th:last-child,
-.jobcan-enhanced table.jbc-table:has(input.manhour) td:last-child {
+.jobcan-enhanced table.jbc-table:has(input.manhour):not(:has(thead th[colspan])) th:last-child,
+.jobcan-enhanced table.jbc-table:has(input.manhour):not(:has(thead th[colspan])) td:last-child {
   width: 92px;
 }
 
 /* Rebalance the text columns: プロジェクト (long code + name) gets the most room,
    while タスク and 備考 (short) are capped so the spare width flows into プロジェクト.
    nth-child: 1=checkbox, 2=プロジェクト, 3=タスク, 4=備考, 5=実績, 6=差分. */
-.jobcan-enhanced table.jbc-table:has(input.manhour) th:nth-child(3),
-.jobcan-enhanced table.jbc-table:has(input.manhour) td:nth-child(3) {
+.jobcan-enhanced table.jbc-table:has(input.manhour):not(:has(thead th[colspan])) th:nth-child(3),
+.jobcan-enhanced table.jbc-table:has(input.manhour):not(:has(thead th[colspan])) td:nth-child(3) {
   width: 150px;
 }
 
-.jobcan-enhanced table.jbc-table:has(input.manhour) th:nth-child(4),
-.jobcan-enhanced table.jbc-table:has(input.manhour) td:nth-child(4) {
+.jobcan-enhanced table.jbc-table:has(input.manhour):not(:has(thead th[colspan])) th:nth-child(4),
+.jobcan-enhanced table.jbc-table:has(input.manhour):not(:has(thead th[colspan])) td:nth-child(4) {
   width: 200px;
 }
 
-.jobcan-enhanced table.jbc-table:has(input.manhour) th:nth-child(2),
-.jobcan-enhanced table.jbc-table:has(input.manhour) td:nth-child(2) {
+.jobcan-enhanced table.jbc-table:has(input.manhour):not(:has(thead th[colspan])) th:nth-child(2),
+.jobcan-enhanced table.jbc-table:has(input.manhour):not(:has(thead th[colspan])) td:nth-child(2) {
   width: auto;
   min-width: 320px;
+}
+
+/* Same proportions for the デフォルト row on the 工数入力設定 page, shifted one column
+   left (no checkbox) and with the 実績 column split three ways.
+   Body cells: 1=プロジェクト, 2=タスク, 3=備考, 4=実績, 5=時間, 6=%.
+   Header cells: 1=プロジェクト, 2=タスク, 3=備考, 4=実績 (colspan 3) — so columns
+   4-6 are sized from the body row only. Measured widths come out 648/150/200/96,
+   against the edit page's 666/150/200/96. */
+.jobcan-enhanced table.jbc-table:has(input.manhour):has(thead th[colspan]) th:nth-child(1),
+.jobcan-enhanced table.jbc-table:has(input.manhour):has(thead th[colspan]) td:nth-child(1) {
+  width: auto;
+  min-width: 320px;
+}
+
+.jobcan-enhanced table.jbc-table:has(input.manhour):has(thead th[colspan]) th:nth-child(2),
+.jobcan-enhanced table.jbc-table:has(input.manhour):has(thead th[colspan]) td:nth-child(2) {
+  width: 150px;
+}
+
+.jobcan-enhanced table.jbc-table:has(input.manhour):has(thead th[colspan]) th:nth-child(3),
+.jobcan-enhanced table.jbc-table:has(input.manhour):has(thead th[colspan]) td:nth-child(3) {
+  width: 200px;
+}
+
+/* 時間 / % radios — just enough for the label, so the rest goes to プロジェクト. */
+.jobcan-enhanced table.jbc-table:has(input.manhour):has(thead th[colspan]) td:nth-child(5),
+.jobcan-enhanced table.jbc-table:has(input.manhour):has(thead th[colspan]) td:nth-child(6) {
+  width: 72px;
 }
 
 /* Jobcan leaves the 実績 input at ~50px, clipping "03:03". Make it fill its column

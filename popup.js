@@ -2,6 +2,22 @@ document.addEventListener('DOMContentLoaded', function() {
   const darkModeToggle = document.getElementById('darkMode');
   const showProgressBarToggle = document.getElementById('showProgressBar');
   const clockSizeRadios = document.querySelectorAll('input[name="clockSize"]');
+  const clockBackgroundSelect = document.getElementById('clockBackground');
+
+  // Mirrors CLOCK_BACKGROUNDS / DEFAULT_CLOCK_BACKGROUND in scripts/clock.js.
+  const CLOCK_BACKGROUND_LABELS = {
+    none: 'なし',
+    pulse: 'パルス',
+    wave: 'ウェーブメッシュ',
+    particles: 'パーティクル',
+    blob: 'ブラーブロブ',
+    orbit: 'オービット',
+    godray: 'ゴッドレイ'
+  };
+  // Same alias as CLOCK_BACKGROUND_ALIASES in scripts/clock.js: the god-ray slot
+  // was stored as 'aurora' before it was rebuilt.
+  const CLOCK_BACKGROUND_ALIASES = { aurora: 'godray' };
+  const DEFAULT_CLOCK_BACKGROUND = 'pulse';
   
   // Login form elements
   const employeeLoginBtn = document.getElementById('employeeLoginBtn');
@@ -35,7 +51,7 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // Load saved settings
   chrome.storage.sync.get(
-    ['darkMode', 'clockSize', 'showProgressBar'], 
+    ['darkMode', 'clockSize', 'showProgressBar', 'clockBackground'],
     function(result) {
       if (result.darkMode !== undefined) {
         darkModeToggle.checked = result.darkMode;
@@ -58,6 +74,16 @@ document.addEventListener('DOMContentLoaded', function() {
       } else {
         // Default to enabled
         showProgressBarToggle.checked = true;
+      }
+
+      // Set the clock background. An unrecognised stored value (e.g. a variant
+      // removed in a later build) falls back to the default rather than leaving
+      // the select showing something the content script will not honour.
+      if (clockBackgroundSelect) {
+        const stored = CLOCK_BACKGROUND_ALIASES[result.clockBackground] || result.clockBackground;
+        clockBackgroundSelect.value = CLOCK_BACKGROUND_LABELS[stored]
+          ? stored
+          : DEFAULT_CLOCK_BACKGROUND;
       }
     }
   );
@@ -135,6 +161,28 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   });
   
+  // Handle clock background changes
+  if (clockBackgroundSelect) {
+    clockBackgroundSelect.addEventListener('change', function() {
+      const value = this.value;
+      chrome.storage.sync.set({clockBackground: value});
+      const label = CLOCK_BACKGROUND_LABELS[value] || value;
+      showToast(value === 'none'
+        ? '時計の背景アニメーションをオフにしました'
+        : `時計の背景を「${label}」に変更しました`);
+
+      // Send message to content script
+      chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+        if (tabs[0]) {
+          chrome.tabs.sendMessage(tabs[0].id, {
+            action: 'updateClockSettings',
+            clockBackground: value
+          });
+        }
+      });
+    });
+  }
+
   // Handle show progress bar toggle
   showProgressBarToggle.addEventListener('change', function() {
     const isEnabled = this.checked;

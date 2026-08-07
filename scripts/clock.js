@@ -109,12 +109,12 @@ const ALIGNED_TICK_TOLERANCE_MS = 150;
 // miss entirely.
 const ALIGNED_TICK_SAFETY_MS = 5;
 
-// In-memory cache of the three clock settings. applyClockSettings() is called
-// from every applyEnhancements() pass — which the debounced body observer
+// In-memory cache of the clock settings. applyClockSettings() is called from
+// every applyEnhancements() pass — which the debounced body observer
 // re-triggers roughly once a second during DOM churn — and each call used to be
 // its own chrome.storage.sync.get round-trip. The cache is invalidated by the
 // storage.onChanged listener below, so the popup's writes still land immediately.
-const CLOCK_SETTING_KEYS = ['clockSize', 'showProgressBar'];
+const CLOCK_SETTING_KEYS = ['clockSize', 'showProgressBar', 'clockBackground'];
 let cachedClockSettings = null;
 let clockSettingsPromise = null;
 
@@ -712,10 +712,15 @@ function updateWorkProgressBar(container) {
 }
 
 /* ---- Timeline legend ------------------------------------------------------
- * Static row under the axis: one entry per drawable segment state plus the
- * current-time indicator. The swatches are colored by the same tokens as the
- * segments themselves (see .work-legend-swatch in styles.css), so the legend can
- * never drift from the bar.
+ * Row under the axis: one entry per segment state ACTUALLY DRAWN on the bar,
+ * plus the current-time indicator (which is always on the track). The swatches
+ * are colored by the same tokens as the segments themselves (see
+ * .work-legend-swatch in styles.css), so the legend can never drift from the bar.
+ *
+ * Every entry is built once and then shown/hidden per render rather than
+ * rebuilt: renderWorkScheduleSegments() runs on every tick and every resize, and
+ * a legend that re-created its nodes would feed the body-wide MutationObserver in
+ * main.js each time.
  */
 
 const PROGRESS_LEGEND_ITEMS = [
@@ -732,6 +737,10 @@ function createProgressLegend() {
   PROGRESS_LEGEND_ITEMS.forEach((item) => {
     const entry = document.createElement('span');
     entry.className = 'work-legend-item';
+    entry.dataset.legendState = item.state;
+    // Hidden until a render reports which states the bar drew — otherwise the
+    // full row would flash on load and settle to a shorter one.
+    entry.hidden = item.state !== 'now';
     const swatch = document.createElement('span');
     swatch.className = `work-legend-swatch legend-${item.state}`;
     entry.appendChild(swatch);
@@ -739,6 +748,24 @@ function createProgressLegend() {
     legend.appendChild(entry);
   });
   return legend;
+}
+
+/**
+ * Show only the entries whose state appears on the bar. `now` always stays: the
+ * indicator is created unconditionally and is never hidden.
+ * @param {HTMLElement} track the .work-progress-track the segments were drawn in
+ * @param {Set<string>} drawnStates segment states present in this render
+ */
+function syncProgressLegend(track, drawnStates) {
+  const container = track && track.closest('.work-progress-container');
+  const legend = container && container.querySelector('.work-progress-legend');
+  if (!legend) return;
+  legend.querySelectorAll('.work-legend-item').forEach((entry) => {
+    const state = entry.dataset.legendState;
+    const shouldShow = state === 'now' || drawnStates.has(state);
+    if (entry.hidden === !shouldShow) return; // no-op writes still cost a mutation record
+    entry.hidden = !shouldShow;
+  });
 }
 
 /* ---- Summary tiles -------------------------------------------------------
@@ -1363,6 +1390,10 @@ function renderWorkScheduleSegments(track, entries, axis) {
 
     layer.appendChild(segmentNode);
   });
+
+  // The legend names what is on the bar, so it follows the bands: a day with no
+  // break punch drew no teal band and must not advertise 休憩時間.
+  syncProgressLegend(track, new Set(visibleSegments.map((segment) => segment.state)));
 }
 
 function getPunchMarkerTooltipElement() {
@@ -1479,6 +1510,324 @@ function normalizeTimeFormat(timeString) {
   return '00:00:00';
 }
 
+/* ---- Ambient status background ------------------------------------------
+   Six selectable backdrops for the clock card (popup → 表示設定 → 背景アニメーション),
+   plus 'none'. Each one is a single <div class="jbe-clock-bg"> prepended to the
+   container and styled entirely from css/styles.css by its [data-variant]; the
+   markup here only lays out the pieces (rings, dots, blobs, orbit shells, an SVG
+   wave field) and hands their per-element randomness over as inline custom
+   properties. Nothing here runs after mount: every moving part animates transform
+   or opacity in CSS, so the feature costs no JS frames and no layout.
+
+   Colour is NOT decided here. The layer reads --jbe-bg-tint / --jbe-bg-strength,
+   which css/styles.css derives from the container's own [data-clock-color-class] —
+   the attribute updateFlipClockColors() already maintains from #working_status. So
+   勤務中 / 退室中 / pending each tint the background for free, and the tokens stay
+   the single source of truth for the state colours. */
+const CLOCK_BACKGROUNDS = ['none', 'pulse', 'wave', 'particles', 'blob', 'orbit', 'godray'];
+const DEFAULT_CLOCK_BACKGROUND = 'pulse';
+
+// 'aurora' was this slot's id while it was a striped light-beam wash; it is god
+// rays now. Kept as an alias so a value already in storage.sync resolves to the
+// rebuilt variant instead of silently falling back to the default.
+const CLOCK_BACKGROUND_ALIASES = { aurora: 'godray' };
+
+function normalizeClockBackground(value) {
+  const resolved = CLOCK_BACKGROUND_ALIASES[value] || value;
+  return CLOCK_BACKGROUNDS.includes(resolved) ? resolved : DEFAULT_CLOCK_BACKGROUND;
+}
+
+/**
+ * Deterministic pseudo-random in [0, 1) from an integer seed.
+ *
+ * Math.random() is deliberately not used: the clock is rebuilt from scratch on
+ * every SPA navigation, so a random field would re-scatter its dots each time and
+ * read as the background twitching for no reason. Same seed → same layout, always.
+ */
+function clockBgNoise(seed) {
+  let x = (seed * 1103515245 + 12345) & 0x7fffffff;
+  x ^= x >>> 7;
+  x = (x * 16807) & 0x7fffffff;
+  return x / 0x7fffffff;
+}
+
+/**
+ * A drifting dot field, shared by the particle, orbit and aurora variants. Every
+ * dot carries its own position, size, travel vector and (negative) delay, so the
+ * field is already mid-animation on the first frame instead of starting as one
+ * synchronised pulse.
+ */
+function buildClockBgDots(count, seedBase, options = {}) {
+  const {
+    minSize = 2,
+    maxSize = 6,
+    minDuration = 9,
+    maxDuration = 20,
+    spread = 26
+  } = options;
+
+  let html = '';
+  for (let i = 0; i < count; i++) {
+    const noise = (offset) => clockBgNoise(seedBase + i * 11 + offset);
+    const size = (minSize + noise(1) * (maxSize - minSize)).toFixed(1);
+    const x = (3 + noise(2) * 94).toFixed(2);
+    const y = (3 + noise(3) * 94).toFixed(2);
+    const duration = minDuration + noise(4) * (maxDuration - minDuration);
+    const delay = (-noise(5) * duration).toFixed(1);
+    const dx = ((noise(6) - 0.5) * spread * 2).toFixed(1);
+    const dy = (-noise(7) * spread - 4).toFixed(1);
+    html += `<i class="jbe-bg-dot" style="--sz:${size}px;--x:${x}%;--y:${y}%;`
+      + `--dur:${duration.toFixed(1)}s;--delay:${delay}s;--dx:${dx}px;--dy:${dy}px"></i>`;
+  }
+  return html;
+}
+
+/* ---- God rays -------------------------------------------------------------
+   Ported from the God Ray mode of the Shadow Studio Figma plugin
+   (~/Desktop/figma plugin/Shadow Studio…/code.ts: buildGodRayPlan,
+   godRayShaftPath, godRayMotePaths, godRayStopsFor). Four ideas carry over; the
+   rest of that code is Figma vector/gradient plumbing with no CSS analogue.
+
+   1. ONE APEX BEHIND THE SOURCE. Every shaft's centre line converges on a single
+      point outside the card, which is what makes the set read as a pencil of rays
+      from one light rather than as bands that merely lean. Here that is literal:
+      the shafts share a 0×0 wrapper positioned at the apex and each is rotated
+      about it, so the geometry cannot drift out of agreement (the plugin has to
+      compute `1 + s/D` per shaft to get the same thing).
+   2. THE SHAFT IS A TRIANGLE FROM THE APEX, not a trapezoid — width exactly zero
+      where the centre lines meet — necking to 12% over its last 12%
+      (GODRAY_TIP_FRACTION / GODRAY_TIP_WIDTH there, the clip-path polygon here).
+   3. MOTES TRAVEL ALONG THEIR OWN RAY. In the plugin a mote's lateral position is
+      `offset * scale(s) ± 0.85 * halfWidth(s)`, i.e. proportional to distance from
+      the apex. A CSS transform interpolating `translate(0, 0)` →
+      `translate(lateral, length)` is that same proportionality for free, so a mote
+      tracks the widening beam exactly instead of drifting out through its edge.
+   4. WHITE CORE → TINT → DEEP TINT along the axis, alpha falling as (1-t)^gamma
+      (godRayStopsFor's ramp), which is why a shaft reads as light and not as a
+      coloured wedge.
+
+   Deviation, deliberate: the plugin's axial ripple is strictly SUBTRACTIVE ("uneven
+   dust occludes light, it never adds any") because it composites with SCREEN over
+   dark artwork. This card is light, where a dark overlay would just soil it, so the
+   ripple here is a bright band travelling up the beam instead. Same read — light
+   pulsing through uneven air — in the blend mode we actually have. */
+function buildClockBgGodRay() {
+  // tilt: degrees clockwise from straight down (the aim axis) — CSS negates it, see
+  // .jbe-bg-shaft. hw: the shaft's own HALF-ANGLE of divergence in degrees, which is
+  // what the feathered conic mask is cut from. len: multiple of --jbe-ray-scale.
+  // alpha: peak brightness. ripple: period. blur: share of the ray scale.
+  //
+  // Widths are angles rather than lengths because that is what a shaft's width
+  // actually is — a pencil of rays from a point source diverges by a fixed angle,
+  // and expressing it that way is why the beam keeps its proportions at any card
+  // size instead of getting relatively fatter as the card grows.
+  //
+  // Uneven on purpose — this is the plugin's 'graduated' offset pattern with its
+  // irregularity dial well up. Equal shafts at equal spacing read as a printed
+  // sunburst, not as light: what sells it is that no two are alike. The 6°-50°
+  // spread puts the fan across the whole card rather than bunching it in one corner.
+  const shafts = [
+    { tilt: 6, hw: 2.2, len: 1.05, alpha: 0.70, ripple: 15, blur: 0.044 },
+    { tilt: 17, hw: 1.4, len: 0.86, alpha: 0.44, ripple: 21, blur: 0.034 },
+    { tilt: 27, hw: 3.4, len: 1.15, alpha: 0.80, ripple: 13, blur: 0.056 },
+    { tilt: 38, hw: 1.1, len: 0.80, alpha: 0.36, ripple: 26, blur: 0.028 },
+    { tilt: 50, hw: 2.6, len: 1.00, alpha: 0.56, ripple: 18, blur: 0.048 }
+  ];
+
+  // The shaft's box has to hold its wedge — half-width len*tan(hw) at the far end —
+  // AND the bleed of the core's blur, which is heavy: at 2.6× the wedge, even the
+  // narrowest shaft's blur dies inside its own box instead of being cut off square
+  // at the edge. Raise this whenever the blurs above go up.
+  // tan() has no CSS equivalent, which is the one reason this is computed here.
+  const BOX_MARGIN = 2.6;
+  const boxWidthMultiple = (halfAngleDeg) =>
+    2 * Math.tan((halfAngleDeg * Math.PI) / 180) * BOX_MARGIN;
+  // Lateral spread of the motes, as a fraction of the box width. Solves
+  // f * boxWidth = 0.85 * wedgeHalfWidth — the plugin's ±0.85 × halfWidth — so
+  // widening the box above does not quietly push the dust out of the lit core.
+  const MOTE_SPREAD = 0.85 / (2 * BOX_MARGIN);
+
+  const shaftHtml = shafts.map((shaft, k) => {
+    const noise = (offset) => clockBgNoise(517 + k * 31 + offset);
+    // Breathing and ripple both start part-way in, so the five shafts are never
+    // in step — in step reads as one translucent sheet rather than as separate
+    // shafts through the same air (the plugin's per-shaft streakPhase).
+    const breathe = 12 + noise(1) * 9;
+    const style = `--tilt:${shaft.tilt};--hw:${shaft.hw}deg;`
+      + `--wmul:${boxWidthMultiple(shaft.hw).toFixed(4)};--len:${shaft.len};`
+      + `--blur:${shaft.blur};--alpha:${shaft.alpha};--dur:${breathe.toFixed(1)}s;`
+      + `--delay:${(-noise(2) * breathe).toFixed(1)}s;--ripple:${shaft.ripple}s;`
+      + `--ripple-delay:${(-noise(3) * shaft.ripple).toFixed(1)}s`;
+
+    // Dust count scales with the shaft's divergence, so density per unit of beam is
+    // even across the fan — a flat count per shaft leaves the wide ones looking
+    // empty and the narrow ones crowded. ~93 motes over the five shafts; they are the
+    // only crisp thing in the figure, so this is where the detail budget goes.
+    const moteCount = Math.round(10 + shaft.hw * 4);
+
+    let motes = '';
+    for (let j = 0; j < moteCount; j++) {
+      const mn = (offset) => clockBgNoise(2311 + k * 47 + j * 13 + offset);
+      const lateral = ((mn(1) - 0.5) * 2 * MOTE_SPREAD).toFixed(4);
+      const duration = 16 + mn(2) * 10;
+      // Stratified start (`t = (j + rnd()) / perShaft` there) as a negative delay,
+      // so the motes are already strung out along the beam on the first frame
+      // instead of setting off as one clump.
+      const delay = (-((j + mn(3)) / moteCount) * duration).toFixed(2);
+      // Every third mote is the plugin's "bright" dust tier: fewer, larger, hotter.
+      const bright = j % 3 === 0;
+      const size = ((bright ? 4.6 : 2.8) + mn(4) * 2.2).toFixed(1);
+      const peak = ((bright ? 0.8 : 0.45) * (0.7 + mn(5) * 0.3)).toFixed(2);
+      motes += `<i class="jbe-bg-mote" style="--f:${lateral};--sz:${size}px;`
+        + `--dur:${duration.toFixed(1)}s;--delay:${delay}s;--op:${peak}"></i>`;
+    }
+
+    // The core is its own element so the blur can sit on something STATIC: the
+    // ripple and the motes are siblings, outside the blurred subtree, so their
+    // animation never forces the blur to be recomputed.
+    return `<i class="jbe-bg-shaft" style="${style}">`
+      + '<i class="jbe-bg-core"></i>'
+      + '<i class="jbe-bg-ripple"><i class="jbe-bg-ripple-band"></i></i>'
+      + `${motes}</i>`;
+  }).join('');
+
+  // Haze (flat volumetric lift) under the fan; the bloom is inside the fan so it is
+  // anchored to the apex — it is the glare AT the light source, and pinning it in
+  // card percentages instead let it drift off the apex whenever the card's aspect
+  // ratio changed.
+  return '<i class="jbe-bg-haze"></i>'
+    + `<div class="jbe-bg-fan"><i class="jbe-bg-bloom"></i>${shaftHtml}</div>`;
+}
+
+/**
+ * One layer of the wave mesh: `lineCount` stroked curves in an SVG drawn 1600
+ * units wide and shown 1200 at a time.
+ *
+ * Every curve has period 400, so translating the wrapper by exactly one period
+ * puts an identical curve under the window and the loop is seamless — that is why
+ * the SVG is drawn a third wider than it is shown. The wrapper (an HTML div) is
+ * what animates, not the <g>: a CSS transform on an HTML element is composited,
+ * while animating an SVG transform repaints every path each frame.
+ *
+ * Two things make this read as a ribbon rather than as a scribble, and both were
+ * measured against the mock:
+ *
+ *   * the phase advances a little per line instead of being random, so the curves
+ *     nest and lean together. Random phases (the first attempt) cross each other
+ *     everywhere and the whole band turns into a tangle;
+ *   * a second harmonic at a third of the amplitude takes the flatness out of a
+ *     plain sine while keeping the 400-unit period the seamless loop depends on.
+ */
+function buildClockBgWaveSvg(lineCount, seedBase) {
+  const width = 1600;
+  const height = 400;
+  const period = 400;
+  const step = 32;
+  // The one place per layer where the seed is used: which harmonic offset the
+  // whole bundle carries. Everything else is progressive, on purpose.
+  const harmonicPhase = clockBgNoise(seedBase) * Math.PI * 2;
+
+  let paths = '';
+  for (let i = 0; i < lineCount; i++) {
+    const amplitude = 30 + i * 1.4;
+    const phase = i * 11;
+    const baseline = 150 + i * 11;
+    let d = '';
+    for (let x = 0; x <= width; x += step) {
+      const theta = ((x + phase) / period) * Math.PI * 2;
+      const y = baseline + amplitude * (Math.sin(theta) + 0.32 * Math.sin(theta * 2 + harmonicPhase));
+      d += `${x === 0 ? 'M' : 'L'}${x} ${y.toFixed(1)}`;
+    }
+    paths += `<path d="${d}"/>`;
+  }
+
+  return `<svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" focusable="false">`
+    + `<g>${paths}</g></svg>`;
+}
+
+function buildClockBackgroundMarkup(variant) {
+  switch (variant) {
+    case 'pulse':
+      // Negative, staggered delays (CSS) mean the four rings are already spread
+      // across the card on the first frame rather than expanding in single file.
+      return [0, 1, 2, 3].map((i) => `<i class="jbe-bg-ring" style="--i:${i}"></i>`).join('')
+        + buildClockBgDots(12, 401, { minSize: 3, maxSize: 8, spread: 18 });
+
+    case 'wave':
+      // Two layers, different speed and direction — the slower, fainter one that
+      // rides 6% higher reads as depth.
+      return '<div class="jbe-bg-wave" style="--dur:30s;--depth:0;--bottom:0;--dir:normal">'
+        + `${buildClockBgWaveSvg(16, 11)}</div>`
+        + '<div class="jbe-bg-wave" style="--dur:46s;--depth:1;--bottom:6%;--dir:reverse">'
+        + `${buildClockBgWaveSvg(13, 53)}</div>`;
+
+    case 'particles':
+      return '<i class="jbe-bg-glow"></i>'
+        + buildClockBgDots(30, 907, { minSize: 2, maxSize: 7, spread: 30 });
+
+    case 'blob':
+      // Radial gradients, not `filter: blur()` on solid shapes: the soft edge is
+      // free this way, and the blobs stay cheap to move because nothing has to be
+      // re-blurred per frame.
+      return [
+        '--w:62%;--h:46%;--x:-14%;--y:38%;--dur:26s;--delay:0s;--o:0.9',
+        '--w:44%;--h:34%;--x:58%;--y:-8%;--dur:32s;--delay:-8s;--o:0.75',
+        '--w:26%;--h:20%;--x:70%;--y:62%;--dur:22s;--delay:-14s;--o:0.85',
+        '--w:36%;--h:30%;--x:24%;--y:74%;--dur:38s;--delay:-5s;--o:0.55'
+      ].map((style) => `<i class="jbe-bg-blob" style="${style}"></i>`).join('');
+
+    case 'orbit':
+      // Three ellipses (border-radius on a non-square box) spun as HTML elements,
+      // each carrying one satellite. The rotation is composited, so this stays a
+      // transform-only animation despite looking like an SVG figure.
+      return '<i class="jbe-bg-halo"></i>'
+        + [
+          // --offset is a negative-delay fraction of the orbit's own period: without
+          // it all three satellites start on their ellipse's top vertex and set off
+          // as one clump.
+          '--tilt:-18deg;--w:78%;--ratio:2.5;--dur:34s;--dir:normal;--dash:solid;--offset:0',
+          '--tilt:22deg;--w:66%;--ratio:2.2;--dur:44s;--dir:reverse;--dash:solid;--offset:0.38',
+          '--tilt:6deg;--w:52%;--ratio:1.9;--dur:52s;--dir:normal;--dash:dashed;--offset:0.71'
+        ].map((style) => `<i class="jbe-bg-orbit" style="${style}"><i class="jbe-bg-satellite"></i></i>`).join('')
+        + buildClockBgDots(6, 1301, { minSize: 2, maxSize: 4, spread: 10 });
+
+    case 'godray':
+      return buildClockBgGodRay();
+
+    default:
+      return '';
+  }
+}
+
+/**
+ * Idempotent: called from applyClockSettingsToContainer() on every
+ * applyEnhancements() pass, so the steady state must be a single attribute read.
+ * The markup is rebuilt only when the chosen variant actually changes.
+ */
+function ensureClockBackground(container, requestedVariant) {
+  if (!container) return;
+  const variant = normalizeClockBackground(requestedVariant);
+  const existing = container.querySelector(':scope > .jbe-clock-bg');
+
+  if (variant === 'none') {
+    if (existing) existing.remove();
+    container.removeAttribute('data-clock-bg');
+    return;
+  }
+
+  container.dataset.clockBg = variant;
+  if (existing && existing.dataset.variant === variant) return;
+
+  const layer = existing || document.createElement('div');
+  layer.className = 'jbe-clock-bg';
+  layer.dataset.variant = variant;
+  // Decorative only: it must never reach the accessibility tree or take a click
+  // (the card's whole surface is above it, PUSH button included).
+  layer.setAttribute('aria-hidden', 'true');
+  layer.innerHTML = buildClockBackgroundMarkup(variant);
+  if (!existing) container.prepend(layer);
+}
+
 function applyClockSettingsToContainer(container, settings) {
   const clockSize = settings.clockSize || 'medium';
   const showProgressBar = settings.showProgressBar !== false;
@@ -1494,6 +1843,7 @@ function applyClockSettingsToContainer(container, settings) {
   const prog = container.querySelector('.work-progress-container');
   if (prog) prog.classList.toggle('hidden', !showProgressBar);
 
+  ensureClockBackground(container, settings.clockBackground);
   updateFlipClockColors(container);
 }
 
@@ -1518,7 +1868,8 @@ function updateClockSettings(settings = {}) {
   getClockSettings().then((stored) => {
     const merged = {
       clockSize: settings.clockSize ?? stored.clockSize ?? 'medium',
-      showProgressBar: settings.showProgressBar ?? stored.showProgressBar
+      showProgressBar: settings.showProgressBar ?? stored.showProgressBar,
+      clockBackground: settings.clockBackground ?? stored.clockBackground ?? DEFAULT_CLOCK_BACKGROUND
     };
 
     // The popup writes to storage.sync and messages us in parallel, so seed the
