@@ -25,6 +25,14 @@
         "*://ssl.jobcan.jp/employee/*",
         "*://id.jobcan.jp/users/sign_in*"
       ],
+      "js": ["scripts/earlyStyleFlag.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "*://ssl.jobcan.jp/employee/*",
+        "*://id.jobcan.jp/users/sign_in*"
+      ],
       "css": ["css/variables.css", "css/base.css", "css/styles.css", "css/responsive.css", "css/manHourRebuild.css"],
       "js": [
         "confetti.min.js",

@@ -54,6 +54,7 @@ const crossFileGlobals = {
   setupScreenshotButton: 'readonly',
   initScreenshotCapture: 'readonly',
   captureManHourDayReport: 'readonly',
+  captureManHourReport: 'readonly',
   // scripts/dataExtraction.js
   extractAndStoreCollapseInfoData: 'readonly',
   loadAttendanceData: 'readonly',

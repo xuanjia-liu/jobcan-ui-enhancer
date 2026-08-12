@@ -376,10 +376,12 @@ function setupSelfAnimatingClockDigits(container, timeString) {
       container.appendChild(group);
       return;
     }
-    // The seconds pair sits at the bottom of the row with the working-status pill
-    // stacked above it (punchCard.js fills the slot). Wrapping rather than
+    // The seconds pair sits at the bottom of the row. Wrapping rather than
     // positioning keeps the digits in document order, which the tick cache and the
-    // colour sync both rely on — they read a flat querySelectorAll.
+    // colour sync both rely on — they read a flat querySelectorAll. (The
+    // working-status pill used to be stacked above the seconds in this wrapper;
+    // it is now a child of .flip-clock-container, which this innerHTML wipe cannot
+    // reach — see ensurePunchStatusBadge in punchCard.js.)
     const stack = document.createElement('div');
     stack.className = 'flip-seconds-stack';
     stack.appendChild(group);
@@ -1518,8 +1520,10 @@ function normalizeTimeFormat(timeString) {
    * メッシュグラデーション and ゴッドレイ are DOM figures. The builders here lay out the
      pieces (blur orbs, light shafts) and hand their per-element randomness over as
      inline custom properties; css/styles.css does everything else off
-     [data-variant]. Nothing runs after mount — every moving part animates transform
-     or opacity in CSS, so they cost no JS frames and no layout.
+     [data-variant]. No JS drives their animation — every moving part animates
+     transform or opacity in CSS, so they cost no frames and no layout. The one thing
+     that does run after mount is attachClockBgPointer(), and it only publishes the
+     pointer's position as custom properties; see its block comment.
    * ウェーブメッシュ and パーティクル are a single <canvas>, driven by the shared runtime
      below (startClockCanvas). Both port an effect whose look IS per-point maths — a
      lit surface in perspective, a cursor force field — which CSS has no way to
@@ -1618,16 +1622,27 @@ function buildClockBgMesh() {
   // pass did. Giving the front row a much longer travel than the back row puts the
   // two rows at different heights at any moment, so the field keeps a lumpy upper
   // edge — the lobes — while its base stays solid.
+  //
+  // `parallax` is the row's share of the cursor shift (see the pointer block below
+  // and .jbe-bg-orb-row in styles.css). The back row moves LESS than the front one:
+  // that is the whole point of splitting the shift per row rather than sliding the
+  // field as one piece — same-for-everything would read as the card being dragged,
+  // different-per-row reads as the two rows sitting at different distances.
   const ROWS = [
     { phase: 0.5, depth: 1, sizeMin: 30, sizeVar: 38, drop: 9,
-      alphaMul: 0.72, durMul: 1.45, riseMul: 0.7 },
+      alphaMul: 0.72, durMul: 1.45, riseMul: 0.7, parallax: 0.4 },
     { phase: 0, depth: 0, sizeMin: 16, sizeVar: 34, drop: 2,
-      alphaMul: 1.15, durMul: 1, riseMul: 1.6 }
+      alphaMul: 1.15, durMul: 1, riseMul: 1.6, parallax: 1 }
   ];
 
   let html = '';
 
   for (const row of ROWS) {
+    // Each row is its own box so the cursor shift has somewhere to live: an orb's
+    // own transform is already spoken for by its rise/scale keyframes, and a second
+    // transform on the same element would overwrite the first.
+    html += `<i class="jbe-bg-orb-row" style="--depth:${row.parallax}">`;
+
     for (let i = 0; i < COUNT; i++) {
       const noise = (offset) => clockBgNoise(6101 + row.depth * 733 + i * 17 + offset);
 
@@ -1684,6 +1699,8 @@ function buildClockBgMesh() {
         + `--rise:${rise}cqi;--sway:${sway}cqi;--dur:${duration.toFixed(1)}s;`
         + `--delay:${delay}s;--o:${alpha};--mix:${mix}%"></i>`;
     }
+
+    html += '</i>';
   }
 
   return html;
@@ -2178,32 +2195,55 @@ function startClockCanvas(canvas, container, spec) {
       outermost stretch of each: it can light everything the fades had hidden
       except the place where the mesh actually stops.
 
-   8. DEPTH OF FIELD, WITHOUT A BLUR. A focal plane sits just in front of the middle
-      of the field; a row's distance outside the sharp band gives it a 0…1 defocus,
-      and that number widens its stroke, drains its core and grows its bloom. That
-      is what a lens does to a line — the same ink spread over a wider band with no
-      hard centre — and it costs nothing, because a row was already drawn as two
-      concentric strokes and this only changes their widths and alphas. All four
-      numbers are solved per row at layout, so a defocused row costs a sharp one.
-      Columns cross every depth and a stroke has one width for its length, so they
-      are cut into bands of quantised blur instead (~3 short strokes each, sharing
-      the one gradient). The real thing — `ctx.filter = 'blur()'`, or an offscreen
-      layer blurred per frame — is precisely the cost the runtime's block comment
-      says was cut from both source sketches, and a two-stroke profile at this size
-      is indistinguishable from it.
+   8. DEPTH OF FIELD, WITHOUT A BLUR. A focal plane sits a little above the middle of
+      the field; how far a row lies outside the sharp band is its 0…1 defocus, and
+      that one number scales the whole stroke profile it is drawn with. Three things
+      make this read as a lens rather than as fat lines:
+
+      DEFOCUS IS LINEAR IN SCREEN Y, because the circle of confusion goes as
+      |1/d − 1/d_focus| and this projection puts 1/d linear in y (see waveLayout —
+      py = horizon + focal/d). So the defocus is a plain tent in the row parameter
+      `t`, sharp in the band and ramping to fully soft at both edges. Measuring it in
+      DEPTH instead, as the first pass did, is the same mistake as focus-by-distance
+      in a renderer: depth 1 → 2.35 is only ±0.75 either side of the plane, the ramp
+      never reached its end, and the visible result was a field that was slightly
+      soft everywhere and never actually out of focus.
+
+      A DEFOCUS SCALES THE PROFILE, it does not just widen a stroke. A line is three
+      concentric strokes — core, mid, bloom — and blurring multiplies every width by
+      the spread while dividing every alpha by it. That is what a point spread
+      function does: the same ink over a wider band, so the peak drops as the wings
+      grow. Widening a stroke while keeping its alpha (the first pass, whose halo even
+      got BRIGHTER with defocus) draws a fat hard line with a glow, which is exactly
+      what it looked like. The mid stroke exists only when defocused, so a sharp row
+      is still the two strokes it always was — and there is no hard centre left in a
+      soft one, which is the thing a viewer actually reads as blur.
+
+      COLUMNS GET THE SAME PROFILE. They cross every depth and a stroke has one width
+      for its length, so each column is cut into bands of quantised defocus — but a
+      band is stroked with the full profile, not the single stroke it used to be. That
+      omission was why the vertical lines stayed crisp while the horizontal ones went
+      soft: their alpha and width did change, and a wider stroke at a lower alpha with
+      no wings is still a hard-edged line.
+
+      The real thing — `ctx.filter = 'blur()'`, or an offscreen layer blurred per
+      frame — is precisely the cost the runtime's block comment says was cut from both
+      source sketches. Every number here is solved at layout, so a defocused line
+      costs at most two extra short strokes and a sharp one costs nothing.
 
    Cost, against the budget in the runtime's block comment above:
    * ~400 grid points of trigonometry a frame, then ~12 row strokes, ~12 bloom
-     strokes, ~11 band fills and ~100 short column segments. Everything else is a
-     table lookup.
+     strokes, ~8 mid strokes for the defocused rows, ~11 band fills and ~150 short
+     column segments (the outer bands stroke twice). Everything else is a table
+     lookup.
    * NO COLOUR STRING IS BUILT INSIDE THE LOOP. Lighting travels as gradients — one
      across each row, one down each column — and every stop comes out of a ramp
      table (colour level × alpha level) built once per palette, the same trade the
      nebula makes with its sprite atlas. Quantising to 12 × 18 is invisible:
      consecutive stops interpolate, so the error never exceeds half a step.
    * No `shadowBlur` and no `filter` — not for the bloom and not for the depth of
-     field. Both are the same path stroked twice, wide and faint under thin and
-     bright, with only the widths and alphas changing between them.
+     field. Both are the same path stroked two or three times, widest and faintest
+     underneath, with only the widths and alphas changing between them.
 
    Colour is never named here (rule 2 of the section): every stroke comes out of the
    ramp, and the ramp comes out of the state palette. */
@@ -2250,22 +2290,31 @@ const WAVE = {
   lineWidth: 1.7,
   minLine: 0.5,
   maxLine: 2.2,
-  /* Depth of field (point 8 below). `focus` is the depth the mesh is sharp at — 1
-     is the near edge, depthRatio the far one — `focusRange` how deep the sharp band
-     runs, and `focusFalloff` how much further a row has to be before it is fully
-     soft. Sitting the plane just in front of the middle puts the crisp band where
-     the figure has the most ink, and leaves BOTH ends soft: distance melting away
-     at the top, a foreground blur along the bottom edge. */
-  focus: 1.6,
-  focusRange: 0.52,
-  focusFalloff: 0.68,
-  /* What a fully defocused line does. Widen and soften are the whole effect: the
-     same ink spread over a wider band with no hard centre left, which is what a
-     lens does to a line. Glow lets the bloom grow with it, since the light that
-     leaves the core has to land somewhere. */
-  dofWiden: 2.2,
-  dofSoften: 0.62,
-  dofGlow: 0.9,
+  /* Depth of field (point 8 above), all three in the ROW PARAMETER t — 0 at the far
+     edge, 1 at the near one. t is the right variable and not depth: the circle of
+     confusion goes as |1/d − 1/d_focus|, and 1/d is linear in screen y here, so a
+     receding plane's defocus is linear in t on either side of the focal line.
+
+     `focusAt` is where the plane is sharp, `focusRange` how wide the sharp band is,
+     `focusFalloff` how much further a row must be to be FULLY soft. The plane sits
+     just above the middle, where the figure has the most legible ink, and both ends
+     reach full defocus well inside the field: distance melting away at the top, a
+     foreground blur along the bottom edge. */
+  focusAt: 0.46,
+  focusRange: 0.12,
+  focusFalloff: 0.34,
+  /* What a full defocus does to a line's stroke profile. `dofWiden` is the extra
+     spread at defocus 1 (so a fully soft line is 4.2× the width of a sharp one), and
+     every alpha is divided by that same spread — the point spread function scales,
+     it does not brighten. `dofMid` is the middle stroke's share of the core's alpha,
+     at 2.1× its width; it exists only where there is defocus to fill, which is what
+     leaves a soft line with no hard centre while keeping a sharp one at two strokes.
+     `dofColMin` is the defocus a COLUMN band needs before it is worth giving it wings
+     of its own — below it the band is a single stroke, as every band used to be. */
+  dofWiden: 3.2,
+  dofMid: 0.5,
+  dofMidWidth: 2.1,
+  dofColMin: 0.42,
   // Ceiling for the whole figure. Every other alpha below is a share of this one,
   // and the per-point fades ride in the ramp rather than here — which is what lets
   // the torch overcome them (a globalAlpha could only scale a whole path at once).
@@ -2276,6 +2325,13 @@ const WAVE = {
   // The columns are the cross-hatch, not the subject: a third of the ink, so the
   // rows stay the figure even though both carry the same lighting.
   colAlpha: 0.34,
+  /* A defocused column band's wings. Narrower and stronger than a row's bloom
+     (haloWidth/haloAlpha above), for two reasons: a column already carries a third of
+     the ink, so a 4.5× halo of it would be nothing at all, and the columns converge
+     with depth — at the far edge they are much closer together than the rows, so wide
+     wings there would fill the gaps between them instead of softening each one. */
+  colHaloWidth: 2.6,
+  colHaloAlpha: 0.42,
   bandAlpha: 0.075,
   /* The cursor torch. `radius` is in card heights and clamped, so the lit pool is
      the same size relative to the card whatever the clock size is. `lift` and `lum`
@@ -2387,13 +2443,18 @@ function waveLayout(state) {
     const restY = topY + t * (bottomY - topY);
     const depth = (WAVE.camHeight * focal) / Math.max(1, restY - horizonY);
     const scale = focal / depth;
-    // How far outside the sharp band this row's depth falls, 0…1. Solved here and
-    // never again: every DoF term below is a function of it alone.
+    // How far outside the sharp band this row falls, 0…1. In t, not in depth — the
+    // circle of confusion is linear in screen y (see the DoF note in point 8), and t
+    // IS screen y. Solved here and never again: every term below is a function of it.
     const blur = Math.max(0, Math.min(1,
-      (Math.abs(depth - WAVE.focus) - WAVE.focusRange / 2) / WAVE.focusFalloff));
+      (Math.abs(t - WAVE.focusAt) - WAVE.focusRange / 2) / WAVE.focusFalloff));
+    // The point spread function's scale factor: widths are multiplied by it, alphas
+    // divided by it, so a defocus spreads the row's ink instead of adding any.
+    const spread = 1 + blur * WAVE.dofWiden;
+    const ink = 1 / spread;
     const sharpWidth = Math.max(WAVE.minLine,
       Math.min(WAVE.maxLine, WAVE.lineWidth * (scale / focal)));
-    const coreWidth = sharpWidth * (1 + blur * WAVE.dofWiden);
+    const coreWidth = sharpWidth * spread;
     rows.push({
       depth,
       scale,
@@ -2407,22 +2468,32 @@ function waveLayout(state) {
       // last row can never be drawn as the boundary it is.
       reveal: Math.min(1, t / WAVE.depthGuard),
       blur,
-      // The two strokes a row is made of, already defocused. Alphas are shares of
+      // The three strokes a row is made of, already defocused. Alphas are shares of
       // peakAlpha; widths are absolute. Nothing per-frame touches any of this.
       coreWidth,
-      coreAlpha: 1 - blur * WAVE.dofSoften,
+      coreAlpha: ink,
+      // Only where there is a defocus to fill: at blur 0 this is 0 and the stroke is
+      // skipped, so a sharp row is the same two strokes it has always been.
+      midWidth: coreWidth * WAVE.dofMidWidth,
+      midAlpha: ink * WAVE.dofMid * blur,
       bloomWidth: coreWidth * WAVE.haloWidth,
-      bloomAlpha: WAVE.haloAlpha * (1 + blur * WAVE.dofGlow)
+      bloomAlpha: WAVE.haloAlpha * ink
     });
   }
 
   /* Columns cross every depth, and a stroke has one width for its whole length, so
      a column cannot be defocused the way a row can. It is cut into bands instead:
-     runs of rows that share a quantised blur, each stroked at its own width. Four
-     buckets keeps a band's own spread narrow enough that averaging its rows does
-     not smear the effect back out, and still costs only ~5 short strokes per column
-     instead of one long one. Each band starts a row early so the segments overlap
-     and the line has no seam. */
+     runs of rows that share a quantised defocus, each stroked with its own profile.
+     Four buckets keeps a band's own spread narrow enough that averaging its rows does
+     not smear the effect back out, and still costs only a handful of short strokes per
+     column instead of one long one. Each band starts a row early so the segments
+     overlap and the line has no seam.
+
+     THE BAND CARRIES THE WHOLE PROFILE, not just a width and an alpha. That was the
+     original omission: the defocus reached the columns as "wider and fainter", which
+     is a hard-edged line either way, so the vertical lines stayed crisp while the
+     horizontal ones dissolved. Only the genuinely soft bands pay for the extra stroke
+     (dofColMin) — in the sharp band a column is one stroke, exactly as before. */
   const bands = [];
   for (let r = 0; r < rowCount; r++) {
     const bucket = Math.min(3, Math.floor(rows[r].blur * 4));
@@ -2438,8 +2509,12 @@ function waveLayout(state) {
   const colSharp = Math.max(WAVE.minLine, WAVE.lineWidth * 0.6);
   for (const band of bands) {
     const blur = band.sum / band.n;
-    band.width = colSharp * (1 + blur * WAVE.dofWiden);
-    band.alpha = WAVE.colAlpha * (1 - blur * WAVE.dofSoften);
+    const spread = 1 + blur * WAVE.dofWiden;
+    band.width = colSharp * spread;
+    band.alpha = WAVE.colAlpha / spread;
+    band.haloWidth = band.width * WAVE.colHaloWidth;
+    band.haloAlpha = band.alpha * WAVE.colHaloAlpha;
+    band.soft = blur > WAVE.dofColMin;
   }
 
   const cols = [];
@@ -2613,14 +2688,23 @@ function wavePaint(state) {
     }
     ctx.strokeStyle = gradient;
     for (const band of bands) {
-      ctx.globalAlpha = WAVE.peakAlpha * band.alpha;
-      ctx.lineWidth = band.width;
       ctx.beginPath();
       ctx.moveTo(px[band.start * colCount + c], py[band.start * colCount + c]);
       for (let r = band.start + 1; r <= band.end; r++) {
         const at = r * colCount + c;
         ctx.lineTo(px[at], py[at]);
       }
+      // Wings first, then the core over them — the same two-pass profile the rows
+      // use, and the same path, so a defocused column costs one extra short stroke.
+      // Sharp bands skip it: there is nothing to soften and the halo would only
+      // thicken a line that is meant to be a hairline.
+      if (band.soft) {
+        ctx.globalAlpha = WAVE.peakAlpha * band.haloAlpha;
+        ctx.lineWidth = band.haloWidth;
+        ctx.stroke();
+      }
+      ctx.globalAlpha = WAVE.peakAlpha * band.alpha;
+      ctx.lineWidth = band.width;
       ctx.stroke();
     }
   }
@@ -2653,13 +2737,18 @@ function wavePaint(state) {
     ctx.moveTo(px[base], py[base]);
     for (let c = 1; c < colCount; c++) ctx.lineTo(px[base + c], py[base + c]);
     ctx.strokeStyle = gradient;
-    // Bloom first — wide and faint — then the core over it. Same path either way,
-    // which is why this is cheaper than a shadowBlur as well as softer, and it is
-    // also where the depth of field lands: all four numbers were solved per row at
-    // layout, so a defocused row costs exactly what a sharp one does.
+    // Widest and faintest first, then inward: bloom → mid → core. Same path all
+    // three times, which is why this is cheaper than a shadowBlur as well as softer,
+    // and it is also where the depth of field lands — every width and alpha was
+    // solved per row at layout, so all a defocus costs is the middle stroke.
     ctx.globalAlpha = WAVE.peakAlpha * row.bloomAlpha;
     ctx.lineWidth = row.bloomWidth;
     ctx.stroke();
+    if (row.midAlpha > 0.002) {
+      ctx.globalAlpha = WAVE.peakAlpha * row.midAlpha;
+      ctx.lineWidth = row.midWidth;
+      ctx.stroke();
+    }
     ctx.globalAlpha = WAVE.peakAlpha * row.coreAlpha;
     ctx.lineWidth = row.coreWidth;
     ctx.stroke();
@@ -2892,6 +2981,124 @@ const NEBULA_SPEC = {
 /** Which canvas runtime a variant needs, or null for the CSS-only ones. */
 const CLOCK_CANVAS_SPECS = { wave: WAVE_SPEC, particles: NEBULA_SPEC };
 
+/* ---- Cursor interaction for the CSS variants -------------------------------
+   メッシュグラデーション and ゴッドレイ are pure CSS figures with no per-frame JS, and
+   that stays true: all this does is publish WHERE THE POINTER IS onto the layer as
+   custom properties, and the stylesheet decides what each variant does with it (the
+   mesh parallaxes its two rows, the god ray leans its fan toward the cursor).
+   Nothing here knows about either figure.
+
+   Four reasons it looks like this:
+
+   * ONE rAF PER MOVE BURST, and the only layout read happens inside it. A pointermove
+     handler that measured the card directly would force a style/layout flush at
+     pointer rate, and it would do it right after the previous frame dirtied the
+     layer's custom properties. Coalescing into a rAF means at most one rect read and
+     one write per frame no matter how fast the mouse moves.
+   * THE EASING IS CSS, not JS. The properties jump to the pointer; the transitions on
+     .jbe-bg-orb-row / .jbe-bg-fan do the smoothing and the lag. So there is no
+     interpolation loop to keep running after the cursor stops — which is what keeps
+     this at zero cost on an idle card.
+   * PROPERTIES ONLY EVER FEED transform, so a write cannot invalidate layout (section
+     rule 1 in styles.css). The body-wide observer in main.js is `attributes: false`,
+     so writing them also cannot re-trigger applyEnhancements.
+   * Listeners live on the CONTAINER, as they do for the canvas variants: the layer is
+     `pointer-events: none` at z-index -1 under the whole card, so it never sees an
+     event of its own. Passive, so nothing here can cancel a scroll or a PUSH click. */
+const CLOCK_BG_POINTER_VARIANTS = new Set(['mesh', 'godray']);
+
+let clockBgPointerRun = null;
+
+function stopClockBgPointer() {
+  if (!clockBgPointerRun) return;
+  clockBgPointerRun.teardown();
+  clockBgPointerRun = null;
+}
+
+function attachClockBgPointer(layer, container) {
+  if (!layer || !container) return;
+  // The layer survives most applyEnhancements() passes, so the steady state is this
+  // one comparison — re-binding per pass would leak a listener set every second.
+  if (clockBgPointerRun && clockBgPointerRun.layer === layer) return;
+  stopClockBgPointer();
+
+  // Reduced motion: the figure holds still, so it must not follow the cursor either.
+  // Nothing is bound at all, and every property below stays unset — the CSS fallbacks
+  // are the neutral position.
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    return;
+  }
+
+  // Last raw viewport position; resolved against the card only in the frame callback.
+  let clientX = 0;
+  let clientY = 0;
+  let raf = 0;
+
+  const write = () => {
+    raf = 0;
+    const rect = layer.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    // -1…1 from the card's centre, which is the only form anything reads: every
+    // consumer is a lean or a parallax, i.e. proportional to the offset from centre.
+    const cx = ((clientX - rect.left) / rect.width) * 2 - 1;
+    const cy = ((clientY - rect.top) / rect.height) * 2 - 1;
+    layer.style.setProperty('--jbe-ptr-cx', clamp01Signed(cx));
+    layer.style.setProperty('--jbe-ptr-cy', clamp01Signed(cy));
+  };
+
+  const schedule = () => { if (!raf) raf = requestAnimationFrame(write); };
+
+  const onMove = (event) => {
+    clientX = event.clientX;
+    clientY = event.clientY;
+    schedule();
+  };
+
+  // Back to centre when the pointer leaves — the same transitions that carried the
+  // figure out carry it home, so the card settles rather than snapping back.
+  const onLeave = () => {
+    // The pending frame still holds the last position INSIDE the card, and it would
+    // run after this handler and undo it.
+    if (raf) cancelAnimationFrame(raf);
+    raf = 0;
+    layer.style.setProperty('--jbe-ptr-cx', '0');
+    layer.style.setProperty('--jbe-ptr-cy', '0');
+  };
+
+  container.addEventListener('pointermove', onMove, { passive: true });
+  container.addEventListener('pointerleave', onLeave, { passive: true });
+
+  const teardown = () => {
+    if (raf) cancelAnimationFrame(raf);
+    raf = 0;
+    container.removeEventListener('pointermove', onMove);
+    container.removeEventListener('pointerleave', onLeave);
+    layer.style.removeProperty('--jbe-ptr-cx');
+    layer.style.removeProperty('--jbe-ptr-cy');
+  };
+
+  const run = { layer, container, teardown };
+  clockBgPointerRun = run;
+
+  // `watch:` so an SPA navigation unbinds it, and the registry only ever calls
+  // disconnect() plus the cleanup hook — hence the shim rather than an observer.
+  //
+  // THE SHIM MUST ONLY STOP ITS OWN RUN. Registering a key that is already taken makes
+  // the registry disconnect the entry it is replacing (main.js), so a shim that called
+  // stopClockBgPointer() unconditionally tore down the run being registered — the
+  // symptom was that leaving mesh/god ray for another variant and coming back left the
+  // figure bound to nothing, because the second attach killed itself on its way in.
+  if (typeof window.__jbe_registerManagedObserver === 'function') {
+    window.__jbe_registerManagedObserver('watch:clockBgPointer', {
+      disconnect: () => { if (clockBgPointerRun === run) stopClockBgPointer(); }
+    });
+  }
+}
+
+function clamp01Signed(value) {
+  return Math.max(-1, Math.min(1, value)).toFixed(3);
+}
+
 function buildClockBackgroundMarkup(variant) {
   switch (variant) {
     case 'wave':
@@ -2929,6 +3136,7 @@ function ensureClockBackground(container, requestedVariant) {
   if (variant === 'none') {
     if (existing) existing.remove();
     stopClockCanvas();
+    stopClockBgPointer();
     container.removeAttribute('data-clock-bg');
     return;
   }
@@ -2937,8 +3145,10 @@ function ensureClockBackground(container, requestedVariant) {
   if (existing && existing.dataset.variant === variant) {
     // The layer survived, but the clock around it may not have: a rebuild leaves a
     // detached canvas whose loop has already stopped itself, and startClockCanvas
-    // is a no-op when it is still the live one.
+    // is a no-op when it is still the live one. Same for the pointer listeners —
+    // they hang off the container, which a rebuild also replaces.
     if (spec) startClockCanvas(existing.querySelector('.jbe-bg-canvas'), container, spec);
+    else if (CLOCK_BG_POINTER_VARIANTS.has(variant)) attachClockBgPointer(existing, container);
     return;
   }
 
@@ -2953,8 +3163,11 @@ function ensureClockBackground(container, requestedVariant) {
 
   if (spec) {
     startClockCanvas(layer.querySelector('.jbe-bg-canvas'), container, spec);
+    stopClockBgPointer();
   } else {
     stopClockCanvas();
+    if (CLOCK_BG_POINTER_VARIANTS.has(variant)) attachClockBgPointer(layer, container);
+    else stopClockBgPointer();
   }
 }
 

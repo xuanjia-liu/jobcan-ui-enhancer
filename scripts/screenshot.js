@@ -700,10 +700,22 @@ function buildScreenshotLayout(reportData = {}) {
   headerDiv.style.paddingBottom = '20px';
 
   const titleDiv = document.createElement('div');
-  titleDiv.textContent = '工数レポート';
-  titleDiv.style.fontSize = '20px';
-  titleDiv.style.fontWeight = '600';
-  titleDiv.style.color = theme.accent;
+  const titleText = document.createElement('div');
+  titleText.textContent = '工数レポート';
+  titleText.style.fontSize = '20px';
+  titleText.style.fontWeight = '600';
+  titleText.style.color = theme.accent;
+  titleDiv.appendChild(titleText);
+  // Which day this is. The editor already shows it on screen; a shot taken from
+  // the list has no other date context, so it is passed in there.
+  if (reportData && reportData.subtitle) {
+    const sub = document.createElement('div');
+    sub.textContent = reportData.subtitle;
+    sub.style.fontSize = '13px';
+    sub.style.marginTop = '4px';
+    sub.style.color = theme.mutedText;
+    titleDiv.appendChild(sub);
+  }
 
   const totalDiv = document.createElement('div');
   totalDiv.textContent = totalText;
@@ -810,7 +822,20 @@ async function captureManHourDayReport() {
   }
 
   const totalText = `合計: ${Math.floor(totalMinutes / 60)}時間${totalMinutes % 60}分`;
-  const layoutElem = buildScreenshotLayout({ totalText, rows });
+  await captureManHourReport({ rows, totalText });
+}
+
+// Render + capture + copy + preview for an already-collected set of rows. Split
+// out of captureManHourDayReport so the 工数実績一覧 page can shoot a day straight
+// from the list (scripts/manHourList.js) without opening the editor.
+// rows: [{ project, task, work }], subtitle: optional date line under the title.
+async function captureManHourReport({ rows, totalText, subtitle }) {
+  if (!(await ensureHtml2Canvas())) {
+    showNotification('スクリーンショット機能を読み込めませんでした。');
+    return;
+  }
+
+  const layoutElem = buildScreenshotLayout({ totalText, rows, subtitle });
   layoutElem.style.position = 'fixed';
   layoutElem.style.top = '0';
   layoutElem.style.left = '0';
@@ -863,6 +888,7 @@ async function captureManHourDayReport() {
 
 // Expose the functions globally
 window.captureManHourDayReport = captureManHourDayReport;
+window.captureManHourReport = captureManHourReport;
 window.registerFloatingAction = registerFloatingAction;
 window.closeFloatingActionMenu = closeFloatingActionMenu;
 window.setupScreenshotButton = setupScreenshotButton;

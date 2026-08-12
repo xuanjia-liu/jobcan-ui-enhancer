@@ -2075,7 +2075,14 @@
     display: flex;
     align-items: center;
     gap: clamp(2px, 0.9cqi, 5px);
-    padding: clamp(3px, 0.9cqi, 7px);
+    --jbe-group-pad: clamp(3px, 0.9cqi, 7px);
+    /* The deck (see the tile's own block) hangs 2 steps below each tile, and the panel
+       has to be tall enough to hold it or the stack pokes out through the bottom of its
+       own holder. Read off the group's --flip-digit-scale, which `.is-seconds` sets —
+       so the seconds panel grows by exactly as much as its thinner deck needs. */
+    --jbe-deck-step: calc(var(--jbe-deck-unit) * var(--flip-digit-scale, 1));
+    padding: var(--jbe-group-pad);
+    padding-bottom: calc(var(--jbe-group-pad) + var(--jbe-deck-step) * 2);
     min-width: 0;
     border-radius: calc(var(--border-radius-lg) + 4px);
     background: var(--color-clock-group-bg);
@@ -2090,8 +2097,10 @@
     --flip-digit-scale: 0.6;
   }
 
-  /* The seconds pair and the working-status pill share a column at the end of the
-     row: pill on top, seconds sitting on the baseline of the full-size groups. */
+  /* The seconds pair, sitting on the baseline of the full-size groups. The wrapper
+     is what drops them to that baseline, and it stays even though it now holds only
+     the one child: the working-status pill used to share this column (pill on top,
+     seconds below) and has since moved to the card's top-left corner. */
   .jobcan-enhanced .flip-seconds-stack {
     display: flex;
     flex-direction: column;
@@ -2111,6 +2120,17 @@
       calc((100cqi - clamp(28px, 8cqi, 48px)) / 6.8),
       var(--flip-digit-max)
     );
+    /* One card's worth of the deck's thickness (see the deck block below), before the
+       seconds' 0.6 scale is applied. Declared up here because the group needs it for
+       its padding and the tile needs it for the cards themselves, and both must be
+       reading the same number.
+
+       Deliberately small, and capped at 3px. The first pass was 3.6% of the tile with a
+       5px cap over three cards — about 14px under a large tile, which read as a plinth
+       the digit was standing on rather than as thickness. Two cards at this step is
+       ~5px: enough to see that something is behind the face, not enough to look like
+       part of the figure. */
+    --jbe-deck-unit: clamp(1.5px, calc(var(--flip-digit-w) * 0.022), 3px);
   }
 
   /* ---- Split-flap tile -----------------------------------------------------
@@ -2145,6 +2165,140 @@
     /* The face gradient every half reads. Neutral until #working_status resolves —
        see the pending-state note below. */
     --jbe-flip-face: linear-gradient(135deg, var(--color-clock-pending-start) 0%, var(--color-clock-pending-end) 100%);
+    /* How far one card of the deck sits below the one in front of it. Restated here
+       rather than only inherited from the group, so a tile draws its deck correctly
+       even outside one; --flip-digit-scale is inherited either way, which is what
+       thins the seconds' deck to match their smaller tiles. */
+    --jbe-deck-step: calc(var(--jbe-deck-unit, 3px) * var(--flip-digit-scale, 1));
+    /* What a card behind the top one is veiled with. Black in light mode: a card's
+       edge is the part of it the light does not reach. */
+    --jbe-deck-veil: 0, 0, 0;
+    /* Alpha of the hairline along the top of each card's exposed edge — the cut edge
+       catching the light, and the only line the deck draws. See the deck block for why
+       it is not paired with a dark one. */
+    --jbe-deck-rim: 0.2;
+  }
+
+  /* ---- Deck thickness ------------------------------------------------------
+     Two cards behind the face, each showing a sliver of its own edge below the one in
+     front of it, so the tile reads as the top of a stack rather than as one printed
+     rectangle. Two pseudo-elements and no markup, so createSelfAnimatingDigit() and the
+     flip are untouched.
+
+     ONE LINE PER EDGE, AND IT IS THE LIGHT ONE. A sliver needs something to separate it
+     from the card in front — shading alone merges the two into a single dark strip and
+     the tile just looks bevelled — but it only needs one line, and it has to be the rim
+     where the cut edge catches the light. An earlier pass drew a dark seam under every
+     rim as well, over three cards: six hairlines inside ~14px, which at this scale is
+     not a stack, it is a moiré. Each edge now gets a 1px rim and takes its separation
+     from below from the next card being darker.
+
+     THE WHOLE DECK IS ABOUT 5px. It is a hint of what is behind the face, not a feature:
+     the digit is the reason the tile exists, and anything thick enough to notice on its
+     own is competing with it. See --jbe-deck-unit for what the too-thick version looked
+     like.
+
+     DOWN AND NARROWER, never sideways. A deeper card drops by one step and is inset on
+     both sides — a stack seen from slightly above, which is the angle the face gradient
+     already implies. Sideways is not available: the gap between the two digits INSIDE a
+     group is 2–5px, so a deck that leaned right would put a dark sliver in it and read
+     as a misprinted tile rather than as thickness. Being narrower rather than offset
+     also means the deck can never touch a neighbour at any clock size — it only ever
+     appears below the tile it belongs to, in the room `.flip-group` reserves for it.
+
+     THEY SIT AT NEGATIVE z-index, which works because the tile is already a stacking
+     context (it has `perspective`). The two halves and the leaf carry no z-index of
+     their own, so anything negative is behind all three; -2 and -1 keep the deeper
+     card behind the nearer one regardless of pseudo-element paint order.
+
+     THE VEIL IS A FLAT GRADIENT LAYER, not `filter: brightness()` and not
+     `color-mix()`. Both of those would be a second way to express the same shading and
+     neither survives html2canvas — a filter is dropped outright, so screenshots would
+     show identically-coloured offset rectangles instead of a deck. A two-stop gradient
+     over the face is the same result out of parts the screenshot path already handles.
+
+     No colour is named: the cards are the state's own face gradient, veiled. */
+  .jobcan-enhanced .flip-clock-digit::before,
+  .jobcan-enhanced .flip-clock-digit::after {
+    content: '';
+    position: absolute;
+    /* Inset per card below. The top edge stays at 0 in both: it is behind the face
+       either way, and pulling it down would only shorten the gradient. */
+    border-radius: inherit;
+    /* Overridden per card below. Declared here as well because an undefined custom
+       property inside rgba() is invalid at computed-value time, which would drop the
+       whole `background-image` — face gradient included — and leave a blank card. */
+    --jbe-deck-shade: 0.1;
+    /* The face gradient is sampled over the whole tile here, as the halves do between
+       them — so a deck card is the same gradient the front is, not a restarted copy. */
+    background-size: 100% 100%;
+  }
+
+  /* The card directly behind the face: one exposed edge, one step tall. Its rim sits a
+     step up from its own bottom, which is exactly where the face's bottom edge is — so
+     the light line lands on the top row of the sliver.
+
+     Every stop carries ONE position, not the `color a b` shorthand this could be written
+     with: the tiles are captured by html2canvas (screenshot.js) and its gradient parser
+     is the reason to stay on the oldest syntax that expresses this. A stop list it
+     cannot read would drop the whole layer, deck and face with it. */
+  .jobcan-enhanced .flip-clock-digit::after {
+    z-index: -1;
+    inset: 0 calc(var(--jbe-deck-step) * 0.5) calc(var(--jbe-deck-step) * -1);
+    background-image:
+      linear-gradient(to top,
+        transparent 0,
+        transparent var(--jbe-deck-step),
+        rgba(255, 255, 255, var(--jbe-deck-rim)) var(--jbe-deck-step),
+        rgba(255, 255, 255, var(--jbe-deck-rim)) calc(var(--jbe-deck-step) + 1px),
+        transparent calc(var(--jbe-deck-step) + 1px)),
+      linear-gradient(rgba(var(--jbe-deck-veil), var(--jbe-deck-shade)),
+                      rgba(var(--jbe-deck-veil), var(--jbe-deck-shade))),
+      var(--jbe-flip-face);
+  }
+
+  /* The card behind that one: the same edge, one step further down, and its own rim
+     lands one step up from ITS bottom — which is where the card above ends. So the two
+     rims are exactly one step apart and each sliver gets one line, no more.
+
+     It also carries the stack's shadow: the ground shadow belongs to the BOTTOM of the
+     deck, not to the top card, or the slivers stick out past their own shadow and the
+     stack reads as flat. The tile keeps its own box-shadow as well — a deck casts a
+     slightly deeper one, which is the point. */
+  .jobcan-enhanced .flip-clock-digit::before {
+    z-index: -2;
+    --jbe-deck-shade: 0.2;
+    inset: 0 var(--jbe-deck-step) calc(var(--jbe-deck-step) * -2);
+    background-image:
+      linear-gradient(to top,
+        transparent 0,
+        transparent var(--jbe-deck-step),
+        rgba(255, 255, 255, var(--jbe-deck-rim)) var(--jbe-deck-step),
+        rgba(255, 255, 255, var(--jbe-deck-rim)) calc(var(--jbe-deck-step) + 1px),
+        transparent calc(var(--jbe-deck-step) + 1px)),
+      linear-gradient(rgba(var(--jbe-deck-veil), var(--jbe-deck-shade)),
+                      rgba(var(--jbe-deck-veil), var(--jbe-deck-shade))),
+      var(--jbe-flip-face);
+    box-shadow: var(--shadow-md);
+  }
+
+  /* Dark mode inverts which way an edge reads. A veil toward black is invisible on a
+     dark card — the sliver merges into the surface behind it and the deck disappears —
+     so there the edges are the part that CATCHES the light instead, and the veil goes
+     toward white. Lower alphas throughout: white over these faces moves them much
+     further than the same amount of black does, and the rim has a lighter card to
+     stand out against. */
+  .jobcan-enhanced body.dark-mode .flip-clock-digit {
+    --jbe-deck-veil: 255, 255, 255;
+    --jbe-deck-rim: 0.2;
+  }
+
+  .jobcan-enhanced body.dark-mode .flip-clock-digit::after {
+    --jbe-deck-shade: 0.09;
+  }
+
+  .jobcan-enhanced body.dark-mode .flip-clock-digit::before {
+    --jbe-deck-shade: 0.19;
   }
 
   /* Static halves */
@@ -2512,6 +2666,34 @@
     --jbe-mesh-chroma: 1;
   }
 
+  /* One row of orbs, and the box the cursor shift lives on. See the pointer block in
+     scripts/clock.js for what writes --jbe-ptr-*; the fallbacks are the neutral
+     position, so with nothing bound (reduced motion, or the pointer never entering)
+     this resolves to no transform at all.
+
+     NEGATIVE --jbe-ptr-cx: the field leans AWAY from the cursor. Parallax reads as
+     depth only if the far thing moves against you — a field sliding toward the mouse
+     reads as the card being dragged. --depth is the row's share (clock.js), and the
+     vertical figure is deliberately a third of the horizontal one: the field is
+     bottom-anchored, and moving it up as far as sideways lifts its base off the edge.
+
+     The travel is small on purpose. At 2.6cqi the largest orb moves about a tenth of
+     its own radius, which is under the wash's own drift — you read it as the light
+     shifting, not as anything following the mouse. The transition is what sells it:
+     the property jumps to the new position and the ease carries the field there over
+     ~1.1s, so a flick of the mouse produces a slow settle rather than a twitch. */
+  .jobcan-enhanced .jbe-bg-orb-row {
+    --jbe-mesh-parallax: 2.6cqi;
+    position: absolute;
+    inset: 0;
+    transform: translate3d(
+      calc(var(--jbe-ptr-cx, 0) * var(--jbe-mesh-parallax) * var(--depth) * -1),
+      calc(var(--jbe-ptr-cy, 0) * var(--jbe-mesh-parallax) * var(--depth) * -0.34),
+      0
+    );
+    transition: transform 1.1s cubic-bezier(0.22, 0.61, 0.36, 1);
+  }
+
   .jobcan-enhanced .jbe-bg-orb {
     position: absolute;
     left: var(--x);
@@ -2595,6 +2777,10 @@
     /* Mean shaft direction, clockwise from straight down. The haze reads it so its
        wash cannot end up lit from a different side than the beams. */
     --jbe-ray-aim: 27deg;
+    /* How far the whole pencil of rays leans when the cursor is at the card's edge.
+       Barely more than the sway's own ±1.7°, so the lean never looks like a separate,
+       faster motion laid over the figure — it reads as the sway having drifted. */
+    --jbe-ray-follow: 2.4deg;
   }
 
   /* Flat volumetric lift filling the beam volume — the plugin's Haze. Without it
@@ -2615,7 +2801,19 @@
   /* THE APEX. A 0×0 box at the (off-card) light source: every shaft is positioned
      and rotated against this one point, so the fan converges by construction rather
      than by arithmetic that could fall out of step. Swaying it rotates the whole
-     pencil of rays about the source — which is what moving a light does. */
+     pencil of rays about the source — which is what moving a light does.
+
+     THE CURSOR LEANS THE WHOLE FAN, and it does it here for the same reason the sway
+     does: one rotation about the apex moves every shaft, every mote and the bloom
+     together, so the fan stays a fan. Aiming individual shafts at the pointer instead
+     would break the convergence, which is the one thing that makes the set read as
+     light from a single source.
+
+     `transform` and not `rotate`, because `rotate` is already carrying the sway
+     animation. The two are separate properties applied about the same origin, so they
+     compose — the lean is added to whatever the sway is doing rather than replacing
+     it. The 1.8s ease is much slower than the mesh's: the sway it rides on has a 54s
+     period, and anything quicker than this stood out against it. */
   .jobcan-enhanced .jbe-bg-fan {
     position: absolute;
     left: var(--jbe-ray-x);
@@ -2623,6 +2821,11 @@
     width: 0;
     height: 0;
     transform-origin: 0 0;
+    /* POSITIVE with the cursor: the apex is off the top-LEFT corner and the shafts
+       fan down-right, so a clockwise rotation swings them further right — toward a
+       cursor on the right. */
+    transform: rotate(calc(var(--jbe-ptr-cx, 0) * var(--jbe-ray-follow)));
+    transition: transform 1.8s cubic-bezier(0.22, 0.61, 0.36, 1);
     animation: jbeBgFanSway calc(54s * var(--jbe-bg-speed)) ease-in-out infinite alternate;
   }
 
@@ -2875,7 +3078,11 @@
      The composition is the point, the motion is the garnish: every variant still
      reads as itself standing still, so the layer stays and only the animations
      stop. The rings would be invisible frozen at their `0%` keyframe (scale 0.3,
-     opacity 0), so they are placed by hand instead. */
+     opacity 0), so they are placed by hand instead.
+
+     The cursor interaction needs nothing here: attachClockBgPointer() binds no
+     listeners under reduced motion, so --jbe-ptr-* stay unset and every lean and
+     parallax above falls back to zero. */
   @media (prefers-reduced-motion: reduce) {
     .jobcan-enhanced .jbe-clock-bg *,
     .jobcan-enhanced .jbe-clock-bg {
@@ -3522,6 +3729,18 @@
     opacity: 0;
     transform: translateY(20px) translateZ(0);
   }
+
+  /* --color-white is a literal, not a themed surface, so the panel stayed white
+     in dark mode. */
+  .jobcan-enhanced body.dark-mode #screenshot-preview-container {
+    background-color: var(--color-card);
+    color: var(--color-text-primary);
+    border: 1px solid var(--color-border);
+  }
+
+  .jobcan-enhanced body.dark-mode .screenshot-preview-image {
+    border-color: var(--color-border);
+  }
   
   .screenshot-preview-image {
     width: 100%;
@@ -3545,10 +3764,38 @@
     margin-bottom: 10px;
   }
 
+  /* Preview close (✕ over the thumbnail). It is a bare <button>, so section 6's
+     `:where(button)` rule was dressing it as a full primary button: blue fill,
+     8px/16px padding and uppercase. The padding is what crushed the 16px icon,
+     and the fill is what made it a blue slab on the preview. Style it as the
+     icon button it is — dark scrim + white glyph, legible over any screenshot. */
   .screenshot-preview-close {
     position: absolute;
     top: 5px;
     right: 5px;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: var(--border-radius-circle);
+    background-color: var(--color-black-70);
+    color: var(--color-white);
+    letter-spacing: normal;
+    box-shadow: none;
+    transition: background-color 0.2s ease;
+  }
+
+  .screenshot-preview-close:hover {
+    background-color: var(--color-black-85);
+  }
+
+  .screenshot-preview-close svg {
+    width: 13px;
+    height: 13px;
+    flex: 0 0 auto;
   }
 
   .form-screenshot-button {
@@ -3658,26 +3905,36 @@
     box-shadow: var(--shadow-fullsize-image);
   }
   
+  /* `padding: 0` matters: section 6's `:where(button)` rule adds 8px/16px, and
+     inside this fixed 40x40 flex box that left the 24px icon ~8px of content
+     width to shrink into. */
   #screenshot-fullsize-modal button {
     position: absolute;
     top: 20px;
     right: 20px;
-    background-color: transparent;
+    background-color: var(--color-white-10);
     border: none;
     color: var(--color-white);
     font-size: 30px;
     cursor: pointer;
     width: 40px;
     height: 40px;
+    padding: 0;
     display: flex;
     align-items: center;
     justify-content: center;
     border-radius: var(--border-radius-circle);
     transition: background-color 0.2s ease;
   }
+
+  #screenshot-fullsize-modal button svg {
+    width: 24px;
+    height: 24px;
+    flex: 0 0 auto;
+  }
   
   #screenshot-fullsize-modal button:hover {
-    background-color: var(--color-white-10);
+    background-color: var(--color-white-20);
   }
   
   .fullsize-hint {
@@ -4624,15 +4881,46 @@
 
   /* Solid, not a tint: this is the one element that says whether you are on the
      clock, and a pale pill next to 80px digits was the quietest thing in the block.
-     Sized off the tile so it scales with the clock-size setting. */
+
+     Parked in the card's top-left corner: absolute against .flip-clock-container's
+     `position: relative`, inset by the card's own padding so it lines up with the
+     content edge rather than floating in from the border. Out of flow on purpose —
+     the digits+PUSH group is centred in the card's free height by auto margins, and
+     an in-flow pill at the top would have eaten into that space and shifted the
+     clock down. No z-index needed against the ambient background layer (z-index:-1),
+     but one is stated anyway so a narrow card overlaps the pill ON TOP of the digits
+     rather than under them.
+
+     Everything below the font-size is in `em`, so the whole pill — padding, gap,
+     dot — scales from that one value. The font-size derives from --flip-digit-w,
+     the tile width the digits themselves are sized from, which is what makes the
+     pill track the clock-size setting (small … xxlarge) and the fluid width clamp
+     alike.
+
+     The ramp is deliberately shallower than proportional. A straight fraction of
+     the tile (0.2) held the pill's ratio to the digits constant, which meant it
+     reached 32px at `xxlarge` — correct by proportion, too loud in practice: at
+     that size the pill competes with the digits instead of labelling them. So the
+     two ends are pinned instead — 12px at `small`, 20px at `xxlarge` — and the line
+     between them is walked linearly against the tile width:
+
+       12px + (tile - 60px) x 0.08   →   small 12 · M 13.6 · L 15.2 · XL 17.4 · XXL 20
+
+     i.e. `xxlarge` now sits where `large` used to. The floor keeps it legible when
+     the fluid clamp drives the tile below `small`'s 60px; the var() fallback covers
+     the moment before the digits container defines the tile at all. */
   .jobcan-enhanced .jbe-clock-status {
-    align-self: center;
+    position: absolute;
+    top: var(--spacing-md);
+    left: var(--spacing-md);
+    z-index: 1;
     display: inline-flex;
     align-items: center;
-    gap: 7px;
-    padding: 5px clamp(10px, 1.6cqi, 16px);
+    max-width: calc(100% - var(--spacing-md) * 2);
+    gap: 0.5em;
+    padding: 0.4em 0.85em;
     border-radius: 999px;
-    font-size: clamp(12px, 1.5cqi, 15px);
+    font-size: clamp(11px, calc(12px + (var(--flip-digit-w, 60px) - 60px) * 0.08), 20px);
     font-weight: 700;
     letter-spacing: 0.04em;
     line-height: 1.4;
@@ -4647,8 +4935,8 @@
      glance when the wording is one Jobcan phrase or another. */
   .jobcan-enhanced .jbe-clock-status::before {
     content: '';
-    width: 8px;
-    height: 8px;
+    width: 0.55em;
+    height: 0.55em;
     border-radius: 50%;
     background-color: currentColor;
     flex: 0 0 auto;
@@ -4993,6 +5281,34 @@
     flex: 1 1 auto;
     min-width: 0;
     margin: 0 !important;
+  }
+
+  /* Colour, stated explicitly for every state instead of inherited from the
+     generic `.jobcan-enhanced .btn` rule in section 6.
+     Jobcan's PUSH carries `.jbc-btn-secondary`, which is their ORANGE button:
+     #eb840b at rest, #d97807 on :hover/:focus/.focus. Section 6 outranks the rest
+     state on specificity (0,2,0 vs 0,1,0) and the hover state via
+     `.jobcan-enhanced .btn:hover` (0,3,0) — but nothing there answers :focus, so
+     `.jbc-btn-secondary:focus` (0,2,0) ties with the base rule and the winner is
+     decided by stylesheet order alone. A tie is not a guarantee; the button is the
+     single most conspicuous control on the page and must not be able to flash
+     Jobcan's orange because a cascade coin-flip landed the other way. These
+     selectors are (0,3,0)/(0,4,0), so every state wins outright. */
+  .jobcan-enhanced .jbe-punch-actions .jbe-punch-push,
+  .jobcan-enhanced .jbe-punch-actions .jbe-punch-push:focus,
+  .jobcan-enhanced .jbe-punch-actions .jbe-punch-push.focus {
+    background-color: var(--color-primary);
+    border-color: var(--color-primary);
+    color: var(--color-white);
+    box-shadow: none;
+  }
+
+  /* Same hue, lower value — matches the button-family hover in section 6. */
+  .jobcan-enhanced .jbe-punch-actions .jbe-punch-push:hover,
+  .jobcan-enhanced .jbe-punch-actions .jbe-punch-push:active {
+    background-color: color-mix(in srgb, var(--color-primary) 87%, #000);
+    border-color: color-mix(in srgb, var(--color-primary) 87%, #000);
+    color: var(--color-white);
   }
 
   .jobcan-enhanced .jbe-punch-settings-toggle {

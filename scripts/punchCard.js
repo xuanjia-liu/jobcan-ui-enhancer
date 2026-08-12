@@ -398,18 +398,28 @@ function unwrapPunchCard(card) {
  * pill changes at the same moment the digits change colour.
  */
 function ensurePunchStatusBadge(clock) {
-  if (!clock || clock.querySelector('.jbe-clock-status')) return;
-  const badge = document.createElement('div');
-  badge.className = 'jbe-clock-status';
-  badge.dataset.state = 'unknown';
-  // Preferred home is the seconds stack, so the pill sits directly above the
-  // seconds pair at the end of the digits row (see setupSelfAnimatingClockDigits).
-  // The fallbacks keep it visible if the digits are ever rebuilt without the stack.
-  const stack = clock.querySelector('.flip-seconds-stack');
-  const digits = clock.querySelector('.flip-clock-digits-container');
-  if (stack) stack.prepend(badge);
-  else if (digits) clock.insertBefore(badge, digits);
-  else clock.prepend(badge);
+  if (!clock) return;
+
+  let badge = clock.querySelector('.jbe-clock-status');
+  if (!badge) {
+    badge = document.createElement('div');
+    badge.className = 'jbe-clock-status';
+    badge.dataset.state = 'unknown';
+  }
+
+  // Direct child of the card, parked in its top-left corner by CSS
+  // (position: absolute against the container's `position: relative`).
+  //
+  // It used to live inside .flip-seconds-stack, above the seconds pair. That slot
+  // is inside .flip-clock-digits-container, which setupSelfAnimatingClockDigits()
+  // clears with `innerHTML = ''` on every rebuild — so the pill was destroyed and
+  // re-created, losing its resolved state until the next sync. As a child of the
+  // container it outlives digit rebuilds.
+  //
+  // Re-parenting an existing pill, rather than only placing a newly created one,
+  // is what moves the badge on a page that was already enhanced by the previous
+  // layout. The parent check keeps this a no-op on the ~1/s re-runs.
+  if (badge.parentElement !== clock) clock.prepend(badge);
 }
 
 function syncPunchStatusBadge() {

@@ -47,6 +47,17 @@
   // never "missing input", they are simply days that were not worked.
   const WEEKEND_CLASSES = ['sat', 'sun'];
 
+  // The date cell is decorated in place by decorateDateCell — the date becomes an
+  // .jbe-day-link and a mismatch day gains a "−0:43" .jbe-day-delta badge — so the
+  // cell's whole textContent is no longer just the date. Reading it whole made
+  // "08/04" + a "−1:23" badge parse as day 23 in the report's day-bar labels (and
+  // would break dayEditUrl on any re-parse). Read the link when it is there.
+  function dateCellText(cell) {
+    if (!cell) return '';
+    const link = cell.querySelector('.jbe-day-link');
+    return ((link || cell).textContent || '').trim();
+  }
+
   function parseListDays() {
     const list = getList();
     if (!list) return [];
@@ -57,7 +68,7 @@
       const dateCell = tr.querySelector('td.date');
       if (dateCell) {
         current = {
-          dateText: dateCell.textContent.trim(),
+          dateText: dateCellText(dateCell),
           dateCell,
           isWeekend: WEEKEND_CLASSES.some((c) => dateCell.classList.contains(c)),
           sumMinutes: parseHHMMToMinutes((tr.querySelector('td.sum') || {}).textContent),
@@ -205,7 +216,7 @@
     if (!link) {
       const url = dayEditUrl(day);
       if (!url) return;
-      const text = cell.textContent.trim();
+      const text = dateCellText(cell);
       link = document.createElement('a');
       link.className = 'jbe-day-link';
       link.href = url;
@@ -214,6 +225,8 @@
       cell.textContent = '';
       cell.appendChild(link);
     }
+
+    decorateDayShotButton(day, cell);
 
     let badge = cell.querySelector('.jbe-day-delta');
     if (!mismatch) {
@@ -225,7 +238,8 @@
     if (!badge) {
       badge = document.createElement('span');
       badge.className = 'jbe-day-delta';
-      cell.appendChild(badge);
+      // Above the camera, which decorateDayShotButton has already appended.
+      cell.insertBefore(badge, cell.querySelector('.jbe-day-shot'));
     }
     // >0 => 工数 short of actual work (不足); <0 => over-entered (超過).
     badge.classList.toggle('jbe-day-delta--under', delta > 0);
@@ -235,6 +249,67 @@
     badge.title = delta > 0
       ? `工数が ${minutesToHHMM(delta)} 不足しています`
       : `工数が ${minutesToHHMM(-delta)} 超過しています`;
+  }
+
+  // --- per-day 工数レポート screenshot ------------------------------------------
+  //
+  // The list already renders every entry of every day, so the same report the
+  // editor's スクリーンショット button produces can be shot straight from here —
+  // no round-trip through 工数実績入力. The camera sits in the date cell and is
+  // revealed by the day-group hover (CSS keys off .jbe-day-hover).
+  const CAMERA_SVG =
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+    + 'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+    + '<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>'
+    + '<circle cx="12" cy="13" r="4"/></svg>';
+
+  function decorateDayShotButton(day, cell) {
+    let shot = cell.querySelector('.jbe-day-shot');
+    // A day with nothing entered has no report to shoot.
+    if (!day.entries.length) {
+      if (shot) shot.remove();
+      return;
+    }
+    if (!shot) {
+      shot = document.createElement('button');
+      shot.type = 'button';
+      shot.className = 'jbe-day-shot';
+      shot.innerHTML = CAMERA_SVG;
+      // The handler re-reads the day at click time: `day` here belongs to one
+      // parse pass and goes stale as soon as the worker re-renders the list.
+      shot.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        captureDayReport(shot.dataset.jbeDate || '');
+      });
+      cell.appendChild(shot);
+    }
+    shot.dataset.jbeDate = day.dateText;
+    shot.title = `${day.dateText} の工数レポートを作成`;
+    shot.setAttribute('aria-label', shot.title);
+  }
+
+  function captureDayReport(dateText) {
+    const day = parseListDays().find((d) => d.dateText === dateText);
+    const entries = day ? day.entries : [];
+    if (!entries.length) {
+      showNotification('工数が入力されていません。', 2500);
+      return;
+    }
+    const total = entries.reduce((sum, e) => sum + e.minutes, 0);
+    if (typeof captureManHourReport !== 'function') {
+      showNotification('スクリーンショット機能を読み込めませんでした。');
+      return;
+    }
+    captureManHourReport({
+      rows: entries.map((e) => ({
+        project: stripCode(e.project),
+        task: stripCode(e.task),
+        work: minutesToHHMM(e.minutes)
+      })),
+      totalText: `合計: ${Math.floor(total / 60)}時間${total % 60}分`,
+      subtitle: dateText
+    });
   }
 
   // --- month completion header (feature 3) ------------------------------------
@@ -583,8 +658,14 @@
   function aggregate(days) {
     const agg = {
       projectTotals: {},
+      // Task names are the same dimension across projects (デザイン, その他 …), so
+      // one colour per task holds for the whole report and the legend can live
+      // once next to the section title.
+      taskTotals: {},
       taskByProject: {},
       dayByProject: {},
+      // project -> date -> task -> minutes, for the stacked day columns.
+      dayTaskByProject: {},
       dayList: [],
       grandMinutes: 0,
       entryCount: 0,
@@ -599,9 +680,25 @@
 
     days.forEach((day) => {
       if (day.workMinutes) agg.totalWork += day.workMinutes;
-      if (dayIsMismatch(day)) agg.mismatchDays += 1;
+      const mismatch = dayIsMismatch(day);
+      const missing = dayIsMissing(day);
+      if (mismatch) agg.mismatchDays += 1;
       const dayEntryMinutes = day.entries.reduce((sum, e) => sum + e.minutes, 0);
-      if (dayEntryMinutes > 0) { agg.activeDays += 1; agg.dayList.push(day.dateText); } else agg.noInputDays += 1;
+      if (dayEntryMinutes > 0) agg.activeDays += 1; else agg.noInputDays += 1;
+      // The x-axis carries the days that were worked: those with entries, plus the
+      // 未入力 ones — a day you owe input for is exactly what the graph should not
+      // silently drop. Weekends with no work stay off the axis.
+      if (dayEntryMinutes > 0 || missing) {
+        agg.dayList.push({
+          key: day.dateText,
+          dayNumber: dayNumber(day.dateText),
+          weekday: weekdayLabel(day),
+          isWeekend: !!day.isWeekend,
+          mismatch,
+          missing,
+          delta: dayDeltaMinutes(day)
+        });
+      }
 
       day.entries.forEach((entry) => {
         const project = stripCode(entry.project) || '(プロジェクト未選択)';
@@ -609,8 +706,13 @@
         agg.projectTotals[project] = (agg.projectTotals[project] || 0) + entry.minutes;
         if (!agg.taskByProject[project]) agg.taskByProject[project] = {};
         agg.taskByProject[project][task] = (agg.taskByProject[project][task] || 0) + entry.minutes;
+        agg.taskTotals[task] = (agg.taskTotals[task] || 0) + entry.minutes;
         if (!agg.dayByProject[project]) agg.dayByProject[project] = {};
         agg.dayByProject[project][day.dateText] = (agg.dayByProject[project][day.dateText] || 0) + entry.minutes;
+        if (!agg.dayTaskByProject[project]) agg.dayTaskByProject[project] = {};
+        const perDay = agg.dayTaskByProject[project];
+        if (!perDay[day.dateText]) perDay[day.dateText] = {};
+        perDay[day.dateText][task] = (perDay[day.dateText][task] || 0) + entry.minutes;
         agg.grandMinutes += entry.minutes;
         agg.entryCount += 1;
         if (!entry.project || /未選択/.test(entry.project)) agg.unselectedProject += 1;
@@ -663,9 +765,19 @@
       return wrap;
     }
 
+    const taskColors = taskColorMap(agg);
+
     projects.forEach((project) => {
-      const row = document.createElement('div');
-      row.className = 'jbe-report-bar-row';
+      const dayTaskMap = agg.dayTaskByProject[project] || {};
+      const tasks = agg.taskByProject[project] || {};
+      const taskNames = Object.keys(tasks).sort((a, b) => tasks[b] - tasks[a]);
+      const expandable = !!(agg.dayList.length || taskNames.length);
+
+      // The whole project row is the <summary>: name, total and track all toggle
+      // the breakdown, with a caret at the left as the affordance. A row with
+      // nothing to show stays a plain <div> so it gets no caret and no pointer.
+      const row = document.createElement(expandable ? 'details' : 'div');
+      row.className = expandable ? 'jbe-report-bar-row jbe-report-tasks' : 'jbe-report-bar-row';
 
       const head = document.createElement('div');
       head.className = 'jbe-report-bar-head';
@@ -687,43 +799,37 @@
       fill.style.width = `${Math.max(2, (agg.projectTotals[project] / max) * 100)}%`;
       track.appendChild(fill);
 
-      row.appendChild(head);
-      row.appendChild(track);
+      const main = document.createElement('div');
+      main.className = 'jbe-report-bar-main';
+      main.appendChild(head);
+      main.appendChild(track);
 
-      // Expandable detail: per-day vertical bar graph for this project, plus the
-      // task breakdown beneath it.
-      const dayMap = agg.dayByProject[project] || {};
-      const tasks = agg.taskByProject[project] || {};
-      const taskNames = Object.keys(tasks).sort((a, b) => tasks[b] - tasks[a]);
-      if (agg.dayList.length || taskNames.length) {
-        const details = document.createElement('details');
-        details.className = 'jbe-report-tasks';
-        const summary = document.createElement('summary');
-        summary.textContent = taskNames.length ? `日別内訳 ・ ${taskNames.length} タスク` : '日別内訳';
-        details.appendChild(summary);
-
-        if (agg.dayList.length) details.appendChild(buildDayColumns(dayMap, agg.dayList));
-
-        taskNames.forEach((task) => {
-          const t = document.createElement('div');
-          t.className = 'jbe-report-task-row';
-          t.innerHTML = `<span>${escapeHtml(task)}</span><span>${minutesToHHMM(tasks[task])}</span>`;
-          details.appendChild(t);
-        });
-
-        row.appendChild(details);
+      if (!expandable) {
+        row.appendChild(main);
+        wrap.appendChild(row);
+        return;
       }
 
+      const summary = document.createElement('summary');
+      summary.className = 'jbe-report-bar-summary';
+      const caret = document.createElement('span');
+      caret.className = 'jbe-report-bar-caret';
+      caret.setAttribute('aria-hidden', 'true');
+      summary.appendChild(caret);
+      summary.appendChild(main);
+      row.appendChild(summary);
+
+      // Detail: the per-day graph. Each column is stacked by task, so the task
+      // split is read off the bars themselves instead of a list under them.
+      const detail = document.createElement('div');
+      detail.className = 'jbe-report-bar-detail';
+      if (agg.dayList.length) detail.appendChild(buildDayColumns(dayTaskMap, agg.dayList, taskColors));
+
+      row.appendChild(detail);
       wrap.appendChild(row);
     });
 
     return wrap;
-  }
-
-  function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = String(text == null ? '' : text);
-    return div.innerHTML;
   }
 
   // Extract the day-of-month from a list date label ("06/02(火)", "2026/06/02"…)
@@ -733,31 +839,82 @@
     return nums && nums.length ? String(parseInt(nums[nums.length - 1], 10)) : String(dateText || '');
   }
 
-  // Vertical bar graph of one project's man-hours across the month's active days.
-  // Column heights are normalised to that project's own busiest day; days with no
-  // hours for the project keep a faint baseline stub so the timeline reads cleanly.
-  function buildDayColumns(dayMap, dayList) {
+  // 曜日 for the x-axis. Jobcan tags the date cell with a weekday class, which is
+  // the same signal WEEKEND_CLASSES reads; fall back to a "(火)" in the label for
+  // layouts that print it and leave the class off.
+  const WEEKDAY_BY_CLASS = { sun: '日', mon: '月', tue: '火', wed: '水', thu: '木', fri: '金', sat: '土' };
+
+  function weekdayLabel(day) {
+    const cell = day && day.dateCell;
+    if (cell) {
+      const hit = Object.keys(WEEKDAY_BY_CLASS).find((c) => cell.classList.contains(c));
+      if (hit) return WEEKDAY_BY_CLASS[hit];
+    }
+    const m = /[（(]\s*([日月火水木金土])\s*[）)]/.exec(String((day && day.dateText) || ''));
+    return m ? m[1] : '';
+  }
+
+  // One colour per task name for the whole report. Task names are a shared
+  // dimension (デザイン, その他 …), so the same task keeps its colour in every
+  // project's chart and a single legend covers them all. The palette cycles.
+  const TASK_COLOR_COUNT = 8;
+
+  function taskColorMap(agg) {
+    const map = {};
+    Object.keys(agg.taskTotals)
+      .sort((a, b) => agg.taskTotals[b] - agg.taskTotals[a])
+      .forEach((task, i) => { map[task] = `jbe-task-c${(i % TASK_COLOR_COUNT) + 1}`; });
+    return map;
+  }
+
+  // Vertical bar graph of one project's man-hours across the month's active days,
+  // each column stacked by task. Column heights are normalised to that project's
+  // own busiest day; days with no hours for the project keep a faint baseline stub
+  // so the timeline reads cleanly.
+  function buildDayColumns(dayTaskMap, dayList, taskColors) {
     const chart = document.createElement('div');
     chart.className = 'jbe-report-daybars';
-    const max = dayList.reduce((m, d) => Math.max(m, dayMap[d] || 0), 1);
+    const dayTotal = (key) => Object.values(dayTaskMap[key] || {}).reduce((s, v) => s + v, 0);
+    const max = dayList.reduce((m, d) => Math.max(m, dayTotal(d.key)), 1);
 
-    dayList.forEach((dateText) => {
-      const minutes = dayMap[dateText] || 0;
+    dayList.forEach((day) => {
+      const byTask = dayTaskMap[day.key] || {};
+      const taskNames = Object.keys(byTask).sort((a, b) => byTask[b] - byTask[a]);
+      const minutes = dayTotal(day.key);
       const col = document.createElement('div');
       col.className = 'jbe-report-daybar-col';
-      col.title = `${dateText}: ${minutesToHHMM(minutes)}`;
+      // 不一致 / 未入力 are properties of the DAY, not of this project, so a day can
+      // be flagged while this project's own bar is perfectly normal.
+      if (day.missing) col.classList.add('is-missing');
+      else if (day.mismatch) col.classList.add('is-mismatch');
+      const flagNote = day.missing
+        ? ' ・ 未入力'
+        : (day.mismatch ? ` ・ 工数不一致 (${day.delta > 0 ? '−' : '+'}${minutesToHHMM(Math.abs(day.delta))})` : '');
+      const taskNote = taskNames.map((t) => `\n  ${t}: ${minutesToHHMM(byTask[t])}`).join('');
+      col.title = `${day.key}: ${minutesToHHMM(minutes)}${flagNote}${taskNote}`;
 
       const bar = document.createElement('div');
       bar.className = 'jbe-report-daybar-bar';
       const fill = document.createElement('div');
       fill.className = 'jbe-report-daybar-fill';
+      // The value label is positioned above the fill and must not be the fill's
+      // last child — that slot is what rounds the top segment.
+      const value = document.createElement('span');
+      value.className = 'jbe-report-daybar-value';
+      if (minutes === 0) value.classList.add('is-zero');
+      value.textContent = minutesToHHMM(minutes);
+      fill.appendChild(value);
       if (minutes > 0) {
         // Cap at 82% so the value printed above the tallest bar still fits.
         fill.style.height = `${Math.max(6, (minutes / max) * 82)}%`;
-        const value = document.createElement('span');
-        value.className = 'jbe-report-daybar-value';
-        value.textContent = minutesToHHMM(minutes);
-        fill.appendChild(value);
+        // Stacked segments, largest task at the bottom (the fill stacks upward).
+        taskNames.forEach((task) => {
+          const seg = document.createElement('div');
+          seg.className = `jbe-report-daybar-seg ${taskColors[task] || 'jbe-task-c1'}`;
+          seg.style.height = `${(byTask[task] / minutes) * 100}%`;
+          seg.title = `${task}: ${minutesToHHMM(byTask[task])}`;
+          fill.appendChild(seg);
+        });
       } else {
         fill.classList.add('is-empty');
       }
@@ -765,14 +922,61 @@
 
       const label = document.createElement('div');
       label.className = 'jbe-report-daybar-label';
-      label.textContent = dayNumber(dateText);
-
+      const num = document.createElement('span');
+      num.className = 'jbe-report-daybar-day';
+      num.textContent = day.dayNumber;
+      label.appendChild(num);
+      if (day.weekday) {
+        const dow = document.createElement('span');
+        dow.className = 'jbe-report-daybar-dow';
+        if (day.isWeekend) dow.classList.add('is-weekend');
+        dow.textContent = day.weekday;
+        label.appendChild(dow);
+      }
       col.appendChild(bar);
       col.appendChild(label);
       chart.appendChild(col);
     });
 
     return chart;
+  }
+
+  // One legend for the whole report, next to the section title: the task colours
+  // used by the stacked columns, then the day flags. Both mean the same thing in
+  // every project's chart. Null when there is nothing to explain.
+  function buildReportLegend(agg, taskColors) {
+    const taskNames = Object.keys(agg.taskTotals).sort((a, b) => agg.taskTotals[b] - agg.taskTotals[a]);
+    const hasMissing = agg.dayList.some((d) => d.missing);
+    const hasMismatch = agg.dayList.some((d) => d.mismatch && !d.missing);
+    if (!taskNames.length && !hasMissing && !hasMismatch) return null;
+
+    const legend = document.createElement('span');
+    legend.className = 'jbe-report-daybar-legend';
+    taskNames.forEach((task) => {
+      legend.appendChild(makeLegendItem(taskColors[task] || 'jbe-task-c1', task, minutesToHHMM(agg.taskTotals[task])));
+    });
+    if (hasMismatch) legend.appendChild(makeLegendItem('is-mismatch', '工数不一致'));
+    if (hasMissing) legend.appendChild(makeLegendItem('is-missing', '未入力'));
+    return legend;
+  }
+
+  function makeLegendItem(variant, text, detail) {
+    const item = document.createElement('span');
+    item.className = 'jbe-report-daybar-legend-item';
+    const swatch = document.createElement('span');
+    // The variant class is the colour, and it is the same class the stacked
+    // segments carry — so a legend swatch cannot drift from its bars.
+    swatch.className = `jbe-report-daybar-swatch ${variant}`;
+    item.appendChild(swatch);
+    item.appendChild(document.createTextNode(text));
+    if (detail) {
+      const d = document.createElement('span');
+      d.className = 'jbe-report-legend-detail';
+      d.textContent = detail;
+      item.appendChild(d);
+    }
+    item.title = detail ? `${text}: ${detail}` : text;
+    return item;
   }
 
   function openReport() {
@@ -818,7 +1022,13 @@
 
     const barsTitle = document.createElement('h4');
     barsTitle.className = 'jbe-report-section-title';
-    barsTitle.textContent = 'プロジェクト別工数';
+    const barsTitleText = document.createElement('span');
+    barsTitleText.textContent = 'プロジェクト別工数';
+    barsTitle.appendChild(barsTitleText);
+    // The day-flag colours mean the same thing in every project's 日別内訳, so the
+    // legend belongs once next to the section title rather than under each chart.
+    const legend = buildReportLegend(agg, taskColorMap(agg));
+    if (legend) barsTitle.appendChild(legend);
     body.appendChild(barsTitle);
     body.appendChild(buildProjectBars(agg));
 

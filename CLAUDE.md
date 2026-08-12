@@ -69,6 +69,12 @@ Keys prefixed `watch:` are torn down on SPA navigation — pass `onCleanup` to r
 whatever init flag guards their setup, or they will never come back. Keys prefixed
 `core:` persist.
 
+**Re-registering a key disconnects the entry it replaces**, so anything registered
+under a fixed key more than once must make `disconnect()` teardown *only its own*
+resource. A `{ disconnect: stopFoo }` shim that stops "the current one" will tear down
+the run it was just registered for — the second registration kills itself, and only
+the first ever works (`attachClockBgPointer` in `clock.js` hit exactly this).
+
 **`html2canvas` is not loaded on page load.** It is injected on first use via
 `chrome.scripting.executeScript` from `background.js` (which is why the `scripting`
 permission is needed). A `<script>` tag would land in the MAIN world and be

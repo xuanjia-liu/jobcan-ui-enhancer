@@ -360,16 +360,47 @@
   color: var(--color-primary, #0077ff);
 }
 
+/* --color-primary stays #0077ff in dark mode, which on the dark card is ~2.6:1 —
+   the hovered label all but disappeared. Use the lightened primary and back it
+   with a tint so the hover still reads as a state change. */
+.jobcan-enhanced body.dark-mode .jbe-list-filter-btn:hover {
+  border-color: var(--color-primary-light, #109fff);
+  color: var(--color-primary-light, #109fff);
+  background: var(--color-primary-hover-bg, #00356b);
+}
+
+/* The active pill keeps its solid primary fill; only its label needs forcing so
+   the rule above cannot leave white-on-blue text mid-hover. */
+.jobcan-enhanced body.dark-mode .jbe-list-filter-btn.active:hover {
+  background: var(--color-primary, #0077ff);
+  border-color: var(--color-primary, #0077ff);
+  color: #fff;
+}
+
 .jobcan-enhanced .jbe-list-filter-btn.active {
   background: var(--color-primary, #0077ff);
   border-color: var(--color-primary, #0077ff);
   color: #fff;
 }
 
-/* Highlight days whose man-hour total (合計) differs from working time (総労働時間). */
+/* Highlight days whose man-hour total (合計) differs from working time (総労働時間).
+
+   Every mismatch colour here is mixed against --color-card, never against
+   `transparent`. A translucent red still lets the cell's own background through,
+   and these cells keep Jobcan's white one — so in dark mode the tint composited
+   to pale pink while the text stayed dark-mode light: unreadable. Mixing against
+   the card colour makes the result opaque and theme-correct in both modes. */
 .jobcan-enhanced #list tr.jbe-mismatch-row > td {
   /* Calmer than a full red wash: a light tint, with a left accent bar on the date cell. */
-  background-color: var(--color-danger-bg-light, rgba(231, 76, 60, 0.08)) !important;
+  background-color: color-mix(in srgb, var(--color-danger, #DC3545) 9%, var(--color-card, #ffffff)) !important;
+}
+
+.jobcan-enhanced body.dark-mode #list tr.jbe-mismatch-row > td {
+  background-color: color-mix(in srgb, var(--color-danger, #DC3545) 16%, var(--color-card, #272736)) !important;
+}
+
+.jobcan-enhanced body.dark-mode #list tr.jbe-mismatch-row > td:not(.date) {
+  color: var(--color-text-primary, #e4e6eb) !important;
 }
 
 .jobcan-enhanced #list td.date.jbe-mismatch-date {
@@ -389,19 +420,36 @@
    <tr>, so styles.css's `tr:hover td` repaints only the row under the cursor and a
    five-entry day looks like a one-row selection. scripts/manHourList.js tags every
    row of a day with data-jbe-day and mirrors .jbe-day-hover across the group.
-   The #list id is what lets these beat the !important single-row hover rule. */
-.jobcan-enhanced #list tr.jbe-day-hover > td {
+   The #list id is what lets these beat the !important single-row hover rule.
+
+   Each rule is doubled with a `:hover` twin. Without it the row physically under
+   the cursor is matched by `tr:hover td` rules (ours in styles.css, Jobcan's own,
+   and Bootstrap's `.table-hover`) that the plain `.jbe-day-hover` selector does
+   not outrank on the pointer row alone — which is exactly how one row of a
+   mismatch day ended up painted differently from its siblings. */
+.jobcan-enhanced #list tr.jbe-day-hover > td,
+.jobcan-enhanced #list tr.jbe-day-hover:hover > td {
   background-color: var(--color-table-hover-bg, #f0f7ff) !important;
 }
 
 /* Mismatch days keep their red identity while hovered — a step up from the
-   at-rest tint rather than the neutral hover grey. */
-.jobcan-enhanced #list tr.jbe-mismatch-row.jbe-day-hover > td {
-  background-color: color-mix(in srgb, var(--color-danger, #DC3545) 18%, transparent) !important;
+   at-rest tint rather than the neutral hover grey. Opaque, same reason as above. */
+.jobcan-enhanced #list tr.jbe-mismatch-row.jbe-day-hover > td,
+.jobcan-enhanced #list tr.jbe-mismatch-row.jbe-day-hover:hover > td {
+  background-color: color-mix(in srgb, var(--color-danger, #DC3545) 16%, var(--color-card, #ffffff)) !important;
 }
 
-.jobcan-enhanced body.dark-mode #list tr.jbe-mismatch-row.jbe-day-hover > td {
-  background-color: color-mix(in srgb, var(--color-danger, #DC3545) 26%, transparent) !important;
+.jobcan-enhanced body.dark-mode #list tr.jbe-mismatch-row.jbe-day-hover > td,
+.jobcan-enhanced body.dark-mode #list tr.jbe-mismatch-row.jbe-day-hover:hover > td {
+  background-color: color-mix(in srgb, var(--color-danger, #DC3545) 30%, var(--color-card, #272736)) !important;
+}
+
+/* The date cell keeps its own red (see .jbe-mismatch-date above); everything else
+   in a hovered mismatch row takes the theme's body text colour, so no Jobcan
+   `text-*` utility can leave dark text sitting on the dark hover tint. */
+.jobcan-enhanced body.dark-mode #list tr.jbe-mismatch-row.jbe-day-hover > td:not(.date),
+.jobcan-enhanced body.dark-mode #list tr.jbe-mismatch-row.jbe-day-hover:hover > td:not(.date) {
+  color: var(--color-text-primary, #e4e6eb) !important;
 }
 
 /* ------------------------------------------------------------------ */
@@ -509,6 +557,9 @@
   text-decoration: none !important;
   padding: 6px 4px !important;
   line-height: 1.25;
+  /* Beats Bootstrap's `.table td { vertical-align: top }` so the date stays
+     centred in the rowspan'd cell while the camera collapses in and out. */
+  vertical-align: middle !important;
 }
 
 .jobcan-enhanced #list td.date .jbe-day-link {
@@ -558,6 +609,58 @@
 /* The 工数差異 delta is a second, quieter line under the date. As plain text in the
    same red at nearly the same size it just doubled the date; as a shrink-wrapped
    chip it reads as a badge and stops competing with it. */
+/* Per-day 工数レポート camera. At rest it collapses to zero height so the date
+   stays vertically centred in its (rowspan'd) cell; on hover it grows in place.
+   Bootstrap's `.table td { vertical-align: top }` is what the centring has to
+   beat — see the `vertical-align` on `#list td.date` above. */
+.jobcan-enhanced #list td.date .jbe-day-shot {
+  display: block;
+  margin: 0 auto;
+  padding: 0;
+  width: 22px;
+  height: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--color-text-secondary, #777);
+  opacity: 0;
+  overflow: hidden;
+  cursor: pointer;
+  transform: translateY(-3px);
+  transition: height 0.18s ease, margin-top 0.18s ease, padding 0.18s ease,
+    opacity 0.18s ease, transform 0.18s ease, color 0.15s ease, background-color 0.15s ease;
+}
+
+.jobcan-enhanced #list td.date .jbe-day-shot svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.jobcan-enhanced #list tr.jbe-day-hover td.date .jbe-day-shot,
+.jobcan-enhanced #list td.date .jbe-day-shot:focus-visible {
+  height: 22px;
+  margin-top: 4px;
+  padding: 2px;
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.jobcan-enhanced #list td.date .jbe-day-shot:hover {
+  color: var(--color-primary, #0077ff);
+  background: var(--color-primary-hover-bg, #f5f9ff);
+}
+
+.jobcan-enhanced body.dark-mode #list td.date .jbe-day-shot:hover {
+  color: var(--color-primary-light, #109fff);
+  background: var(--color-primary-hover-bg, #00356b);
+}
+
+.jobcan-enhanced #list td.date .jbe-day-shot:focus-visible {
+  outline: 2px solid var(--color-primary, #0077ff);
+  outline-offset: 1px;
+}
+
 .jobcan-enhanced #list td.date .jbe-day-delta {
   display: block;
   width: fit-content;
@@ -688,7 +791,12 @@
   margin-top: 2px;
 }
 
+/* Flex row so the shared day-flag legend can sit at the far right of the title. */
 .jobcan-enhanced .jbe-report-section-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
   margin: 0 0 12px;
   font-size: 14px;
   font-weight: 600;
@@ -696,6 +804,12 @@
 
 .jobcan-enhanced .jbe-report-bar-row {
   margin-bottom: 14px;
+}
+
+/* A project with nothing to expand has no caret — pad it so its bar still lines
+   up with the expandable rows above and below. */
+.jobcan-enhanced div.jbe-report-bar-row > .jbe-report-bar-main {
+  padding-left: 13px;
 }
 
 .jobcan-enhanced .jbe-report-bar-head {
@@ -1173,22 +1287,27 @@
 .jobcan-enhanced .jbe-report-daybars {
   display: flex;
   align-items: stretch;
+  justify-content: flex-start;
   gap: 3px;
-  height: 116px;
+  height: 122px;
   margin: 8px 0 10px;
   padding: 6px 2px 0;
   overflow-x: auto;
 }
 
+/* Fixed-width columns, packed from the left. `flex: 1` stretched a three-day
+   project across the full modal, which read as a month of data with huge gaps
+   instead of three days. Wide months still scroll horizontally. */
 .jobcan-enhanced .jbe-report-daybar-col {
-  flex: 1 0 28px;
-  min-width: 28px;
+  flex: 0 0 30px;
+  min-width: 30px;
   display: flex;
   flex-direction: column;
   align-items: center;
 }
 
 .jobcan-enhanced .jbe-report-daybar-bar {
+  position: relative;
   flex: 1;
   width: 100%;
   min-height: 0;
@@ -1197,14 +1316,42 @@
   justify-content: center;
 }
 
+/* The fill is a stack: one .jbe-report-daybar-seg per task, largest at the
+   bottom, so the task split is read off the bar itself. */
 .jobcan-enhanced .jbe-report-daybar-fill {
   position: relative;
+  display: flex;
+  flex-direction: column-reverse;
   width: 72%;
   max-width: 18px;
   min-height: 2px;
   background: var(--color-primary, #0077ff);
   border-radius: 3px 3px 0 0;
 }
+
+/* No `overflow: hidden` on the fill — the 0:30-style value label sits above it
+   at `bottom: 100%` and would be clipped. The top segment rounds itself instead
+   (column-reverse: the last child is the topmost one). */
+.jobcan-enhanced .jbe-report-daybar-seg {
+  width: 100%;
+  min-height: 1px;
+}
+
+.jobcan-enhanced .jbe-report-daybar-seg:last-child {
+  border-radius: 3px 3px 0 0;
+}
+
+/* Task palette. Cycled by taskColorMap() in manHourList.js; these hues hold up on
+   both the white card and the dark one, and stay clear of the danger/warning reds
+   the day flags use. */
+.jobcan-enhanced .jbe-task-c1 { background: #3b82f6; }
+.jobcan-enhanced .jbe-task-c2 { background: #14b8a6; }
+.jobcan-enhanced .jbe-task-c3 { background: #8b5cf6; }
+.jobcan-enhanced .jbe-task-c4 { background: #f59e0b; }
+.jobcan-enhanced .jbe-task-c5 { background: #ec4899; }
+.jobcan-enhanced .jbe-task-c6 { background: #22c55e; }
+.jobcan-enhanced .jbe-task-c7 { background: #06b6d4; }
+.jobcan-enhanced .jbe-task-c8 { background: #a3762f; }
 
 .jobcan-enhanced .jbe-report-daybar-fill.is-empty {
   height: 2px;
@@ -1225,12 +1372,103 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* A day this project has no hours on still prints 0:00, quieter than a real value. */
+.jobcan-enhanced .jbe-report-daybar-value.is-zero {
+  opacity: 0.55;
+}
+
+/* x-axis label: day-of-month with 曜日 under it. The 不一致 / 未入力 state is
+   carried by the bar's colour, not by this label — colouring the text moved it
+   off the baseline of its neighbours. */
 .jobcan-enhanced .jbe-report-daybar-label {
-  margin-top: 4px;
-  font-size: 9px;
-  line-height: 1.3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  margin-top: 7px;
+  font-size: 11px;
+  line-height: 1.2;
   color: var(--color-text-secondary, #999);
   font-variant-numeric: tabular-nums;
+}
+
+.jobcan-enhanced .jbe-report-daybar-dow {
+  font-size: 10px;
+  line-height: 1;
+  opacity: 0.75;
+}
+
+.jobcan-enhanced .jbe-report-daybar-dow.is-weekend {
+  color: var(--color-danger, #DC3545);
+  opacity: 0.9;
+}
+
+/* A day flag and a task colour are independent facts about the same bar — a day
+   can be 工数不一致 *and* デザイン — so the flag is a dotted ring around the bar,
+   never a fill. The stacked task colours stay fully visible inside it. */
+.jobcan-enhanced .jbe-report-daybar-col.is-mismatch .jbe-report-daybar-fill {
+  outline: 1.5px dotted var(--color-danger, #DC3545);
+  outline-offset: 1.5px;
+}
+
+.jobcan-enhanced .jbe-report-daybar-col.is-missing .jbe-report-daybar-fill {
+  outline: 1.5px dotted var(--color-warning, #eb9800);
+  outline-offset: 1.5px;
+}
+
+/* A flagged day with no hours has only the 2px stub to ring. Give it just enough
+   height for the dotted ring to be legible — a hollow marker at the baseline, not
+   something that competes with a real bar. */
+.jobcan-enhanced .jbe-report-daybar-col.is-mismatch .jbe-report-daybar-fill.is-empty,
+.jobcan-enhanced .jbe-report-daybar-col.is-missing .jbe-report-daybar-fill.is-empty {
+  height: 6px;
+  background: transparent;
+  border-radius: 2px;
+}
+
+.jobcan-enhanced .jbe-report-daybar-legend {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.jobcan-enhanced .jbe-report-daybar-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--color-text-secondary, #777);
+}
+
+.jobcan-enhanced .jbe-report-daybar-swatch {
+  flex: 0 0 auto;
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+}
+
+.jobcan-enhanced .jbe-report-legend-detail {
+  opacity: 0.7;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Flag swatches mirror the mark on the chart: a dotted ring, not a fill. */
+.jobcan-enhanced .jbe-report-daybar-swatch.is-mismatch,
+.jobcan-enhanced .jbe-report-daybar-swatch.is-missing {
+  background: transparent;
+  border-radius: 3px;
+}
+
+.jobcan-enhanced .jbe-report-daybar-swatch.is-mismatch {
+  border: 1.5px dotted var(--color-danger, #DC3545);
+}
+
+.jobcan-enhanced .jbe-report-daybar-swatch.is-missing {
+  border: 1.5px dotted var(--color-warning, #eb9800);
 }
 
 /* Animate 日別内訳 open/close. The modern ::details-content pseudo lets the
@@ -1253,23 +1491,61 @@
   height: auto;
 }
 
-.jobcan-enhanced .jbe-report-tasks {
-  margin-top: 6px;
-  padding-left: 4px;
-}
-
-.jobcan-enhanced .jbe-report-tasks summary {
-  font-size: 12px;
-  color: var(--color-text-secondary, #777);
-  cursor: pointer;
-}
-
-.jobcan-enhanced .jbe-report-task-row {
+/* The project row itself is the toggle: the whole <summary> — caret, name, total
+   and track — is the click target, so there is no separate "日別内訳" line. */
+.jobcan-enhanced .jbe-report-bar-summary {
   display: flex;
-  justify-content: space-between;
-  font-size: 12px;
-  padding: 3px 0 3px 14px;
-  color: var(--color-text-secondary, #555);
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  margin: -4px -6px 0;
+  border-radius: 8px;
+  cursor: pointer;
+  list-style: none;
+  transition: background-color 0.15s ease;
+}
+
+/* Both spellings are needed to drop the native disclosure triangle. */
+.jobcan-enhanced .jbe-report-bar-summary::-webkit-details-marker {
+  display: none;
+}
+
+.jobcan-enhanced .jbe-report-bar-summary::marker {
+  content: '';
+}
+
+.jobcan-enhanced .jbe-report-bar-summary:hover {
+  background: var(--color-table-hover-bg, #f0f7ff);
+}
+
+.jobcan-enhanced .jbe-report-bar-summary:focus-visible {
+  outline: 2px solid var(--color-primary, #0077ff);
+  outline-offset: 1px;
+}
+
+.jobcan-enhanced .jbe-report-bar-caret {
+  flex: 0 0 auto;
+  width: 0;
+  height: 0;
+  margin-left: 2px;
+  border-left: 5px solid var(--color-text-secondary, #888);
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  transition: transform 0.2s ease;
+}
+
+.jobcan-enhanced .jbe-report-bar-row[open] > .jbe-report-bar-summary .jbe-report-bar-caret {
+  transform: rotate(90deg);
+}
+
+.jobcan-enhanced .jbe-report-bar-main {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Indent the breakdown to the caret's text column. */
+.jobcan-enhanced .jbe-report-bar-detail {
+  padding-left: 13px;
 }
 
 .jobcan-enhanced .jbe-report-empty {
