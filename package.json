@@ -1,6 +1,6 @@
 {
   "name": "jobcan-ui-enhancer",
-  "version": "1.3.2",
+  "version": "1.3.3",
   "private": true,
   "description": "Transform Jobcan into a modern, intuitive interface with improved navigation, visual design, and productivity features",
   "scripts": {
