@@ -5,6 +5,34 @@
 // popup's button stayed disabled on 「ログイン中…」 with no way back.
 const LOGIN_TIMEOUT_MS = 25000;
 
+// Entry point for a login attempt.
+//
+// The employee app (ssl.jobcan.jp) is a separate application from the identity
+// provider (id.jobcan.jp) and is only reachable through an OAuth handshake.
+// Measured redirect chain from this URL while signed out:
+//
+//   ssl.jobcan.jp/jbcoauth/login
+//     → id.jobcan.jp/oauth/authorize/?...&redirect_uri=ssl.jobcan.jp/jbcoauth/callback
+//     → id.jobcan.jp/users/sign_in        ← inject credentials here
+//     → (Jobcan resumes the pending authorize request itself)
+//     → ssl.jobcan.jp/jbcoauth/callback?code=… → ssl.jobcan.jp/employee
+//
+// While already signed in the same URL runs the whole chain unattended and lands
+// on /employee with no form and no typing.
+//
+// This used to start at id.jobcan.jp/users/sign_in instead. That URL has no
+// pending OAuth request attached to it, so Jobcan has nowhere to send you
+// afterwards and parks you on its own id.jobcan.jp/account/profile portal page —
+// the employee app is never entered. /account/profile was never a required step;
+// it was the symptom of entering through the wrong door. Handled below anyway,
+// since Jobcan can still land there on its own.
+const LOGIN_ENTRY_URL = 'https://ssl.jobcan.jp/jbcoauth/login';
+
+// The content script that fills the form is injected at document_idle, which can
+// land after tabs.onUpdated has already reported 'complete' on a slow load.
+const MAX_INJECT_ATTEMPTS = 3;
+const INJECT_RETRY_DELAY_MS = 400;
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'performJobcanLogin') {
     startJobcanLogin(message, sendResponse);
@@ -19,15 +47,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return false;
 });
 
-// Drive a login in a background tab: open the sign-in page, inject the
-// credentials once it loads, then follow the SSO hop to the employee portal.
+// Drive a login in a background tab: start the OAuth handshake, fill in the
+// sign-in form if Jobcan asks for one, and reveal the tab once it reaches the
+// employee app.
+//
+// Nothing here assumes the user is signed out. An unexpired id.jobcan.jp session
+// simply means the sign-in page never appears and the credentials are never used.
 //
 // Every exit path — success, rejected credentials, injection failure, the user
 // closing the tab, or the timeout — funnels through finish(), which is the only
 // place the listeners are removed and the only place sendResponse is called.
 // (Previously only the two success paths cleaned up.)
 function startJobcanLogin({ email, password }, sendResponse) {
-  chrome.tabs.create({ url: 'https://id.jobcan.jp/users/sign_in', active: false }, (tab) => {
+  chrome.tabs.create({ url: LOGIN_ENTRY_URL, active: false }, (tab) => {
     if (chrome.runtime.lastError || !tab) {
       sendResponse({ success: false });
       return;
@@ -35,8 +67,9 @@ function startJobcanLogin({ email, password }, sendResponse) {
 
     const loginTabId = tab.id;
     let settled = false;
-    let credentialsInjected = false;
-    let attemptedNavigateToEmployee = false;
+    let injectAttempts = 0;
+    let credentialsSubmitted = false;
+    let restartedHandshake = false;
     let timeoutId = null;
 
     const finish = (success, { reveal = false } = {}) => {
@@ -56,63 +89,72 @@ function startJobcanLogin({ email, password }, sendResponse) {
       if (removedTabId === loginTabId) finish(false);
     };
 
+    const injectCredentials = () => {
+      injectAttempts += 1;
+      chrome.tabs.sendMessage(loginTabId, { action: 'injectLoginCredentials', email, password }, (response) => {
+        if (settled) return;
+        if (chrome.runtime.lastError || !response || !response.success) {
+          if (injectAttempts < MAX_INJECT_ATTEMPTS) {
+            setTimeout(() => {
+              if (!settled) injectCredentials();
+            }, INJECT_RETRY_DELAY_MS);
+            return;
+          }
+          finish(false, { reveal: true });
+          return;
+        }
+        // Submitted. Jobcan owns the navigation from here: it resumes the
+        // authorize request that LOGIN_ENTRY_URL left pending in the session.
+        // Do not race it with a tabs.update — the previous version fired one on
+        // a fixed 800ms timer, which also wiped Jobcan's 「認証に失敗」 message
+        // off the page whenever the password was wrong.
+        credentialsSubmitted = true;
+      });
+    };
+
     const onUpdated = (updatedTabId, changeInfo, updatedTab) => {
       if (updatedTabId !== loginTabId) return;
 
       // `status: 'complete'` updates carry no `url`, so fall back to the tab's.
       const currentUrl = changeInfo.url || (updatedTab && updatedTab.url) || '';
 
-      // Success: reached the employee portal.
-      if (currentUrl.includes('https://ssl.jobcan.jp/employee')) {
-        handleSuccessfulLogin(loginTabId);
-        finish(true);
+      // Success: the OAuth callback has handed us over to the employee app.
+      // Taken on the first `loading` event so the popup's toast resolves without
+      // waiting for the page to finish rendering.
+      if (currentUrl.startsWith('https://ssl.jobcan.jp/employee')) {
+        finish(true, { reveal: true });
         return;
       }
 
-      const onSignInPage = currentUrl.includes('https://id.jobcan.jp/users/sign_in');
+      // Everything below is a decision about where we have *landed*. The 302s
+      // inside the handshake only ever produce `loading` events, so gating on
+      // 'complete' keeps us from mistaking a hop we are passing through for a
+      // destination.
+      if (changeInfo.status !== 'complete') return;
 
-      if (onSignInPage && changeInfo.status === 'complete') {
-        if (credentialsInjected) {
+      if (currentUrl.startsWith('https://id.jobcan.jp/users/sign_in')) {
+        if (credentialsSubmitted) {
           // We already submitted and Jobcan served the sign-in page again, so the
           // credentials were rejected. Surface the tab (it carries Jobcan's own
           // error message) instead of leaving the popup spinning.
           finish(false, { reveal: true });
           return;
         }
-
-        chrome.tabs.sendMessage(loginTabId, { action: 'injectLoginCredentials', email, password }, (response) => {
-          if (chrome.runtime.lastError || !response || !response.success) {
-            finish(false, { reveal: true });
-            return;
-          }
-          credentialsInjected = true;
-          // Give SSO a moment to set cookies, then navigate if we haven't been
-          // redirected yet.
-          if (!attemptedNavigateToEmployee) {
-            attemptedNavigateToEmployee = true;
-            setTimeout(() => {
-              if (settled) return;
-              chrome.tabs.update(
-                loginTabId,
-                { url: 'https://ssl.jobcan.jp/jbcoauth/login' },
-                () => void chrome.runtime.lastError
-              );
-            }, 800);
-          }
-        });
+        // A 'complete' while an attempt is already in flight belongs to the retry
+        // timer, not to a new attempt — do not double-submit the form.
+        if (injectAttempts === 0) injectCredentials();
         return;
       }
 
-      // Redirected to another id.jobcan.jp page (account/profile) after login —
-      // force the hop to the employee portal.
-      if (credentialsInjected && !onSignInPage && currentUrl.startsWith('https://id.jobcan.jp/')) {
-        if (!attemptedNavigateToEmployee) {
-          attemptedNavigateToEmployee = true;
-          chrome.tabs.update(
-            loginTabId,
-            { url: 'https://ssl.jobcan.jp/jbcoauth/login' },
-            () => void chrome.runtime.lastError
-          );
+      // Signed in, but parked on the identity provider instead of the employee
+      // app — /account/profile is the one Jobcan uses. Restart the handshake,
+      // once, so this cannot ping-pong. /oauth/ is excluded: reaching 'complete'
+      // there means a consent screen is genuinely on display and re-entering
+      // would only redraw it, so let the timeout reveal the tab for the user.
+      if (currentUrl.startsWith('https://id.jobcan.jp/') && !currentUrl.includes('/oauth/')) {
+        if (!restartedHandshake) {
+          restartedHandshake = true;
+          chrome.tabs.update(loginTabId, { url: LOGIN_ENTRY_URL }, () => void chrome.runtime.lastError);
         }
       }
     };
@@ -121,11 +163,6 @@ function startJobcanLogin({ email, password }, sendResponse) {
     chrome.tabs.onUpdated.addListener(onUpdated);
     chrome.tabs.onRemoved.addListener(onRemoved);
   });
-}
-
-// Focus the employee dashboard on successful login
-function handleSuccessfulLogin(tabId) {
-  chrome.tabs.update(tabId, { url: 'https://ssl.jobcan.jp/employee', active: true });
 }
 
 // html2canvas is ~220KB and is only needed for the screenshot / 工数レポート
