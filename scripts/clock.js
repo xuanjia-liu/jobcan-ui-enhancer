@@ -792,6 +792,38 @@ const WORK_STAT_ICONS = {
   calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>'
 };
 
+/**
+ * How far our computed 本日勤務時間 may drift from Jobcan's before we print both.
+ * Small gaps are just rounding and break-rule differences; five minutes is where
+ * it stops being noise and starts being something worth checking.
+ */
+const OFFICIAL_WORK_GAP_MINUTES = 5;
+
+/**
+ * Hang Jobcan's own breakdown off the worked-time tile as a tooltip. 休憩時間,
+ * 残業時間 and 深夜労働時間 are computed by Jobcan under the employer's rules and
+ * cannot be derived from punch times, so this is the only place they appear.
+ *
+ * Kept out of the tiles themselves on purpose: the row is a 4→3→2 responsive
+ * ladder with a deliberate drop order, and a fifth tile would mean reworking it.
+ */
+function applyOfficialSummaryTooltip(tile, summary, warning) {
+  if (!tile) return;
+
+  const lines = warning ? [warning] : [];
+  if (summary && summary.fields) {
+    // Jobcan's own labels, in its own order — see aditApi.js on why they are not
+    // renamed. 状態 is skipped: it reads '-' on any unsettled day.
+    Object.entries(summary.fields).forEach(([label, value]) => {
+      if (label === '状態' || !value || value === '-') return;
+      lines.push(`${label}: ${value}`);
+    });
+  }
+
+  const title = lines.join('\n');
+  if (tile.title !== title) tile.title = title;
+}
+
 function createWorkStatsRow() {
   const row = document.createElement('div');
   row.className = 'jbe-work-stats';
@@ -864,6 +896,9 @@ function updateWorkStatsRow(container, state) {
 
   if (row.dataset.punchState !== state) row.dataset.punchState = state;
 
+  const official = container._jobcanDaySummary || null;
+  const hasOfficial = !!(official && official.workMinutes !== null);
+
   // Anything other than a successful read has no numbers to show. Blanking the
   // values and saying why beats presenting 0時間 as if it were measured.
   if (state !== 'ok') {
@@ -874,6 +909,14 @@ function updateWorkStatsRow(container, state) {
       setStatText(tiles[tile.key], '.jbe-stat-value', '—');
       setStatText(tiles[tile.key], '.jbe-stat-sub', reason);
     });
+    // Jobcan's figure comes from a different request than the punch list, so a
+    // scrape failure does not mean we have nothing. One real number beats four
+    // dashes — the remaining tiles still need the punch times and stay blank.
+    if (hasOfficial && state !== 'loading') {
+      setStatText(tiles.worked, '.jbe-stat-value', formatWorkedDurationMinutes(official.workMinutes));
+      setStatText(tiles.worked, '.jbe-stat-sub', '打刻実績');
+    }
+    applyOfficialSummaryTooltip(tiles.worked, official, '');
     const fill = row.querySelector('.jbe-stat-bar-fill');
     if (fill) fill.style.width = '0%';
     return;
@@ -888,7 +931,20 @@ function updateWorkStatsRow(container, state) {
   const workState = getWorkStateAtNow(entries);
 
   setStatText(tiles.worked, '.jbe-stat-value', formatWorkedDurationMinutes(worked));
-  setStatText(tiles.worked, '.jbe-stat-sub', describeWorkedSpan(entries, workState, container));
+
+  // Only surface Jobcan's number when it disagrees with ours. Printing it beside
+  // an identical figure is noise; the disagreement is the whole signal, because
+  // Jobcan's is what payroll settles on.
+  const officialGap = hasOfficial ? Math.abs(official.workMinutes - worked) : 0;
+  const officialSuffix = hasOfficial && officialGap >= OFFICIAL_WORK_GAP_MINUTES
+    ? ` • 実績 ${formatWorkedDurationMinutes(official.workMinutes)}`
+    : '';
+  setStatText(
+    tiles.worked,
+    '.jbe-stat-sub',
+    `${describeWorkedSpan(entries, workState, container)}${officialSuffix}`
+  );
+
   // The two warnings the removed status line used to carry. A contradicted punch
   // means Jobcan will not settle the day, so the figures above it are provisional.
   const anomalies = getPunchAnomalies(entries);
@@ -898,7 +954,7 @@ function updateWorkStatsRow(container, state) {
     const warning = first
       ? `打刻エラー: ${formatMinutesAsClock(first.minutes)} の${first.type}が入室として扱われています`
       : '';
-    if (tiles.worked.title !== warning) tiles.worked.title = warning;
+    applyOfficialSummaryTooltip(tiles.worked, official, warning);
   }
 
   setStatText(tiles.progress, '.jbe-stat-value', `${percent}%`);
@@ -1474,6 +1530,36 @@ function refreshPunchMarkers(container, force) {
     renderProgressTrack(container, targetEntries);
     updateWorkProgressBar(container);
   });
+
+  refreshDaySummary(container);
+}
+
+/**
+ * Jobcan's own figures for today, from /employee/adit/get-summary/ (see
+ * scripts/aditApi.js).
+ *
+ * Everything else on this row is computed here, from punch times: the extension
+ * decides what counts as a break and rounds it itself. Jobcan applies the
+ * employer's 勤務形態 rules and is the number payroll actually settles on, so the
+ * two can legitimately disagree — and 休憩時間 / 残業時間 / 深夜労働時間 are not
+ * derivable from punch times at all.
+ *
+ * Additive by design: this never blocks a render, and a failure leaves the row
+ * exactly as it was. Called from refreshPunchMarkers so it inherits that
+ * function's 60s throttle, on top of the API module's own cache.
+ */
+function refreshDaySummary(container) {
+  const api = window.JBE_AditApi;
+  if (!api || typeof api.getDaySummary !== 'function') return;
+
+  api.getDaySummary(new Date())
+    .then((summary) => {
+      container._jobcanDaySummary = summary;
+      updateWorkProgressBar(container);
+    })
+    .catch((error) => {
+      console.debug('Day summary skipped:', error?.message || error);
+    });
 }
 
 /**

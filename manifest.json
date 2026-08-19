@@ -38,6 +38,7 @@
         "confetti.min.js",
         "scripts/utils.js",
         "scripts/manHourApi.js",
+        "scripts/aditApi.js",
         "scripts/draggable.js",
         "scripts/ui.js",
         "scripts/clock.js",

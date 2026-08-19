@@ -142,10 +142,21 @@ back to earlier months (`manHourEditSearch.js` walks back up to 3). Kind ids are
 stable dimension definitions, so a previous month's id works fine for a
 current-month date.
 
-**Attendance/punch data has no JSON API** — `/employee/attendance/progress` needs a
-ProcessId and `/employee/attendance/download` returns HTML. But it does not need
-one: everything is server-rendered, so `dataExtraction.js` uses `fetch` +
-`DOMParser` (see `fetchJobcanDocument`). Do **not** reintroduce the hidden iframes
+**Attendance/punch data is mostly server-rendered**, so `dataExtraction.js` uses
+`fetch` + `DOMParser` (see `fetchJobcanDocument`). Two exceptions, both measured:
+
+* `/employee/adit/get-summary/?year=&month=&day=` returns one day's worked-time
+  figures as JSON-wrapped HTML — session cookie only, no CSRF token. Wrapped by
+  `scripts/aditApi.js`; the clock card's 本日勤務時間 tile reconciles against it.
+  This is *not* the punch list, so it does not replace `loadPunchListData()`.
+* The Excel export is a three-step async job, not a single download:
+  `POST /employee/attendance/download` → `{processId, downloadId}`, poll
+  `/employee/attendance/progress?processId=`, then
+  `/employee/attendance/get-file?download_id=`.
+
+`docs/jobcan-endpoints.md` has the full map, recovered by reading Jobcan's own
+public JS under `/st/` — that is the cheapest way to answer "is there an endpoint
+for this" before writing a scraper. Do **not** reintroduce the hidden iframes
 this replaced — measured, fetch is ~770ms for the attendance summary and ~230ms
 for 打刻一覧, against an iframe's full page load plus fixed multi-second sleeps.
 
